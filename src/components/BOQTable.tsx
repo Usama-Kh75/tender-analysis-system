@@ -317,7 +317,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 filterMode === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-emerald-700'
               )}
             >
-              وفورات ({items.filter(i => i.diffAmount < 0).length})
+              مطابقة ({items.filter(i => i.diffAmount < 0).length})
             </button>
           </div>
 
@@ -474,7 +474,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         ) : isSaving ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            وفر
+                            مطابق
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md">
@@ -631,7 +631,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         ) : isSaving ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            وفر
+                            مطابق
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md">
