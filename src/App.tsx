@@ -30,7 +30,8 @@ import {
   Pencil, 
   Award,
   BarChart3,
-  Flame
+  Building2,
+  Plus
 } from 'lucide-react';
 
 export function App() {
@@ -72,6 +73,99 @@ export function App() {
       </div>
     );
   }
+
+  // Update Bidder Name
+  const handleUpdateBidderName = (newName: string) => {
+    const oldName = activeBidder.name;
+    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? { ...b, name: newName } : b);
+    
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: updatedBidders,
+      updatedAt: new Date().toISOString()
+    };
+
+    updatedProj = addAuditLog(
+      updatedProj,
+      'تعديل اسم المجهز',
+      `تم تعديل اسم المجهز من (${oldName}) إلى (${newName})`
+    );
+
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
+
+  // Clear Bidder Prices Only
+  const handleClearBidderPrices = () => {
+    if (!window.confirm(`هل أنت متأكد من رغبتك في تصفير مبالغ المجهز (${activeBidder.name}) للبدء في تعبئتها من جديد؟`)) {
+      return;
+    }
+
+    const resetItems = activeBidder.items.map(item => ({
+      ...item,
+      bidderTotal: 0
+    }));
+
+    const recalc = calculateBOQMetrics(resetItems, currentProject.deviationThreshold);
+
+    const updatedBidder: Bidder = {
+      ...activeBidder,
+      items: recalc.items,
+      totals: recalc.totals
+    };
+
+    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: updatedBidders,
+      updatedAt: new Date().toISOString()
+    };
+
+    updatedProj = addAuditLog(
+      updatedProj,
+      'تصفير مبالغ مجهز',
+      `تم تصفير مبالغ المجهز (${activeBidder.name})`
+    );
+
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
+
+  // Clear All Items (Empty Table)
+  const handleClearAllTableItems = () => {
+    if (!window.confirm('⚠️ تحذير: هل أنت متأكد من مسح وتفريغ الجدول بالكامل وحذف كافة الفقرات للبدء من الصفر؟')) {
+      return;
+    }
+
+    const initialItem: Partial<BOQItem> = {
+      itemNo: 1,
+      description: 'فقرة 1',
+      quantity: 1,
+      estimatedTotal: 0,
+      bidderTotal: 0
+    };
+
+    const recalc = calculateBOQMetrics([initialItem], currentProject.deviationThreshold);
+
+    const updatedBidder: Bidder = {
+      ...activeBidder,
+      items: recalc.items,
+      totals: recalc.totals
+    };
+
+    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: updatedBidders,
+      updatedAt: new Date().toISOString()
+    };
+
+    updatedProj = addAuditLog(
+      updatedProj,
+      'تفريغ الجدول بالكامل',
+      `تم مسح كافة فقرات الجدول وتصفيره للبدء من الصفر`
+    );
+
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
 
   // Update Item in Active Bidder
   const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) => {
@@ -274,7 +368,10 @@ export function App() {
   };
 
   // Add New Bidder
-  const handleAddNewBidder = (name: string) => {
+  const handleAddNewBidder = (name?: string) => {
+    const targetName = name || prompt('أدخل اسم الشركة / المجهز الجديد:') || `شركة جديدة (${currentProject.bidders.length + 1})`;
+    
+    // استنساخ الفقرات مع تصفير أسعار المجهز لإدخال عطائه الخاص
     const clonedItems = activeBidder.items.map(item => ({
       ...item,
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
@@ -285,7 +382,7 @@ export function App() {
 
     const newBidder: Bidder = {
       id: `bidder-${Date.now()}`,
-      name,
+      name: targetName,
       submissionDate: new Date().toISOString().split('T')[0],
       items: recalc.items,
       totals: recalc.totals,
@@ -302,7 +399,7 @@ export function App() {
     updatedProj = addAuditLog(
       updatedProj,
       'إضافة مجهز جديد',
-      `تمت إضافة المجهز (${name}) بنجاح إلى المناقصة`
+      `تمت إضافة المجهز (${targetName}) بنجاح إلى المناقصة`
     );
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
@@ -489,16 +586,20 @@ export function App() {
             {/* Right Controls: Active Bidder Switcher & Excel & 3 Main Tabs */}
             <div className="flex items-center gap-3 flex-wrap">
               
-              {/* Bidder Switcher */}
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-2xl px-3.5 py-2 shadow-xs">
-                <span className="text-xs font-bold text-slate-600">المجهز المعروض:</span>
+              {/* Bidder Switcher & Quick Add Button */}
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-2xl p-1.5 shadow-xs">
+                <div className="flex items-center gap-1 px-2">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-bold text-slate-600">الشركة:</span>
+                </div>
+                
                 <select
                   value={activeBidder.id}
                   onChange={(e) => {
                     const updatedProj = { ...currentProject, activeBidderId: e.target.value };
                     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
                   }}
-                  className="bg-transparent text-xs sm:text-sm font-black text-indigo-700 focus:outline-none cursor-pointer"
+                  className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-black text-indigo-700 focus:outline-none cursor-pointer"
                 >
                   {currentProject.bidders.map(b => (
                     <option key={b.id} value={b.id} className="text-slate-900">
@@ -506,19 +607,16 @@ export function App() {
                     </option>
                   ))}
                 </select>
-              </div>
 
-              {/* Excel Quick Upload */}
-              <label className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-3.5 py-2.5 rounded-2xl cursor-pointer transition shadow-xs">
-                <UploadCloud className="w-4 h-4 text-emerald-600" />
-                <span>استيراد Excel</span>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={handleExcelUpload}
-                />
-              </label>
+                <button
+                  onClick={() => handleAddNewBidder()}
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition cursor-pointer"
+                  title="إضافة شركة / مقاول جديد للمناقصة"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ شركة جديدة</span>
+                </button>
+              </div>
 
               {/* View Tabs */}
               <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
@@ -556,29 +654,6 @@ export function App() {
             </div>
           </div>
 
-          {/* Prominent Data Entry Guide Bar */}
-          {showInputGuide && (
-            <div className="mt-4 p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-slate-50 border border-blue-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 text-slate-800 font-medium">
-                <span className="p-1.5 bg-blue-600 text-white rounded-lg">
-                  <Edit3 className="w-4 h-4" />
-                </span>
-                <div>
-                  <strong className="font-black text-blue-900">طرق إدخال وتعبئة البيانات السريعة:</strong>{' '}
-                  <span>1. <strong>إدخال مباشر:</strong> اكتب المبالغ واضغط <kbd className="bg-white px-1 border font-bold">Enter</kbd> للانتقال للسطر التالي • </span>
-                  <span>2. <strong>لصق من Excel:</strong> انسخ من Excel واضغط <kbd className="bg-white px-1 border font-bold">Ctrl+V</kbd> • </span>
-                  <span>3. <strong>أنماط العرض:</strong> اختر (النمط المصدري Excel 📑) لعرض الجدول الأصلي بدقة</span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowInputGuide(false)}
-                className="text-[11px] text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
-              >
-                إخفاء التنبيه ✕
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Dynamic KPI Cards */}
@@ -596,11 +671,15 @@ export function App() {
               totals={activeBidder.totals}
               currency={currentProject.currency}
               deviationThreshold={currentProject.deviationThreshold}
+              bidderName={activeBidder.name}
+              onUpdateBidderName={handleUpdateBidderName}
               onUpdateItem={handleUpdateItem}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}
               onBatchAddItems={handleBatchAddItems}
+              onClearBidderPrices={handleClearBidderPrices}
+              onClearAllItems={handleClearAllTableItems}
             />
           ) : activeTab === 'summary' ? (
             <ExecutiveSummaryView
