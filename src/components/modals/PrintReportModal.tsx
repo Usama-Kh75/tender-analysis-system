@@ -207,6 +207,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <strong> إحالة وترسية المناقصة على العطاء المقدم من شركة ({activeBidder.name}) </strong>
               بمبلغ إجمالي قدره <strong>({formatCurrency(activeBidder.totals.totalBidderAmount, project.currency)})</strong> <span className="text-slate-800 font-bold underline">({tafqeetArabic(activeBidder.totals.totalBidderAmount, 'دينار عراقي')})</span> لكونه العطاء الأفضل مالياً والأكثر اتزاناً والمطابق للمواصفات، مع اعتماد الأسعار والمفردات الموزونة المثبتة أعلاه كشرط تعاقدي عند تنفيذ أوامر الغيار.
             </p>
+            {activeBidder.totals.totalDeviationPercent > 10 && activeBidder.totals.totalDeviationPercent <= 20 && (
+              <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                📌 <strong>ملاحظة إجرائية ملزمة:</strong> بما أن مبلغ العطاء يزيد عن الكلفة التخمينية بنسبة ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%) وهي تتجاوز حد (+10%) وضمن السقف القانوني (+20%)، يوصى بمفاتحة وزارة المالية لتأمين وتوفير التخصيص المالي الإضافي أصولياً قبل إبرام العقد استناداً لضوابط تنفيذ العقود الحكومية.
+              </div>
+            )}
           </div>
 
           {/* 4. توقيعات اللجنة */}

@@ -467,19 +467,24 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
                       <td className="p-2.5 text-center border-l border-slate-200">
                         {isDeviated ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200">
                             <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            منحرفة
+                            منحرفة {item.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
                           </span>
-                        ) : isSaving ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        ) : item.deviationPercent < 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            مطابق
+                            مطابق (للأقل ↓)
+                          </span>
+                        ) : item.deviationPercent > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
+                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                            مطابق (للأعلى ↑)
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md">
-                            <ShieldCheck className="w-3 h-3 text-blue-600" />
-                            متوازن
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-slate-700 bg-slate-50 px-2.5 py-0.5 rounded-md border border-slate-200">
+                            <CheckCircle2 className="w-3 h-3 text-slate-600" />
+                            مطابق تماماً
                           </span>
                         )}
                       </td>
@@ -624,19 +629,24 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
                       <td className="p-2.5 text-center border-l border-slate-200">
                         {isDeviated ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200">
                             <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            منحرفة
+                            منحرفة {item.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
                           </span>
-                        ) : isSaving ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        ) : item.deviationPercent < 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            مطابق
+                            مطابق (للأقل ↓)
+                          </span>
+                        ) : item.deviationPercent > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
+                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                            مطابق (للأعلى ↑)
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md">
-                            <ShieldCheck className="w-3 h-3 text-blue-600" />
-                            متوازن
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-slate-700 bg-slate-50 px-2.5 py-0.5 rounded-md border border-slate-200">
+                            <CheckCircle2 className="w-3 h-3 text-slate-600" />
+                            مطابق تماماً
                           </span>
                         )}
                       </td>
