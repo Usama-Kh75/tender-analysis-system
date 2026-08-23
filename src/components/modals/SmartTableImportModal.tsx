@@ -318,6 +318,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     const qtyIdx = columnMappings.indexOf('quantity');
     const bidIdx = columnMappings.indexOf('bidderTotal');
     const descIdx = columnMappings.indexOf('description');
+    const writtenIdx = columnMappings.indexOf('writtenText');
 
     const extractedItems: Partial<BOQItem>[] = rawRows.map((row, idx) => {
       const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? row[itemNoIdx] : String(idx + 1);
