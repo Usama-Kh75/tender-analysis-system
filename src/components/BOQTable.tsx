@@ -19,11 +19,13 @@ import {
   Check,
   Scale
 } from 'lucide-react';
-import { BOQItem } from '../types/tender';
+import { BOQItem, TenderTotals } from '../types/tender';
 import { formatNumber } from '../utils/calculations';
 
 interface BOQTableProps {
   items: BOQItem[];
+  totals?: TenderTotals;
+  currency?: string;
   deviationThreshold: number;
   bidderName: string;
   onUpdateItem: (index: number, field: keyof BOQItem, val: any) => void;
