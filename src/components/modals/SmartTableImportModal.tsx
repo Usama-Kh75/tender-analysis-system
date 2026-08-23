@@ -12,13 +12,16 @@ import {
   Coins,
   FileEdit,
   Layers,
-  ArrowLeft,
-  ArrowRight,
+  AlertTriangle,
+  Scale,
+  Calculator,
+  FileCheck2,
   HelpCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { BOQItem } from '../../types/tender';
 import { parseArabicNumber } from '../../utils/calculations';
+import { auditBidderRows, BidderAuditReport } from '../../utils/bidderAuditEngine';
 
 export type ImportDocType = 'bidder' | 'estimated' | 'both';
 export type ImportMode = 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace';
@@ -35,7 +38,7 @@ interface SmartTableImportModalProps {
   initialDocType?: ImportDocType;
 }
 
-type ColumnRole = 'itemNo' | 'estimatedTotal' | 'bidderTotal' | 'description' | 'quantity' | 'ignore';
+type ColumnRole = 'itemNo' | 'estimatedTotal' | 'unitPrice' | 'quantity' | 'bidderTotal' | 'writtenText' | 'description' | 'ignore';
 
 export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   isOpen,
@@ -56,19 +59,20 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   const [pastedText, setPastedText] = useState<string>('');
   const [sourceFileName, setSourceFileName] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [auditReport, setAuditReport] = useState<BidderAuditReport | null>(null);
+  const [useCorrectedPrices, setUseCorrectedPrices] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // تحديث نوع الوثيقة المبدئي عند الفتح
   useEffect(() => {
     setDocType(initialDocType);
   }, [initialDocType, isOpen]);
 
-  // الكشف الذكي وتعيين دور كل عمود بناءً على اسمه ونوع المستند المختار
+  // الكشف الذكي التلقائي عن الأدوار الدقيقة لكافة الأعمدة
   const autoDetectRoles = (headers: string[], selectedDocType: ImportDocType): ColumnRole[] => {
     return headers.map((h) => {
       const clean = h.trim().toLowerCase();
       
-      // 1. رقم الفقرة / التسلسل
+      // 1. رقم الفقرة
       if (
         /^(ت|رقم|الرقم|فقرة|الفقرة|تسلسل|م|item|no|itemno|#|id)$/i.test(clean) || 
         clean.includes('تسلسل') || 
@@ -79,20 +83,28 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
       // 2. الوصف / اسم المادة
       if (
-        clean.includes('وصف') || 
         clean.includes('اسم المادة') || 
         clean.includes('المادة') || 
+        clean.includes('وصف') || 
         clean.includes('بيان') || 
-        clean.includes('تفاصيل') || 
-        clean.includes('العمل') || 
         clean.includes('description') || 
-        clean.includes('item name') || 
-        clean.includes('item description')
+        clean.includes('تفاصيل')
       ) {
         return 'description';
       }
 
-      // 3. الكمية / العدد
+      // 3. سعر المفرد
+      if (
+        clean.includes('سعر المفرد') || 
+        clean.includes('المفرد') || 
+        clean.includes('سعر مفرد') || 
+        clean.includes('unit price') || 
+        clean.includes('rate')
+      ) {
+        return 'unitPrice';
+      }
+
+      // 4. العدد / الكمية
       if (
         clean.includes('عدد') || 
         clean.includes('العدد') || 
@@ -104,54 +116,45 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         return 'quantity';
       }
 
-      // 4. الأعمدة المالية بناءً على نوع المستند
-      if (selectedDocType === 'estimated') {
-        // إذا كان المستخدم يرفع جدول الكلفة التخمينية
-        if (
-          clean.includes('تخمين') || 
-          clean.includes('سعر') || 
-          clean.includes('مفرد') || 
-          clean.includes('مبلغ') || 
-          clean.includes('estimated') || 
-          clean.includes('price') || 
-          clean.includes('rate') || 
-          clean.includes('amount')
-        ) {
-          return 'estimatedTotal';
-        }
-      } else if (selectedDocType === 'bidder') {
-        // إذا كان المستخدم يرفع جدول أسعار المجهز
-        if (
-          clean.includes('مجهز') || 
-          clean.includes('سعر المفرد') || 
-          clean.includes('مفرد') || 
-          clean.includes('مبلغ الفقرة') || 
-          clean.includes('سعر') || 
-          clean.includes('مبلغ') || 
-          clean.includes('عطاء') || 
-          clean.includes('عرض') || 
-          clean.includes('bidder') || 
-          clean.includes('rate') || 
-          clean.includes('price')
-        ) {
-          return 'bidderTotal';
-        }
-      } else {
-        // إذا كان الجدول يحتوي الاثنين معاً
-        if (clean.includes('تخمين') || clean.includes('estimated')) return 'estimatedTotal';
-        if (clean.includes('مجهز') || clean.includes('مقاول') || clean.includes('bidder') || clean.includes('مفرد')) return 'bidderTotal';
+      // 5. التفقيط / مبلغ الفقرة كتابةً
+      if (
+        clean.includes('كتابة') || 
+        clean.includes('كتابةً') || 
+        clean.includes('تفقيط') || 
+        clean.includes('words')
+      ) {
+        return 'writtenText';
+      }
+
+      // 6. مبلغ الفقرة رقماً
+      if (
+        clean.includes('مبلغ الفقرة') || 
+        clean.includes('مبلغ') || 
+        clean.includes('رقما') || 
+        clean.includes('رقماً') || 
+        clean.includes('الإجمالي') || 
+        clean.includes('مجهز') || 
+        clean.includes('عطاء') || 
+        clean.includes('total')
+      ) {
+        return selectedDocType === 'estimated' ? 'estimatedTotal' : 'bidderTotal';
+      }
+
+      // 7. الكلفة التخمينية
+      if (clean.includes('تخمين') || clean.includes('estimated')) {
+        return 'estimatedTotal';
       }
 
       return 'ignore';
     });
   };
 
-  // خوارزمية ذكية لاكتشاف صف العناوين الحقيقي في ملف Excel
+  // خوارزمية اكتشاف صف العناوين الحقيقي
   const findBestHeaderRowIndex = (data: string[][]): number => {
     let bestIdx = 0;
     let maxScore = -1;
 
-    const keywords = ['ت', 'رقم', 'فقرة', 'مادة', 'اسم', 'وصف', 'سعر', 'مفرد', 'تخمين', 'مجهز', 'عدد', 'كمية', 'وحدة', 'مبلغ', 'item', 'price', 'qty', 'description'];
+    const keywords = ['ت', 'رقم', 'فقرة', 'مادة', 'اسم', 'وصف', 'سعر', 'مفرد', 'تخمين', 'مجهز', 'عدد', 'كمية', 'وحدة', 'مبلغ', 'كتابة', 'item', 'price', 'qty', 'description'];
 
     for (let r = 0; r < Math.min(12, data.length); r++) {
       const row = data[r] || [];
@@ -175,6 +178,28 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     }
 
     return bestIdx;
+  };
+
+  // تشغيل الفحص التدقيقي عند تجهيز الصفوف
+  const runForensicAudit = (headers: string[], rows: string[][], roles: ColumnRole[]) => {
+    const itemNoIdx = roles.indexOf('itemNo');
+    const descIdx = roles.indexOf('description');
+    const unitPriceIdx = roles.indexOf('unitPrice');
+    const qtyIdx = roles.indexOf('quantity');
+    const totalIdx = roles.indexOf('bidderTotal');
+    const writtenIdx = roles.indexOf('writtenText');
+
+    const formattedRows = rows.map((r, i) => ({
+      itemNo: itemNoIdx !== -1 && r[itemNoIdx] ? r[itemNoIdx] : String(i + 1),
+      description: descIdx !== -1 && r[descIdx] ? r[descIdx] : `فقرة ${i + 1}`,
+      unitPrice: unitPriceIdx !== -1 ? r[unitPriceIdx] : 0,
+      quantity: qtyIdx !== -1 ? r[qtyIdx] : 1,
+      enteredTotal: totalIdx !== -1 ? r[totalIdx] : (unitPriceIdx !== -1 ? r[unitPriceIdx] : 0),
+      writtenText: writtenIdx !== -1 ? r[writtenIdx] : undefined
+    }));
+
+    const report = auditBidderRows(formattedRows, sourceFileName || currentBidderName);
+    setAuditReport(report);
   };
 
   // تطبيق صف العناوين المختار
@@ -201,17 +226,20 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
     const roles = autoDetectRoles(headers, selectedDoc);
     setColumnMappings(roles);
+    runForensicAudit(headers, rows, roles);
   };
 
-  // تغيير نوع المستند مع إعادة ضبط الأدوار تلقائياً
+  // اختيار نوع المستند
   const handleSelectDocType = (type: ImportDocType) => {
     setDocType(type);
     if (rawHeaders.length > 0) {
-      setColumnMappings(autoDetectRoles(rawHeaders, type));
+      const roles = autoDetectRoles(rawHeaders, type);
+      setColumnMappings(roles);
+      runForensicAudit(rawHeaders, rawRows, roles);
     }
   };
 
-  // معالجة قراءة ملف Excel (.xlsx, .xls, .csv)
+  // معالجة ملف Excel
   const handleExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -240,7 +268,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       const bestHeaderIdx = findBestHeaderRowIndex(stringData);
       applyHeaderRow(stringData, bestHeaderIdx, docType);
 
-      const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/جدول|عطاء|مناقصة|تحليل|BOQ|أسعار|مواد/gi, '').trim();
+      const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/جدول|عطاء|مناقصة|تحليل|BOQ|أسعار|مواد|سيناريو|اختبار/gi, '').trim();
       if (cleanFileName) {
         setNewBidderName(cleanFileName);
       }
@@ -251,7 +279,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     }
   };
 
-  // معالجة لصق جدول من Word أو Excel أو الحافظة
+  // معالجة اللصق
   const handleProcessPastedText = () => {
     if (!pastedText.trim()) return;
 
@@ -272,6 +300,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     setColumnMappings(prev => {
       const updated = [...prev];
       updated[colIndex] = role;
+      runForensicAudit(rawHeaders, rawRows, updated);
       return updated;
     });
   };
@@ -285,28 +314,30 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
     const itemNoIdx = columnMappings.indexOf('itemNo');
     const estIdx = columnMappings.indexOf('estimatedTotal');
+    const unitPriceIdx = columnMappings.indexOf('unitPrice');
+    const qtyIdx = columnMappings.indexOf('quantity');
     const bidIdx = columnMappings.indexOf('bidderTotal');
     const descIdx = columnMappings.indexOf('description');
-    const qtyIdx = columnMappings.indexOf('quantity');
-
-    if (estIdx === -1 && bidIdx === -1) {
-      alert('يرجى تحديد عمود مالي واحد على الأقل عبر القائمة المنسدلة أعلى الأعمدة:\n- اختر [مبلغ المجهز] أو [المبلغ التخميني]');
-      return;
-    }
 
     const extractedItems: Partial<BOQItem>[] = rawRows.map((row, idx) => {
       const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? row[itemNoIdx] : String(idx + 1);
       const estVal = estIdx !== -1 ? parseArabicNumber(row[estIdx]) : 0;
-      const bidVal = bidIdx !== -1 ? parseArabicNumber(row[bidIdx]) : 0;
-      const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
+      const unitPriceVal = unitPriceIdx !== -1 ? parseArabicNumber(row[unitPriceIdx]) : 0;
       const qtyVal = qtyIdx !== -1 ? parseArabicNumber(row[qtyIdx]) : 1;
+      const enteredBidVal = bidIdx !== -1 ? parseArabicNumber(row[bidIdx]) : (unitPriceVal * (qtyVal || 1));
+      const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
+
+      // إذا اختار المستخدم اعتماد التصحيح القانوني لسعر المفرد
+      const finalBidderVal = useCorrectedPrices && unitPriceVal > 0 
+        ? (unitPriceVal * (qtyVal || 1)) 
+        : enteredBidVal;
 
       return {
         itemNo: itemNoVal,
         description: descVal,
         quantity: qtyVal || 1,
         estimatedTotal: estVal,
-        bidderTotal: bidVal
+        bidderTotal: docType === 'estimated' ? 0 : finalBidderVal
       };
     }).filter(item => 
       (item.estimatedTotal || 0) > 0 || 
@@ -332,11 +363,9 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     onClose();
   };
 
-  const hasFinancialColumn = columnMappings.includes('estimatedTotal') || columnMappings.includes('bidderTotal');
-
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden">
         
         {/* Modal Header */}
         <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-500/30">
@@ -346,13 +375,13 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                معالج الاستيراد الذكي لجداول Excel و Word
+                معالج الاستيراد والتدقيق الحسابي والقانوني لجداول العطاءات
                 <span className="text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded-md font-bold">
-                  2-Step Guided Wizard
+                  BOC Math & Legal Auditor
                 </span>
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
-                ارفع جدول عروض المجهزين أو جدول الكلفة التخمينية لشركة نفط البصرة دون استبدال أو مسح أي أرقام سابقة.
+                يكتشف أخطاء الضرب الحسابي وتعارض الأرقام مع التفقيط المكتوب كتابةً ويطبق أحكام المادة (13/ثانياً) تلقائياً.
               </p>
             </div>
           </div>
@@ -365,11 +394,11 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 text-slate-900">
           
-          {/* Step 0: Upfront Document Type Selector (3 Big Interactive Cards) */}
+          {/* Step 0: Upfront Document Type Selector */}
           <div className="space-y-2">
             <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>الخطوة 1: حدد نوع الجدول أو الملف الذي ترفعه الآن:</span>
+              <span>حدد نوع الجدول أو الملف الذي ترفعه الآن:</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
@@ -396,7 +425,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                     <div className="text-sm font-black text-indigo-950">1. أسعار عرض المجهز / المقاول</div>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    لاستيراد أسعار مفردات عطاء المجهز ({currentBidderName}) مع <strong>الحفاظ الكامل على الكلفة التخمينية</strong>.
+                    لاستيراد وتدقيق أسعار مفردات عطاء المجهز مع <strong>الحفاظ الكامل على الكلفة التخمينية</strong>.
                   </p>
                 </div>
               </div>
@@ -450,7 +479,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                     <div className="text-sm font-black text-slate-950">3. جدول متكامل (تخميني + مجهز)</div>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    إذا كان ملف الإكسل يحتوي على عمودين للمبالغ (التخميني ومبلغ المجهز معاً في نفس الجدول).
+                    إذا كان الملف يحتوي على عمودين للمبالغ (التخميني ومبلغ المجهز معاً في نفس الجدول).
                   </p>
                 </div>
               </div>
@@ -468,9 +497,9 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
             >
               <FileSpreadsheet className="w-10 h-10 text-indigo-600 group-hover:scale-110 transition mb-2" />
               <div className="text-sm font-black text-slate-900">
-                رفع ملف Excel ({docType === 'estimated' ? 'جدول الكلفة التخمينية' : 'جدول أسعار المجهز'})
+                رفع ملف Excel ({docType === 'estimated' ? 'جدول الكلفة التخمينية' : 'جدول أسعار وعطاء المجهز'})
               </div>
-              <div className="text-xs text-slate-500 mt-1">انقر لاختيار الملف من جهازك لقراءته واستخلاصه فوراً</div>
+              <div className="text-xs text-slate-500 mt-1">انقر لاختيار الملف من جهازك لتحليله وتدقيقه فوراً</div>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -506,7 +535,104 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
           </div>
 
-          {/* Step 2: Interactive Column Mapping Grid */}
+          {/* Step 2: Audit Results Dashboard (When Errors are Detected) */}
+          {auditReport && auditReport.itemsWithErrorsCount > 0 && (
+            <div className="bg-gradient-to-br from-rose-50 via-amber-50 to-white rounded-3xl border-2 border-rose-300 shadow-md p-5 space-y-4">
+              
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-200/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-rose-600 text-white rounded-2xl shadow-sm">
+                    <Calculator className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-rose-950 flex items-center gap-2">
+                      تقرير التدقيق الحسابي والمطابقة النصية لعطاء المجهز
+                      <span className="text-xs bg-rose-600 text-white px-2 py-0.5 rounded-md font-bold">
+                        تم اكتشاف {auditReport.itemsWithErrorsCount} أخطاء
+                      </span>
+                    </h3>
+                    <p className="text-xs text-rose-800 font-medium">
+                      بموجب المادة (13 / ثانياً) من تعليمات العقود الحكومية: سعر المفرد المكتوب هو المعيار الملزم لتصحيح مبالغ العطاء.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Legal Correction Toggle Button */}
+                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
+                  <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCorrectedPrices}
+                      onChange={(e) => setUseCorrectedPrices(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded"
+                    />
+                    <span>تطبيق التصحيح الحسابي القانوني التلقائي (المادة 13/2)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* KPI Audit Badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white p-3 rounded-2xl border border-slate-200">
+                  <div className="text-[11px] text-slate-500 font-bold">إجمالي المبالغ المدونة بالعطاء</div>
+                  <div className="text-sm font-black text-slate-900 font-mono mt-0.5">
+                    {auditReport.originalTotalEntered.toLocaleString()} د.ع
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-emerald-300">
+                  <div className="text-[11px] text-emerald-700 font-bold">المبلغ القانوني الصحيح (المفرد × العدد)</div>
+                  <div className="text-sm font-black text-emerald-800 font-mono mt-0.5">
+                    {auditReport.correctedLegalTotal.toLocaleString()} د.ع
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-amber-300">
+                  <div className="text-[11px] text-amber-700 font-bold">أخطاء الضرب الحسابي</div>
+                  <div className="text-sm font-black text-amber-800 mt-0.5">
+                    {auditReport.mathErrorsCount} فقرات خاطئة
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-purple-300">
+                  <div className="text-[11px] text-purple-700 font-bold">تعارض التفقيط مع الرقم</div>
+                  <div className="text-sm font-black text-purple-800 mt-0.5">
+                    {auditReport.textDiscrepanciesCount} حالات تعارض
+                  </div>
+                </div>
+              </div>
+
+              {/* Error Detail Cards */}
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {auditReport.rows.filter(r => r.hasMathError || r.hasTextDiscrepancy).map((row, idx) => (
+                  <div key={idx} className="bg-white p-2.5 rounded-xl border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold bg-slate-900 text-white px-2 py-0.5 rounded-md text-[11px]">
+                        فقرة {row.itemNo}
+                      </span>
+                      <span className="font-bold text-slate-800">{row.description}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px]">
+                      {row.hasMathError && (
+                        <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 font-bold">
+                          ⚠️ خطأ ضرب: المدون ({row.enteredNumberTotal.toLocaleString()}) ≠ الصحيح ({row.calculatedMathTotal.toLocaleString()})
+                        </span>
+                      )}
+                      {row.hasTextDiscrepancy && (
+                        <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">
+                          📝 تعارض تفقيط: المكتوب ({row.writtenText})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+          )}
+
+          {/* Step 3: Interactive Column Mapping Grid */}
           {rawHeaders.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
               
@@ -546,18 +672,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                 )}
               </div>
 
-              {/* Notice if no financial column is selected yet */}
-              {!hasFinancialColumn && (
-                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center gap-2 text-xs text-amber-900 font-bold">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    يرجى تعيين عمود <strong>{docType === 'estimated' ? '[المبلغ التخميني]' : '[مبلغ المجهز]'}</strong> عبر القائمة المنسدلة أعلى العمود المطلوب.
-                  </span>
-                </div>
-              )}
-
               {/* Column Mapping Selectors & Preview Table */}
-              <div className="overflow-x-auto max-h-[320px] border border-slate-200 rounded-xl">
+              <div className="overflow-x-auto max-h-[300px] border border-slate-200 rounded-xl">
                 <table className="w-full text-xs text-right border-collapse">
                   
                   {/* Selectors Header */}
@@ -576,25 +692,29 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                               value={currentRole}
                               onChange={(e) => handleMapColumn(colIdx, e.target.value as ColumnRole)}
                               className={`w-full text-xs font-black p-1.5 rounded-lg border focus:outline-none cursor-pointer ${
-                                currentRole === 'bidderTotal'
+                                currentRole === 'unitPrice'
                                   ? 'bg-indigo-600 text-white border-indigo-400'
-                                  : currentRole === 'estimatedTotal'
+                                  : currentRole === 'quantity'
+                                  ? 'bg-purple-600 text-white border-purple-400'
+                                  : currentRole === 'bidderTotal'
                                   ? 'bg-blue-600 text-white border-blue-400'
-                                  : currentRole === 'itemNo'
+                                  : currentRole === 'writtenText'
                                   ? 'bg-amber-600 text-slate-950 border-amber-400'
                                   : currentRole === 'description'
                                   ? 'bg-emerald-700 text-white border-emerald-400'
-                                  : currentRole === 'quantity'
-                                  ? 'bg-slate-700 text-purple-200 border-purple-400'
+                                  : currentRole === 'itemNo'
+                                  ? 'bg-slate-700 text-white border-slate-500'
                                   : 'bg-slate-800 text-slate-400 border-slate-700'
                               }`}
                             >
                               <option value="ignore">✕ تجاهل هذا العمود</option>
-                              <option value="bidderTotal">🏢 مبلغ / سعر المجهز</option>
-                              <option value="estimatedTotal">💰 المبلغ التخميني</option>
-                              <option value="description">📝 وصف / اسم المادة</option>
+                              <option value="unitPrice">🏷️ سعر المفرد (د.ع)</option>
+                              <option value="quantity">🔢 العدد / الكمية</option>
+                              <option value="bidderTotal">🏢 مبلغ الفقرة رقماً</option>
+                              <option value="writtenText">📝 مبلغ الفقرة كتابةً</option>
+                              <option value="description">📋 اسم المادة / الوصف</option>
                               <option value="itemNo">🔢 رقم الفقرة (ت)</option>
-                              <option value="quantity">📦 الكمية / العدد</option>
+                              <option value="estimatedTotal">💰 المبلغ التخميني</option>
                             </select>
                           </th>
                         );
@@ -602,53 +722,49 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                     </tr>
                   </thead>
 
-                  {/* Sample Rows Preview */}
+                  {/* Sample Rows Preview with Audit Badges */}
                   <tbody className="divide-y divide-slate-200 bg-white">
-                    {rawRows.slice(0, 8).map((row, rowIdx) => (
-                      <tr key={rowIdx} className="hover:bg-slate-50">
-                        {rawHeaders.map((_, colIdx) => {
-                          const role = columnMappings[colIdx] || 'ignore';
-                          const val = row[colIdx] || '-';
-                          const isIgnored = role === 'ignore';
+                    {rawRows.slice(0, 15).map((row, rowIdx) => {
+                      const auditRow = auditReport?.rows[rowIdx];
+                      return (
+                        <tr 
+                          key={rowIdx} 
+                          className={`hover:bg-slate-50 ${
+                            auditRow?.hasMathError || auditRow?.hasTextDiscrepancy ? 'bg-rose-50/40' : ''
+                          }`}
+                        >
+                          {rawHeaders.map((_, colIdx) => {
+                            const role = columnMappings[colIdx] || 'ignore';
+                            const val = row[colIdx] || '-';
+                            const isIgnored = role === 'ignore';
 
-                          return (
-                            <td 
-                              key={colIdx} 
-                              className={`p-2.5 border-l border-slate-200 font-mono text-xs ${
-                                isIgnored 
-                                  ? 'text-slate-400 bg-slate-50/50 line-through' 
-                                  : role === 'estimatedTotal'
-                                  ? 'text-blue-900 bg-blue-50/40 font-black'
-                                  : role === 'bidderTotal'
-                                  ? 'text-indigo-900 bg-indigo-50/40 font-black'
-                                  : role === 'description'
-                                  ? 'text-emerald-950 bg-emerald-50/30 font-bold'
-                                  : 'text-slate-900 font-bold'
-                              }`}
-                            >
-                              {val}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                            return (
+                              <td 
+                                key={colIdx} 
+                                className={`p-2.5 border-l border-slate-200 font-mono text-xs ${
+                                  isIgnored 
+                                    ? 'text-slate-400 bg-slate-50/50 line-through' 
+                                    : role === 'unitPrice'
+                                    ? 'text-indigo-950 bg-indigo-50/40 font-black'
+                                    : role === 'quantity'
+                                    ? 'text-purple-950 bg-purple-50/40 font-bold text-center'
+                                    : role === 'bidderTotal' && auditRow?.hasMathError
+                                    ? 'text-rose-700 bg-rose-100 font-black'
+                                    : role === 'writtenText' && auditRow?.hasTextDiscrepancy
+                                    ? 'text-purple-900 bg-purple-100 font-bold'
+                                    : 'text-slate-900 font-bold'
+                                }`}
+                              >
+                                {val}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
 
                 </table>
-              </div>
-
-              {/* Status Summary Banner */}
-              <div className="p-3 bg-slate-100 rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-slate-800">نتيجة الاستيراد:</span>
-                  <span className="text-indigo-900 font-bold">
-                    {docType === 'estimated'
-                      ? `سيتم تحديث الكلفة التخمينية لـ (${rawRows.length}) فقرة مع الحفاظ التام على أسعار المجهزين.`
-                      : docType === 'bidder'
-                      ? `سيتم تحديث أسعار المجهز (${currentBidderName}) لـ (${rawRows.length}) فقرة مع الحفاظ التام على التخميني.`
-                      : `سيتم تعبئة الجدول بالكامل (التخميني وعرض المجهز معاً).`}
-                  </span>
-                </div>
               </div>
 
             </div>
@@ -659,7 +775,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         {/* Modal Footer */}
         <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
           <div className="text-xs text-slate-500 font-medium">
-            {rawRows.length > 0 ? `جاهز لاستيراد (${rawRows.length}) فقرة إلى جدول التحليل` : 'حدد نوع الجدول أولاً ثم ارفع الملف للبدء'}
+            {rawRows.length > 0 ? `جاهز لاستيراد (${rawRows.length}) فقرة مع تطبيق معايير التدقيق والتصحيح القانوني` : 'حدد نوع الجدول أولاً ثم ارفع الملف للبدء'}
           </div>
 
           <div className="flex items-center gap-2">
@@ -673,10 +789,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
             <button
               onClick={handleConfirmImport}
               disabled={rawRows.length === 0}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-black px-6 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer"
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-black px-6 py-2.5 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer"
             >
-              <Check className="w-4 h-4" />
-              <span>تأكيد واستيراد البيانات إلى الجدول</span>
+              <FileCheck2 className="w-4 h-4" />
+              <span>اعتماد واستيراد الجدول في النظام</span>
             </button>
           </div>
         </div>
