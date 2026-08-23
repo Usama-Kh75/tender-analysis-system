@@ -150,6 +150,7 @@ export function App() {
 
     const updatedBidder: Bidder = {
       ...activeBidder,
+      name: 'شركة جديدة',
       items: recalc.items,
       totals: recalc.totals
     };
