@@ -19,7 +19,7 @@ interface NavbarProps {
   activeBidder: Bidder;
   onSelectProject: (id: string) => void;
   onNewProject: () => void;
-  onOpenSmartImport: () => void;
+  onOpenSmartImport: (type?: 'bidder' | 'estimated' | 'both') => void;
   onOpenOcr: () => void;
   onOpenMultiBidder: () => void;
   onOpenAuditTrail: () => void;

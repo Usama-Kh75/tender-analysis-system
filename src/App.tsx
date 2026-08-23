@@ -44,6 +44,7 @@ export function App() {
 
   // Modals
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
+  const [smartImportDocType, setSmartImportDocType] = useState<'bidder' | 'estimated' | 'both'>('bidder');
   const [isOcrOpen, setIsOcrOpen] = useState(false);
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
@@ -677,7 +678,10 @@ export function App() {
           setActiveProjectId(id);
         }}
         onNewProject={handleNewProject}
-        onOpenSmartImport={() => setIsSmartImportOpen(true)}
+        onOpenSmartImport={(type) => {
+          setSmartImportDocType(type || 'bidder');
+          setIsSmartImportOpen(true);
+        }}
         onOpenOcr={() => setIsOcrOpen(true)}
         onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
@@ -886,6 +890,7 @@ export function App() {
         onClose={() => setIsSmartImportOpen(false)}
         onApplyExtractedItems={handleApplyExtractedItems}
         currentBidderName={activeBidder.name}
+        initialDocType={smartImportDocType}
       />
 
       <ImageOcrModal
