@@ -326,8 +326,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       const qtyVal = qtyIdx !== -1 ? parseArabicNumber(row[qtyIdx]) : 1;
       const enteredBidVal = bidIdx !== -1 ? parseArabicNumber(row[bidIdx]) : (unitPriceVal * (qtyVal || 1));
       const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
+      const writtenVal = writtenIdx !== -1 && row[writtenIdx] ? String(row[writtenIdx]).trim() : undefined;
 
-      // إذا اختار المستخدم اعتماد التصحيح القانوني لسعر المفرد
+      const auditRow = auditReport?.rows[idx];
+
       const finalBidderVal = useCorrectedPrices && unitPriceVal > 0 
         ? (unitPriceVal * (qtyVal || 1)) 
         : enteredBidVal;
@@ -337,7 +339,13 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         description: descVal,
         quantity: qtyVal || 1,
         estimatedTotal: estVal,
-        bidderTotal: docType === 'estimated' ? 0 : finalBidderVal
+        bidderTotal: docType === 'estimated' ? 0 : finalBidderVal,
+        enteredUnitPrice: unitPriceVal || (finalBidderVal / (qtyVal || 1)),
+        enteredBidderTotal: enteredBidVal,
+        writtenText: writtenVal,
+        hasMathError: auditRow ? auditRow.hasMathError : false,
+        hasTextDiscrepancy: auditRow ? auditRow.hasTextDiscrepancy : false,
+        correctionRationale: auditRow?.hasMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد (مادة 13/2)' : undefined
       };
     }).filter(item => 
       (item.estimatedTotal || 0) > 0 || 
