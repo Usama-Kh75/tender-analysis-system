@@ -18,7 +18,7 @@ import { formatNumber } from '../../utils/calculations';
 interface ImageOcrModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onApplyExtractedItems: (items: Partial<BOQItem>[], createAsNewBidder: boolean, bidderName?: string) => void;
+  onApplyExtractedItems: (items: Partial<BOQItem>[], mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean, bidderName?: string) => void;
 }
 
 export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
