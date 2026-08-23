@@ -17,6 +17,7 @@ import { BOQTable } from './components/BOQTable';
 import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
 
+import { SmartTableImportModal } from './components/modals/SmartTableImportModal';
 import { ImageOcrModal } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
@@ -42,6 +43,7 @@ export function App() {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
 
   // Modals
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
   const [isOcrOpen, setIsOcrOpen] = useState(false);
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
@@ -517,6 +519,7 @@ export function App() {
           setActiveProjectId(id);
         }}
         onNewProject={handleNewProject}
+        onOpenSmartImport={() => setIsSmartImportOpen(true)}
         onOpenOcr={() => setIsOcrOpen(true)}
         onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
@@ -720,6 +723,13 @@ export function App() {
       </footer>
 
       {/* Modals */}
+      <SmartTableImportModal
+        isOpen={isSmartImportOpen}
+        onClose={() => setIsSmartImportOpen(false)}
+        onApplyExtractedItems={handleApplyExtractedItems}
+        currentBidderName={activeBidder.name}
+      />
+
       <ImageOcrModal
         isOpen={isOcrOpen}
         onClose={() => setIsOcrOpen(false)}
