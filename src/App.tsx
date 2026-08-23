@@ -233,10 +233,30 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Batch Add Items
+  // Batch Add Items (Direct Smart Paste Handler)
   const handleBatchAddItems = (newItems: Partial<BOQItem>[]) => {
-    const updatedRaw = [...activeBidder.items, ...newItems];
-    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    let mergedItems: Partial<BOQItem>[] = [];
+
+    // إذا كان الجدول يحتوي على عناصر فارغة (أو أسطر مبدئية) وتم لصق عدد فقرات، ندمجها من البداية
+    if (activeBidder.items.length > 0 && (activeBidder.items[0].estimatedTotal === 0 && activeBidder.items[0].bidderTotal === 0 && activeBidder.items.length === 1)) {
+      mergedItems = newItems;
+    } else if (newItems.length <= activeBidder.items.length && activeBidder.items.length > 1) {
+      // دمج الأرقام في الأسطر الحالية
+      mergedItems = activeBidder.items.map((existing, idx) => {
+        const incoming = newItems[idx];
+        if (!incoming) return existing;
+        return {
+          ...existing,
+          estimatedTotal: incoming.estimatedTotal !== 0 ? incoming.estimatedTotal : existing.estimatedTotal,
+          bidderTotal: incoming.bidderTotal !== 0 ? incoming.bidderTotal : existing.bidderTotal,
+          description: incoming.description && !incoming.description.startsWith('فقرة') ? incoming.description : existing.description
+        };
+      });
+    } else {
+      mergedItems = newItems;
+    }
+
+    const recalculation = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
 
     const updatedBidder: Bidder = {
       ...activeBidder,
@@ -317,11 +337,29 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Apply OCR or Imported Items
-  const handleApplyExtractedItems = (extracted: Partial<BOQItem>[], createAsNew: boolean, bidderName?: string) => {
-    const recalc = calculateBOQMetrics(extracted, currentProject.deviationThreshold);
+  // Apply OCR or Imported Items with Precision Destination Modes
+  const handleApplyExtractedItems = (
+    extracted: Partial<BOQItem>[], 
+    mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean, 
+    bidderName?: string
+  ) => {
+    const isNew = mode === 'new_bidder' || mode === true;
+    const isEstimatedOnly = mode === 'estimated_only';
+    const isBidderOnly = mode === 'bidder_only';
 
-    if (createAsNew) {
+    if (isNew) {
+      // 1. إنشاء مجهز جديد
+      const baseItems = extracted.map((ext, idx) => {
+        const matchingExisting = activeBidder.items[idx];
+        return {
+          ...ext,
+          estimatedTotal: ext.estimatedTotal && ext.estimatedTotal > 0 ? ext.estimatedTotal : (matchingExisting?.estimatedTotal || 0),
+          description: ext.description || matchingExisting?.description || `فقرة ${ext.itemNo || idx + 1}`
+        };
+      });
+
+      const recalc = calculateBOQMetrics(baseItems, currentProject.deviationThreshold);
+
       const newBidder: Bidder = {
         id: `bidder-${Date.now()}`,
         name: bidderName || `شركة جديدة (${currentProject.bidders.length + 1})`,
@@ -340,12 +378,75 @@ export function App() {
 
       updatedProj = addAuditLog(
         updatedProj,
-        'استيراد عطاء من مستند/صورة',
-        `تم استيراد وإنشاء مجهز جديد (${newBidder.name}) يحتوي على (${extracted.length}) فقرة بواسطة محرك OCR`
+        'استيراد عطاء شركة جديدة',
+        `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
-    } else {
+
+    } else if (isEstimatedOnly) {
+      // 2. تحديث الكلفة التخمينية فقط للمشروع عبر كافة المجهزين
+      const updatedBidders = currentProject.bidders.map(b => {
+        const mergedItems: Partial<BOQItem>[] = extracted.map((ext, idx) => {
+          const existingItem = b.items[idx];
+          return {
+            id: existingItem?.id || `item-${idx + 1}-${Date.now()}`,
+            itemNo: ext.itemNo || existingItem?.itemNo || idx + 1,
+            description: ext.description || existingItem?.description || `فقرة ${idx + 1}`,
+            quantity: ext.quantity || existingItem?.quantity || 1,
+            estimatedTotal: ext.estimatedTotal || 0,
+            bidderTotal: existingItem?.bidderTotal || 0 // الحفاظ الكامل على أسعار المجهز
+          };
+        });
+
+        const recalc = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
+        return {
+          ...b,
+          items: recalc.items,
+          totals: recalc.totals
+        };
+      });
+
+      let updatedProj: TenderProject = {
+        ...currentProject,
+        bidders: updatedBidders,
+        updatedAt: new Date().toISOString()
+      };
+
+      updatedProj = addAuditLog(
+        updatedProj,
+        'تحديث الكلفة التخمينية للمشروع',
+        `تم استيراد وتحديث جدول الكلفة التخمينية (${extracted.length} فقرة) لشركة نفط البصرة`
+      );
+
+      setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+
+    } else if (isBidderOnly) {
+      // 3. تحديث أسعار المجهز الحالي فقط مع الحفاظ على التخميني
+      const mergedItems: Partial<BOQItem>[] = activeBidder.items.map((existing, idx) => {
+        const ext = extracted[idx];
+        return {
+          ...existing,
+          bidderTotal: ext && ext.bidderTotal !== undefined ? ext.bidderTotal : existing.bidderTotal
+        };
+      });
+
+      // إذا كان الملف المستورد يحتوي على فقرات أكثر من الموجودة
+      if (extracted.length > activeBidder.items.length) {
+        for (let i = activeBidder.items.length; i < extracted.length; i++) {
+          const ext = extracted[i];
+          mergedItems.push({
+            itemNo: ext.itemNo || i + 1,
+            description: ext.description || `فقرة ${i + 1}`,
+            quantity: ext.quantity || 1,
+            estimatedTotal: ext.estimatedTotal || 0,
+            bidderTotal: ext.bidderTotal || 0
+          });
+        }
+      }
+
+      const recalc = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
+
       const updatedBidder: Bidder = {
         ...activeBidder,
         items: recalc.items,
@@ -361,8 +462,33 @@ export function App() {
 
       updatedProj = addAuditLog(
         updatedProj,
-        'تحديث جدول الفقرات عبر OCR',
-        `تم تحديث وتعبئة (${extracted.length}) فقرة في جدول المجهز الحالي (${activeBidder.name})`
+        'تحديث أسعار مجهز',
+        `تم تحديث وتعبئة أسعار المجهز (${activeBidder.name}) لـ (${extracted.length}) فقرة`
+      );
+
+      setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+
+    } else {
+      // 4. استبدال كامل للجدول (تخميني + مجهز)
+      const recalc = calculateBOQMetrics(extracted, currentProject.deviationThreshold);
+
+      const updatedBidder: Bidder = {
+        ...activeBidder,
+        items: recalc.items,
+        totals: recalc.totals
+      };
+
+      const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
+      let updatedProj: TenderProject = {
+        ...currentProject,
+        bidders: updatedBidders,
+        updatedAt: new Date().toISOString()
+      };
+
+      updatedProj = addAuditLog(
+        updatedProj,
+        'استبدال جدول الفقرات بالكامل',
+        `تم استبدال وتعبئة جدول الفقرات بالكامل (${extracted.length}) فقرة`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
