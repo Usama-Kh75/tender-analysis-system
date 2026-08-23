@@ -1,3 +1,4 @@
+import { parseArabicTextToNumber } from './bidderAuditEngine';
 import { BOQItem, TenderTotals } from '../types/tender';
 
 /**
@@ -148,6 +149,23 @@ export function calculateBOQMetrics(
     const isDeviated = Math.abs(deviationPercent) > threshold;
     const deviatedAmount = isDeviated ? Math.abs(diffAmount) : 0;
 
+    const enteredUnit = item.enteredUnitPrice !== undefined ? item.enteredUnitPrice : (bidderUnitPrice || (quantity > 0 ? bidderTotal / quantity : 0));
+    const enteredTotal = item.enteredBidderTotal !== undefined ? item.enteredBidderTotal : bidderTotal;
+    const writtenTxt = item.writtenText;
+
+    const mathCalcTotal = enteredUnit > 0 && quantity > 0 ? (enteredUnit * quantity) : bidderTotal;
+    const isMathError = item.hasMathError !== undefined 
+      ? item.hasMathError 
+      : (enteredUnit > 0 && quantity > 0 && Math.abs(mathCalcTotal - enteredTotal) > 0.01);
+
+    let isTextDiscrepancy = item.hasTextDiscrepancy !== undefined ? item.hasTextDiscrepancy : false;
+    if (writtenTxt && writtenTxt.length > 2 && item.hasTextDiscrepancy === undefined) {
+      const parsedFromText = parseArabicTextToNumber(writtenTxt);
+      if (parsedFromText !== null && parsedFromText > 0 && Math.abs(parsedFromText - enteredTotal) > 0.01) {
+        isTextDiscrepancy = true;
+      }
+    }
+
     return {
       id: item.id || `item-${index + 1}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
       itemNo,
@@ -156,7 +174,7 @@ export function calculateBOQMetrics(
       quantity,
       estimatedUnitPrice: estimatedUnitPrice || (quantity > 0 ? estimatedTotal / quantity : 0),
       estimatedTotal,
-      bidderUnitPrice: bidderUnitPrice || (quantity > 0 ? bidderTotal / quantity : 0),
+      bidderUnitPrice: enteredUnit,
       bidderTotal,
       diffAmount,
       deviationPercent,
@@ -172,8 +190,14 @@ export function calculateBOQMetrics(
         isZeroPrice: bidderTotal === 0 && estimatedTotal > 0,
         isHighDeviation: deviationPercent > threshold,
         isAbnormallyLow: deviationPercent < -threshold,
-        hasMathMismatch: quantity > 0 && bidderUnitPrice > 0 && Math.abs(quantity * bidderUnitPrice - bidderTotal) > 0.05
-      }
+        hasMathMismatch: isMathError
+      },
+      enteredUnitPrice: enteredUnit,
+      enteredBidderTotal: enteredTotal,
+      writtenText: writtenTxt,
+      hasMathError: isMathError,
+      hasTextDiscrepancy: isTextDiscrepancy,
+      correctionRationale: isMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد (مادة 13/2)' : undefined
     };
   });
 

@@ -334,8 +334,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
       let isTextDisc = false;
       if (writtenVal && writtenVal.length > 2) {
-        // إذا كان هناك تفقيط مكتوب ويختلف
-        isTextDisc = auditReport?.rows[idx]?.hasTextDiscrepancy || false;
+        const textNum = parseArabicTextToNumber(writtenVal);
+        if (textNum !== null && textNum > 0 && Math.abs(textNum - enteredBidVal) > 0.01) {
+          isTextDisc = true;
+        }
       }
 
       const finalBidderVal = useCorrectedPrices && unitPriceVal > 0 
