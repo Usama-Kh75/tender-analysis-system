@@ -21,7 +21,7 @@ import {
 import * as XLSX from 'xlsx';
 import { BOQItem } from '../../types/tender';
 import { parseArabicNumber } from '../../utils/calculations';
-import { auditBidderRows, BidderAuditReport } from '../../utils/bidderAuditEngine';
+import { auditBidderRows, BidderAuditReport, parseArabicTextToNumber } from '../../utils/bidderAuditEngine';
 
 export type ImportDocType = 'bidder' | 'estimated' | 'both';
 export type ImportMode = 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace';
