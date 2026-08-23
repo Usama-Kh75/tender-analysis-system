@@ -109,7 +109,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       alert('لا توجد فقرات لاعتمادها!');
       return;
     }
-    onApplyExtractedItems(extractedItems, importMode === 'new', bidderName || undefined);
+    onApplyExtractedItems(extractedItems, importMode, bidderName || undefined);
     onClose();
   };
 
@@ -291,36 +291,48 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     </div>
 
                     {/* Import Mode Options */}
-                    <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                    <div className="mt-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                      <div className="font-bold text-slate-800">وجهة تطبيق هذا الجدول المستخرج من الصورة / PDF:</div>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-1.5 cursor-pointer font-bold text-indigo-900">
                           <input
                             type="radio"
                             name="importMode"
-                            checked={importMode === 'update'}
-                            onChange={() => setImportMode('update')}
+                            checked={importMode === 'bidder_only'}
+                            onChange={() => setImportMode('bidder_only')}
                           />
-                          <span>تحديث جدول المجهز الحالي</span>
+                          <span>تحديث أسعار المجهز الحالي فقط (مع الحفاظ على التخميني)</span>
                         </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-800">
+                        <label className="flex items-center gap-1.5 cursor-pointer font-bold text-blue-900">
                           <input
                             type="radio"
                             name="importMode"
-                            checked={importMode === 'new'}
-                            onChange={() => setImportMode('new')}
+                            checked={importMode === 'estimated_only'}
+                            onChange={() => setImportMode('estimated_only')}
                           />
-                          <span>إضافته كمجهز / عطاء جديد</span>
+                          <span>تحديث الكلفة التخمينية فقط (مع الحفاظ على أسعار المجهزين)</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer font-bold text-emerald-900">
+                          <input
+                            type="radio"
+                            name="importMode"
+                            checked={importMode === 'new_bidder'}
+                            onChange={() => setImportMode('new_bidder')}
+                          />
+                          <span>إنشاء شركة / مجهز جديد بهذا العطاء</span>
                         </label>
                       </div>
 
-                      {importMode === 'new' && (
-                        <input
-                          type="text"
-                          placeholder="اسم الشركة أو المجهز الجديد..."
-                          value={bidderName}
-                          onChange={(e) => setBidderName(e.target.value)}
-                          className="bg-white border border-slate-300 rounded-lg px-3 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        />
+                      {importMode === 'new_bidder' && (
+                        <div className="pt-1">
+                          <input
+                            type="text"
+                            placeholder="اسم الشركة أو المجهز الجديد..."
+                            value={bidderName}
+                            onChange={(e) => setBidderName(e.target.value)}
+                            className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 w-64"
+                          />
+                        </div>
                       )}
                     </div>
 
