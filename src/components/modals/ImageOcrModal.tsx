@@ -32,7 +32,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [extractedItems, setExtractedItems] = useState<Partial<BOQItem>[]>([]);
   const [bidderName, setBidderName] = useState<string>('');
-  const [importMode, setImportMode] = useState<'update' | 'new'>('update');
+  const [importMode, setImportMode] = useState<'estimated_only' | 'bidder_only' | 'new_bidder'>('bidder_only');
   const [rawText, setRawText] = useState<string>('');
 
   if (!isOpen) return null;

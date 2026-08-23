@@ -337,7 +337,7 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Apply OCR or Imported Items with Precision Destination Modes
+  // Apply OCR or Imported Items with Foolproof Row-by-Row Column Merging
   const handleApplyExtractedItems = (
     extracted: Partial<BOQItem>[], 
     mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean, 
@@ -348,17 +348,38 @@ export function App() {
     const isBidderOnly = mode === 'bidder_only';
 
     if (isNew) {
-      // 1. إنشاء مجهز جديد
-      const baseItems = extracted.map((ext, idx) => {
-        const matchingExisting = activeBidder.items[idx];
-        return {
-          ...ext,
-          estimatedTotal: ext.estimatedTotal && ext.estimatedTotal > 0 ? ext.estimatedTotal : (matchingExisting?.estimatedTotal || 0),
-          description: ext.description || matchingExisting?.description || `فقرة ${ext.itemNo || idx + 1}`
-        };
-      });
+      // 1. إنشاء مجهز / شركة جديدة
+      const maxLen = Math.max(activeBidder.items.length, extracted.length);
+      const mergedItems: Partial<BOQItem>[] = [];
 
-      const recalc = calculateBOQMetrics(baseItems, currentProject.deviationThreshold);
+      for (let i = 0; i < maxLen; i++) {
+        const ext = extracted[i];
+        const existing = activeBidder.items[i];
+        
+        // إذا كان الاستيراد هو عطاء مجهز فقط، نأخذ التخميني من الجدول الحالي
+        const estVal = ext && ext.estimatedTotal && ext.estimatedTotal > 0 
+          ? ext.estimatedTotal 
+          : (existing?.estimatedTotal || 0);
+
+        const bidVal = ext && ext.bidderTotal !== undefined 
+          ? ext.bidderTotal 
+          : 0;
+
+        const itemNo = ext?.itemNo || existing?.itemNo || String(i + 1);
+        const desc = ext?.description && !ext.description.startsWith('فقرة ')
+          ? ext.description
+          : (existing?.description || `فقرة ${itemNo}`);
+
+        mergedItems.push({
+          itemNo,
+          description: desc,
+          quantity: ext?.quantity || existing?.quantity || 1,
+          estimatedTotal: estVal,
+          bidderTotal: bidVal
+        });
+      }
+
+      const recalc = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
 
       const newBidder: Bidder = {
         id: `bidder-${Date.now()}`,
@@ -385,19 +406,30 @@ export function App() {
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
 
     } else if (isEstimatedOnly) {
-      // 2. تحديث الكلفة التخمينية فقط للمشروع عبر كافة المجهزين
+      // 2. تحديث الكلفة التخمينية فقط للمشروع عبر كافة المجهزين بسطر بسطر
+      const maxLen = Math.max(activeBidder.items.length, extracted.length);
+
       const updatedBidders = currentProject.bidders.map(b => {
-        const mergedItems: Partial<BOQItem>[] = extracted.map((ext, idx) => {
-          const existingItem = b.items[idx];
-          return {
-            id: existingItem?.id || `item-${idx + 1}-${Date.now()}`,
-            itemNo: ext.itemNo || existingItem?.itemNo || idx + 1,
-            description: ext.description || existingItem?.description || `فقرة ${idx + 1}`,
-            quantity: ext.quantity || existingItem?.quantity || 1,
-            estimatedTotal: ext.estimatedTotal || 0,
-            bidderTotal: existingItem?.bidderTotal || 0 // الحفاظ الكامل على أسعار المجهز
-          };
-        });
+        const mergedItems: Partial<BOQItem>[] = [];
+
+        for (let i = 0; i < maxLen; i++) {
+          const ext = extracted[i];
+          const existing = b.items[i];
+
+          const itemNo = ext?.itemNo || existing?.itemNo || String(i + 1);
+          const desc = ext?.description && !ext.description.startsWith('فقرة ')
+            ? ext.description
+            : (existing?.description || `فقرة ${itemNo}`);
+
+          mergedItems.push({
+            id: existing?.id || `item-${i + 1}-${Date.now()}`,
+            itemNo,
+            description: desc,
+            quantity: ext?.quantity || existing?.quantity || 1,
+            estimatedTotal: ext?.estimatedTotal !== undefined ? ext.estimatedTotal : (existing?.estimatedTotal || 0),
+            bidderTotal: existing?.bidderTotal || 0 // الحفاظ التام على أسعار المجهز الحالي
+          });
+        }
 
         const recalc = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
         return {
@@ -416,33 +448,33 @@ export function App() {
       updatedProj = addAuditLog(
         updatedProj,
         'تحديث الكلفة التخمينية للمشروع',
-        `تم استيراد وتحديث جدول الكلفة التخمينية (${extracted.length} فقرة) لشركة نفط البصرة`
+        `تم استيراد وتحديث جدول الكلفة التخمينية لشركة نفط البصرة (${extracted.length} فقرة)`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
 
     } else if (isBidderOnly) {
-      // 3. تحديث أسعار المجهز الحالي فقط مع الحفاظ على التخميني
-      const mergedItems: Partial<BOQItem>[] = activeBidder.items.map((existing, idx) => {
-        const ext = extracted[idx];
-        return {
-          ...existing,
-          bidderTotal: ext && ext.bidderTotal !== undefined ? ext.bidderTotal : existing.bidderTotal
-        };
-      });
+      // 3. تحديث أسعار المجهز الحالي فقط بسطر بسطر مع الحفاظ على التخميني
+      const maxLen = Math.max(activeBidder.items.length, extracted.length);
+      const mergedItems: Partial<BOQItem>[] = [];
 
-      // إذا كان الملف المستورد يحتوي على فقرات أكثر من الموجودة
-      if (extracted.length > activeBidder.items.length) {
-        for (let i = activeBidder.items.length; i < extracted.length; i++) {
-          const ext = extracted[i];
-          mergedItems.push({
-            itemNo: ext.itemNo || i + 1,
-            description: ext.description || `فقرة ${i + 1}`,
-            quantity: ext.quantity || 1,
-            estimatedTotal: ext.estimatedTotal || 0,
-            bidderTotal: ext.bidderTotal || 0
-          });
-        }
+      for (let i = 0; i < maxLen; i++) {
+        const ext = extracted[i];
+        const existing = activeBidder.items[i];
+
+        const itemNo = existing?.itemNo || ext?.itemNo || String(i + 1);
+        const desc = existing?.description && !existing.description.startsWith('فقرة ')
+          ? existing.description
+          : (ext?.description || `فقرة ${itemNo}`);
+
+        mergedItems.push({
+          id: existing?.id || `item-${i + 1}-${Date.now()}`,
+          itemNo,
+          description: desc,
+          quantity: existing?.quantity || ext?.quantity || 1,
+          estimatedTotal: existing?.estimatedTotal || 0, // الحفاظ التام على الكلفة التخمينية
+          bidderTotal: ext?.bidderTotal !== undefined ? ext.bidderTotal : (existing?.bidderTotal || 0)
+        });
       }
 
       const recalc = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
@@ -469,7 +501,7 @@ export function App() {
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
 
     } else {
-      // 4. استبدال كامل للجدول (تخميني + مجهز)
+      // 4. استبدال كامل للجدول
       const recalc = calculateBOQMetrics(extracted, currentProject.deviationThreshold);
 
       const updatedBidder: Bidder = {
