@@ -18,6 +18,12 @@ export interface BOQItem {
   sourcePage?: number;
   sourceBox?: { x: number; y: number; w: number; h: number };
   notes?: string;
+  enteredUnitPrice?: number;       // سعر المفرد المدون
+  enteredBidderTotal?: number;     // المبلغ المدون رقماً
+  writtenText?: string;            // المبلغ المكتوب كتابةً
+  hasMathError?: boolean;          // خطأ ضرب حسابي
+  hasTextDiscrepancy?: boolean;    // تعارض تفقيط مع الرقم
+  correctionRationale?: string;    // السند القانوني للتصحيح
   flags?: {
     isZeroPrice?: boolean;
     isHighDeviation?: boolean;
@@ -50,6 +56,12 @@ export interface Bidder {
   technicalScore?: number;
   disqualificationReason?: string;
   notes?: string;
+  enteredUnitPrice?: number;       // سعر المفرد المدون
+  enteredBidderTotal?: number;     // المبلغ المدون رقماً
+  writtenText?: string;            // المبلغ المكتوب كتابةً
+  hasMathError?: boolean;          // خطأ ضرب حسابي
+  hasTextDiscrepancy?: boolean;    // تعارض تفقيط مع الرقم
+  correctionRationale?: string;    // السند القانوني للتصحيح
 }
 
 export interface AuditLogEntry {
