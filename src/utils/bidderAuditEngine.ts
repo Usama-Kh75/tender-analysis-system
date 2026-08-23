@@ -191,9 +191,9 @@ export const auditBidderRows = (
     const enteredNumberTotal = parseArabicNumber(row.enteredTotal !== undefined ? row.enteredTotal : row.bidderTotal);
     const writtenText = row.writtenText ? String(row.writtenText).trim() : undefined;
 
-    // 1. تدقيق الخطأ الحسابي في حاصل الضرب (سعر المفرد * العدد)
-    const calculatedMathTotal = unitPrice > 0 ? (unitPrice * quantity) : enteredNumberTotal;
-    const hasMathError = unitPrice > 0 && Math.abs(calculatedMathTotal - enteredNumberTotal) > 0.01;
+    // 1. تدقيق الخطأ الحسابي في حاصل الضرب (سعر المفرد * العدد - يطبق فقط عند وجود كمية أكبر من 1)
+    const calculatedMathTotal = unitPrice > 0 && quantity > 1 ? (unitPrice * quantity) : enteredNumberTotal;
+    const hasMathError = unitPrice > 0 && quantity > 1 && Math.abs(calculatedMathTotal - enteredNumberTotal) > 0.01;
     const mathDifference = calculatedMathTotal - enteredNumberTotal;
 
     // 2. تدقيق التناقض بين المكتوب رقماً والمكتوب كتابةً (التفقيط)

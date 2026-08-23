@@ -153,10 +153,10 @@ export function calculateBOQMetrics(
     const enteredTotal = item.enteredBidderTotal !== undefined ? item.enteredBidderTotal : bidderTotal;
     const writtenTxt = item.writtenText;
 
-    const mathCalcTotal = enteredUnit > 0 && quantity > 0 ? (enteredUnit * quantity) : bidderTotal;
+    const mathCalcTotal = enteredUnit > 0 && quantity > 1 ? (enteredUnit * quantity) : bidderTotal;
     const isMathError = item.hasMathError !== undefined 
       ? item.hasMathError 
-      : (enteredUnit > 0 && quantity > 0 && Math.abs(mathCalcTotal - enteredTotal) > 0.01);
+      : (enteredUnit > 0 && quantity > 1 && Math.abs(mathCalcTotal - enteredTotal) > 0.01);
 
     let isTextDiscrepancy = item.hasTextDiscrepancy !== undefined ? item.hasTextDiscrepancy : false;
     if (writtenTxt && writtenTxt.length > 2 && item.hasTextDiscrepancy === undefined) {
