@@ -340,9 +340,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         }
       }
 
-      const finalBidderVal = useCorrectedPrices && unitPriceVal > 0 
-        ? mathTotal 
-        : enteredBidVal;
+      // الحفاظ على مبلغ المجهز الأصلي كما دونه في العطاء تماماً
+      const finalBidderVal = enteredBidVal;
 
       return {
         itemNo: itemNoVal,
@@ -355,7 +354,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         writtenText: writtenVal,
         hasMathError: isMathErr,
         hasTextDiscrepancy: isTextDisc,
-        correctionRationale: isMathErr ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد (مادة 13/2)' : undefined
+        correctionRationale: isMathErr ? 'مؤشر خطأ ضرب في عطاء المجهز' : undefined
       };
     }).filter(item => 
       (item.estimatedTotal || 0) > 0 || 

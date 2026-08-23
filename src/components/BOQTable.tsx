@@ -1,3 +1,4 @@
+import { parseArabicTextToNumber } from '../utils/bidderAuditEngine';
 import React, { useState } from 'react';
 import { 
   Plus, 
@@ -391,20 +392,55 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         
                         {/* 1. خطأ الضرب الحسابي (أحمر) */}
                         {item.hasMathError && (
-                          <div className="bg-rose-100 text-rose-950 border border-rose-300 px-2 py-1 rounded-lg font-bold flex items-start gap-1.5 shadow-2xs">
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                            <div>
-                              <span className="font-black text-rose-900">🚨 خطأ ضرب:</span> دوّن المجهز رقماً ({item.enteredBidderTotal?.toLocaleString() || '-'}) ← صُحح للمفرد ({item.bidderTotal.toLocaleString()})
+                          <div className="bg-rose-100 text-rose-950 border border-rose-300 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
+                            <div className="flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-black text-rose-900">🚨 خطأ ضرب:</span> المدون في العطاء ({item.enteredBidderTotal?.toLocaleString() || item.bidderTotal.toLocaleString()} د.ع) ≠ حاصل (المفرد {item.enteredUnitPrice?.toLocaleString()} × {item.quantity} = {((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()} د.ع)
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 mr-5">
+                              <button
+                                onClick={() => {
+                                  const mathCorrect = (item.enteredUnitPrice || 0) * (item.quantity || 1);
+                                  onUpdateItem(actualIndex, 'bidderTotal', mathCorrect);
+                                  onUpdateItem(actualIndex, 'hasMathError', false);
+                                }}
+                                className="bg-rose-700 hover:bg-rose-800 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
+                                title="تصحيح مبلغ الفقرة لحاصل ضرب المفرد في الكمية بموجب المادة 13/2"
+                              >
+                                🔢 اعتماد حاصل الضرب ({((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()})
+                              </button>
                             </div>
                           </div>
                         )}
 
                         {/* 2. تعارض وتناقض التفقيط (برتقالي / كهرماني) */}
                         {item.hasTextDiscrepancy && (
-                          <div className="bg-amber-100 text-amber-950 border border-amber-400 px-2 py-1 rounded-lg font-bold flex items-start gap-1.5 shadow-2xs">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
-                            <div>
-                              <span className="font-black text-amber-900">⚠️ تعارض تفقيط:</span> المكتوب كتابةً ({item.writtenText}) يختلف عن الرقم المدون
+                          <div className="bg-amber-100 text-amber-950 border border-amber-400 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
+                            <div className="flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-black text-amber-900">⚠️ تعارض تفقيط:</span> المكتوب كتابةً ({item.writtenText}) يختلف عن الرقم المدون ({item.enteredBidderTotal?.toLocaleString() || item.bidderTotal.toLocaleString()} د.ع)
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 mr-5">
+                              <button
+                                onClick={() => {
+                                  // استخراج الرقم من التفقيط واعتماده
+                                  if (item.writtenText) {
+                                    const parsed = parseArabicTextToNumber(item.writtenText);
+                                    if (parsed && parsed > 0) {
+                                      onUpdateItem(actualIndex, 'bidderTotal', parsed);
+                                      onUpdateItem(actualIndex, 'hasTextDiscrepancy', false);
+                                    }
+                                  }
+                                }}
+                                className="bg-amber-700 hover:bg-amber-800 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
+                                title="اعتماد المبلغ المكتوب كتابةً بعد موافقة اللجنة / الإدارة وفق التعليمات"
+                              >
+                                ⚖️ اعتماد المكتوب كتابةً بموافقة اللجنة
+                              </button>
                             </div>
                           </div>
                         )}
