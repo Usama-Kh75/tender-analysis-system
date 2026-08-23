@@ -2,216 +2,141 @@ import React, { useState } from 'react';
 import { 
   Plus, 
   Trash2, 
-  Search, 
-  FileCheck2, 
   Copy, 
   AlertTriangle, 
   CheckCircle2, 
-  ShieldCheck, 
-  Zap, 
-  FileText, 
-  ClipboardPaste,
-  FileSpreadsheet,
-  Building2,
-  Pencil,
+  FileSpreadsheet, 
+  Sparkles,
+  Calculator,
   RotateCcw,
-  Eraser,
-  HelpCircle
+  Pencil,
+  Building2,
+  Table as TableIcon,
+  ShieldCheck,
+  Coins,
+  Search,
+  Filter,
+  Check,
+  Scale
 } from 'lucide-react';
-import { BOQItem, TenderTotals } from '../types/tender';
+import { BOQItem } from '../types/tender';
 import { formatNumber } from '../utils/calculations';
 
 interface BOQTableProps {
   items: BOQItem[];
-  totals: TenderTotals;
-  currency: string;
   deviationThreshold: number;
   bidderName: string;
-  onUpdateBidderName?: (name: string) => void;
-  onUpdateItem: (index: number, field: keyof BOQItem, value: any) => void;
+  onUpdateItem: (index: number, field: keyof BOQItem, val: any) => void;
   onAddItem: () => void;
   onDeleteItem: (index: number) => void;
   onDuplicateItem: (index: number) => void;
   onBatchAddItems?: (newItems: Partial<BOQItem>[]) => void;
   onClearBidderPrices?: () => void;
   onClearAllItems?: () => void;
+  onUpdateBidderName?: (newName: string) => void;
 }
-
-export type ViewPreset = 'quick_fast' | 'source_excel' | 'detailed_desc';
 
 export const BOQTable: React.FC<BOQTableProps> = ({
   items,
-  totals,
-  currency,
   deviationThreshold,
   bidderName,
-  onUpdateBidderName,
   onUpdateItem,
   onAddItem,
   onDeleteItem,
   onDuplicateItem,
   onBatchAddItems,
   onClearBidderPrices,
-  onClearAllItems
+  onClearAllItems,
+  onUpdateBidderName
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings'>('all');
-  const [viewPreset, setViewPreset] = useState<ViewPreset>('quick_fast'); // الافتراضي هو النمط السريع للإدخال المباشر
-  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(bidderName);
+  const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
+  const [isEditingBidderName, setIsEditingBidderName] = useState(false);
+  const [tempBidderName, setTempBidderName] = useState(bidderName);
 
-  const filteredItems = items.filter((item) => {
-    const matchesSearch = 
-      String(item.itemNo).includes(searchTerm) || 
-      (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    if (!matchesSearch) return false;
+  // إحصائيات الأخطاء الحسابية وتعارض التفقيط
+  const itemsWithErrors = items.filter(i => i.hasMathError || i.hasTextDiscrepancy);
+  const mathErrorsCount = items.filter(i => i.hasMathError).length;
+  const textErrorsCount = items.filter(i => i.hasTextDiscrepancy).length;
+
+  // فلترة الأسطر
+  const filteredItems = items.filter(item => {
+    const matchSearch = 
+      String(item.itemNo).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.writtenText && item.writtenText.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchSearch) return false;
 
     if (filterMode === 'deviated') return item.isDeviated;
     if (filterMode === 'savings') return item.diffAmount < 0;
+    if (filterMode === 'errors') return item.hasMathError || item.hasTextDiscrepancy;
     return true;
   });
 
-  // معالجة اللصق الذكي من Excel (Ctrl + V)
-  const handleTablePaste = (e: React.ClipboardEvent) => {
-    const pastedData = e.clipboardData.getData('text');
-    if (!pastedData || (!pastedData.includes('\t') && !pastedData.includes('\n'))) {
-      return;
+  const handleSaveBidderName = () => {
+    if (tempBidderName.trim() && onUpdateBidderName) {
+      onUpdateBidderName(tempBidderName.trim());
     }
-
-    const rows = pastedData.trim().split(/\r?\n/).map(r => r.split('\t'));
-    if (rows.length === 0) return;
-
-    const parsedRows: Partial<BOQItem>[] = [];
-    let startNo = items.length + 1;
-
-    for (const row of rows) {
-      const cleanNum = (val: string) => {
-        if (!val) return 0;
-        const cleaned = val.replace(/,/g, '').trim();
-        return parseFloat(cleaned) || 0;
-      };
-
-      if (row.length === 1) {
-        parsedRows.push({
-          itemNo: startNo++,
-          description: 'فقرة ' + (startNo - 1),
-          quantity: 1,
-          estimatedTotal: 0,
-          bidderTotal: cleanNum(row[0])
-        });
-      } else if (row.length === 2) {
-        parsedRows.push({
-          itemNo: startNo++,
-          description: 'فقرة ' + (startNo - 1),
-          quantity: 1,
-          estimatedTotal: cleanNum(row[0]),
-          bidderTotal: cleanNum(row[1])
-        });
-      } else if (row.length >= 3) {
-        const isFirstNum = !isNaN(Number(row[0].trim()));
-        parsedRows.push({
-          itemNo: isFirstNum ? row[0].trim() : startNo++,
-          description: !isFirstNum ? row[0].trim() : 'فقرة ' + row[0].trim(),
-          quantity: 1,
-          estimatedTotal: cleanNum(row[1]),
-          bidderTotal: cleanNum(row[2])
-        });
-      }
-    }
-
-    if (parsedRows.length > 0 && onBatchAddItems) {
-      e.preventDefault();
-      onBatchAddItems(parsedRows);
-      setPasteNotice('تم لصق وإدراج (' + parsedRows.length + ') فقرة بنجاح من الحافظة!');
-      setTimeout(() => setPasteNotice(null), 4000);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, rowIndex: number, field: string) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (rowIndex === items.length - 1) {
-        onAddItem();
-      } else {
-        const nextInput = document.getElementById('input-' + field + '-' + (rowIndex + 1));
-        nextInput?.focus();
-      }
-    }
+    setIsEditingBidderName(false);
   };
 
   return (
-    <div 
-      className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-8 outline-none"
-      onPaste={handleTablePaste}
-      tabIndex={0}
-    >
+    <div className="space-y-4">
       
-      {/* 1. Header Bar: Bidder Name (Editable) & Action Toolbar */}
-      <div className="p-4 sm:p-5 bg-slate-900 text-white border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      {/* Top Banner: Bidder Editing & Actions Bar */}
+      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-4">
         
-        {/* Bidder Identity & Name Editing */}
+        {/* Bidder Name Editor */}
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs">
-            <Building2 className="w-5 h-5" />
+          <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-md">
+            <Building2 className="w-6 h-6 text-white" />
           </div>
-
           <div>
-            <div className="text-[11px] text-indigo-300 font-bold">المجهز / المقاول الذي يتم إدخال مبالغه حالياً:</div>
-            
-            {!isEditingName ? (
+            <div className="text-[11px] text-slate-400 font-bold">
+              المجهز / المقاول الذي يتم تحليل وتدقيق عطائه حالياً:
+            </div>
+            {!isEditingBidderName ? (
               <div 
                 onClick={() => {
-                  setTempName(bidderName);
-                  setIsEditingName(true);
+                  setTempBidderName(bidderName);
+                  setIsEditingBidderName(true);
                 }}
-                className="text-base sm:text-lg font-black text-white hover:text-amber-400 cursor-pointer flex items-center gap-2 transition"
-                title="انقر لتعديل اسم الشركة فوراً"
+                className="text-base sm:text-lg font-black text-white flex items-center gap-2 cursor-pointer hover:text-indigo-300 transition group"
               >
                 <span>{bidderName}</span>
-                <Pencil className="w-3.5 h-3.5 text-slate-400" />
+                <Pencil className="w-4 h-4 text-indigo-400 opacity-60 group-hover:opacity-100 transition" />
               </div>
             ) : (
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="text"
-                  value={tempName}
-                  onChange={(e) => setTempName(e.target.value)}
-                  className="bg-slate-800 text-white text-sm font-black px-3 py-1 rounded-lg border border-indigo-400 focus:outline-none ring-2 ring-indigo-500/40"
+                  value={tempBidderName}
+                  onChange={(e) => setTempBidderName(e.target.value)}
+                  className="bg-slate-800 border border-indigo-400 text-white text-sm font-black px-3 py-1.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
                   autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveBidderName()}
                 />
                 <button
-                  onClick={() => {
-                    if (onUpdateBidderName && tempName.trim()) {
-                      onUpdateBidderName(tempName.trim());
-                    }
-                    setIsEditingName(false);
-                  }}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3 py-1.5 rounded-lg cursor-pointer shadow-xs"
+                  onClick={handleSaveBidderName}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black px-3 py-1.5 rounded-xl cursor-pointer"
                 >
                   حفظ
-                </button>
-                <button
-                  onClick={() => setIsEditingName(false)}
-                  className="bg-slate-700 text-slate-300 text-xs px-2.5 py-1.5 rounded-lg cursor-pointer"
-                >
-                  إلغاء
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Clear & Reset Tools (أدوات المسح والتفريغ) */}
+        {/* Clear Actions */}
         <div className="flex items-center gap-2 flex-wrap">
           {onClearBidderPrices && (
             <button
               onClick={onClearBidderPrices}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer"
-              title="تصفير مبالغ هذا المجهز للبدء في تعبئتها من جديد"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold px-3.5 py-2 rounded-xl border border-amber-400/30 transition cursor-pointer"
+              title="تصفير مبالغ هذا المجهز لإعادة إدخالها مع الحفاظ على التخميني والفقرات"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <RotateCcw className="w-3.5 h-3.5" />
               <span>تصفير مبالغ المجهز</span>
             </button>
           )}
@@ -219,10 +144,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           {onClearAllItems && (
             <button
               onClick={onClearAllItems}
-              className="flex items-center gap-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer"
-              title="مسح كافة أسطر وفقرات الجدول بالكامل للبدء بجدول فارغ"
+              className="flex items-center gap-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 text-xs font-bold px-3.5 py-2 rounded-xl border border-rose-600/40 transition cursor-pointer"
+              title="مسح وتفريغ الجدول بالكامل للبدء من الصفر"
             >
-              <Eraser className="w-3.5 h-3.5 text-rose-400" />
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
               <span>مسح وتفريغ الجدول بالكامل</span>
             </button>
           )}
@@ -230,578 +155,366 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
       </div>
 
-      {/* 2. Sub-Toolbar: Fast Mode / Presets / Search / Add */}
-      <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-        
-        {/* View Mode Presets Switcher */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center bg-slate-200/80 p-1 rounded-2xl text-xs font-black border border-slate-300">
-            
-            {/* النمط السريع (الافتراضي للإدخال) */}
-            <button
-              onClick={() => setViewPreset('quick_fast')}
-              className={'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition cursor-pointer ' + (
-                viewPreset === 'quick_fast'
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'text-slate-700 hover:text-slate-950'
-              )}
-              title="النمط السريع المباشر لإدخال المبالغ التخمينية ومبالغ المجهز"
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>النمط السريع للإدخال ⚡</span>
-            </button>
+      {/* Forensic Audit Warning Banner (When Math or Text Errors are Detected) */}
+      {itemsWithErrors.length > 0 && (
+        <div className="bg-gradient-to-r from-rose-500/20 via-amber-500/15 to-transparent border-2 border-rose-400 p-4 sm:p-5 rounded-3xl flex flex-wrap items-center justify-between gap-4 text-xs shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-rose-600 text-white rounded-2xl font-black text-sm shrink-0 flex items-center gap-2 shadow-sm">
+              <AlertTriangle className="w-5 h-5" />
+              <span>تدقيق حسابي وقانوني (مادة 13/2)</span>
+            </div>
+            <div>
+              <div className="font-black text-rose-950 text-sm sm:text-base flex items-center gap-2">
+                تم اكتشاف ({itemsWithErrors.length}) أخطاء في عطاء ({bidderName}):
+                <span className="text-xs bg-rose-600 text-white px-2 py-0.5 rounded-md font-bold">
+                  {mathErrorsCount} خطأ ضرب • {textErrorsCount} تعارض تفقيط
+                </span>
+              </div>
+              <p className="text-rose-900 text-xs mt-1 leading-relaxed">
+                قام النظام بتأشير كافة الأخطاء وتطبيق التصحيح الحسابي القانوني التلقائي بالاعتداد بسعر المفرد وفق المادة (13 / ثانياً) من تعليمات تنفيذ العقود الحكومية.
+              </p>
+            </div>
+          </div>
 
-            {/* النمط المصدري Excel (للمطابقة والمراجعة) */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setViewPreset('source_excel')}
-              className={'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition cursor-pointer ' + (
-                viewPreset === 'source_excel'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-slate-700 hover:text-slate-950'
-              )}
-              title="معاينة الأعمدة كما هي في ملف Excel المرجعي"
+              onClick={() => setFilterMode(filterMode === 'errors' ? 'all' : 'errors')}
+              className={`px-4 py-2 rounded-xl font-black text-xs border transition cursor-pointer ${
+                filterMode === 'errors'
+                  ? 'bg-rose-700 text-white border-rose-800 shadow-sm'
+                  : 'bg-white text-rose-900 border-rose-300 hover:bg-rose-50'
+              }`}
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>معاينة شيت Excel 📑</span>
-            </button>
-            
-            {/* النمط الشامل التفصيلي */}
-            <button
-              onClick={() => setViewPreset('detailed_desc')}
-              className={'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition cursor-pointer ' + (
-                viewPreset === 'detailed_desc'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 hover:text-slate-950'
-              )}
-              title="إظهار كافة التفاصيل مع وصف الفقرة والتقييم"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>النمط الشامل 📝</span>
+              {filterMode === 'errors' ? 'عرض كافة الفقرات' : `عرض الفقرات الخاطئة فقط (${itemsWithErrors.length})`}
             </button>
           </div>
         </div>
+      )}
 
-        {/* Search & Filters & Add Item */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+      {/* Main Table Container */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden" id="boq-table-container">
+        
+        {/* Table Toolbar */}
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          
+          {/* Search Box */}
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
             <input
               type="text"
               placeholder="بحث برقم أو وصف الفقرة..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-white border border-slate-300 rounded-xl text-xs sm:text-sm pr-9 pl-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44 sm:w-52 shadow-2xs"
+              className="w-full bg-white border border-slate-300 rounded-xl pr-9 pl-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
             />
           </div>
 
-          <div className="flex items-center bg-white border border-slate-300 rounded-xl p-1 text-xs font-bold shadow-2xs">
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setFilterMode('all')}
-              className={'px-3 py-1.5 rounded-lg transition cursor-pointer ' + (
-                filterMode === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              )}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                filterMode === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+              }`}
             >
               الكل ({items.length})
             </button>
+
+            {itemsWithErrors.length > 0 && (
+              <button
+                onClick={() => setFilterMode('errors')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 ${
+                  filterMode === 'errors' ? 'bg-rose-600 text-white shadow-xs' : 'bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100'
+                }`}
+              >
+                <AlertTriangle className="w-3 h-3 text-rose-600" />
+                <span>أخطاء العطاء ({itemsWithErrors.length})</span>
+              </button>
+            )}
+
             <button
               onClick={() => setFilterMode('deviated')}
-              className={'px-3 py-1.5 rounded-lg transition cursor-pointer ' + (
-                filterMode === 'deviated' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 hover:text-rose-700'
-              )}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                filterMode === 'deviated' ? 'bg-rose-600 text-white shadow-xs' : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
+              }`}
             >
-              المنحرفة &gt; {deviationThreshold}% ({totals.deviatedItemsCount})
+              المنحرفة &gt; {deviationThreshold}% ({items.filter(i => i.isDeviated).length})
             </button>
+
             <button
               onClick={() => setFilterMode('savings')}
-              className={'px-3 py-1.5 rounded-lg transition cursor-pointer ' + (
-                filterMode === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-emerald-700'
-              )}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                filterMode === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
+              }`}
             >
               مطابقة ({items.filter(i => i.diffAmount < 0).length})
             </button>
           </div>
 
+          {/* Add Row Button */}
           <button
             onClick={onAddItem}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black px-4 py-2 rounded-xl shadow-sm transition transform active:scale-95 cursor-pointer"
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-4 py-2 rounded-xl shadow-xs transition transform active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ إضافة فقرة</span>
           </button>
         </div>
-      </div>
 
-      {/* Paste Notice */}
-      {pasteNotice && (
-        <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 text-center animate-bounce">
-          {pasteNotice}
-        </div>
-      )}
-
-      {/* Spreadsheet Table Container */}
-      <div className="overflow-x-auto max-h-[620px] relative">
-        <table className="w-full text-xs sm:text-sm text-right border-collapse">
-          
-          <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 z-20 shadow-xs select-none">
-            {viewPreset === 'quick_fast' ? (
-              /* النمط السريع (الافتراضي) */
+        {/* The Comprehensive BOQ Table */}
+        <div className="overflow-x-auto max-h-[640px] relative">
+          <table className="w-full text-xs sm:text-sm text-right border-collapse">
+            
+            <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 z-20 shadow-xs select-none">
               <tr>
-                <th className="p-3.5 w-16 text-center border-l border-slate-800">ت</th>
-                <th className="p-3.5 w-44 text-center bg-blue-950 border-l border-slate-800 text-blue-300">المبلغ التخميني ✏️</th>
-                <th className="p-3.5 w-44 text-center bg-indigo-950 border-l border-slate-800 text-indigo-300">مبلغ المجهز ({bidderName}) ✏️</th>
-                <th className="p-3.5 w-32 text-center border-l border-slate-800">نسبة الانحراف %</th>
-                <th className="p-3.5 w-36 text-center border-l border-slate-800 bg-rose-950 text-rose-300">الفقرة المنحرفة (&gt;{deviationThreshold}%)</th>
-                <th className="p-3.5 w-44 text-center border-l border-slate-800 bg-purple-950 text-purple-200">المفرد المجهز الموزون</th>
-                <th className="p-3.5 w-28 text-center border-l border-slate-800">التقييم</th>
-                <th className="p-3.5 w-20 text-center">إجراءات</th>
+                <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
+                <th className="p-3 min-w-[200px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
+                <th className="p-3 w-20 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
+                <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">سعر المفرد للمجهز ✏️</th>
+                <th className="p-3 w-36 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">مبلغ المجهز الإجمالي 💰</th>
+                <th className="p-3 w-32 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني (BOC) ✏️</th>
+                <th className="p-3 min-w-[240px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط (مادة 13/2)</th>
+                <th className="p-3 w-28 text-center border-l border-slate-800">نسبة الانحراف %</th>
+                <th className="p-3 w-32 text-center border-l border-slate-800 bg-purple-950 text-purple-200">المفرد الموزون</th>
+                <th className="p-3 w-28 text-center border-l border-slate-800">التقييم</th>
+                <th className="p-3 w-16 text-center">حذف</th>
               </tr>
-            ) : viewPreset === 'source_excel' ? (
-              /* معاينة شيت Excel */
-              <tr>
-                <th className="p-3.5 w-16 text-center border-l border-slate-800">الفقرة</th>
-                <th className="p-3.5 w-40 text-center bg-indigo-950 border-l border-slate-800 text-indigo-300">مبلغ المجهز ✏️</th>
-                <th className="p-3.5 w-40 text-center bg-blue-950 border-l border-slate-800 text-blue-300">المبلغ التخميني ✏️</th>
-                <th className="p-3.5 w-32 text-center border-l border-slate-800">نسبة الانحراف</th>
-                <th className="p-3.5 w-36 text-center border-l border-slate-800 bg-rose-950 text-rose-300">الفقرة المنحرفة</th>
-                <th className="p-3.5 w-28 text-center border-l border-slate-800 bg-purple-950/80 text-purple-200">النسبة السعرية</th>
-                <th className="p-3.5 w-40 text-center border-l border-slate-800 bg-purple-950 text-purple-200">السعر الجديد (للمجهز)</th>
-                <th className="p-3.5 w-24 text-center border-l border-slate-800">الكمية</th>
-                <th className="p-3.5 w-40 text-center border-l border-slate-800 bg-purple-950 text-purple-200">المفرد المجهز الموزون</th>
-                <th className="p-3.5 w-20 text-center">إجراءات</th>
-              </tr>
-            ) : (
-              /* النمط الشامل مع الأوصاف */
-              <tr>
-                <th className="p-3.5 w-16 text-center border-l border-slate-800">ت</th>
-                <th className="p-3.5 min-w-[240px] border-l border-slate-800">وصف وتفاصيل الفقرة ✏️</th>
-                <th className="p-3.5 w-40 text-center bg-blue-950 border-l border-slate-800 text-blue-300">المبلغ التخميني ✏️</th>
-                <th className="p-3.5 w-40 text-center bg-indigo-950 border-l border-slate-800 text-indigo-300">مبلغ المجهز ✏️</th>
-                <th className="p-3.5 w-32 text-center border-l border-slate-800">نسبة الانحراف %</th>
-                <th className="p-3.5 w-36 text-center border-l border-slate-800 bg-rose-950 text-rose-300">الفقرة المنحرفة</th>
-                <th className="p-3.5 w-40 text-center border-l border-slate-800 bg-purple-950 text-purple-200">السعر الجديد الموزون</th>
-                <th className="p-3.5 w-28 text-center border-l border-slate-800">التقييم</th>
-                <th className="p-3.5 w-20 text-center">إجراءات</th>
-              </tr>
-            )}
-          </thead>
-          
-          <tbody className="divide-y divide-slate-200 bg-white font-medium">
-            {filteredItems.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
-                  <div className="max-w-md mx-auto space-y-2">
-                    <p className="text-base text-slate-700 font-black">الجدول فارغ حالياً</p>
-                    <p className="text-xs text-slate-500">انقر فوق زر <strong>(+ إضافة فقرة)</strong> أو الصق بيانات من Excel بـ <kbd className="bg-white px-1 border font-bold">Ctrl+V</kbd></p>
-                  </div>
-                </td>
-              </tr>
-            ) : filteredItems.map((item, index) => {
-              const actualIndex = items.findIndex(i => i.id === item.id);
-              const isDeviated = item.isDeviated;
-              const isSaving = item.diffAmount < 0;
+            </thead>
 
-              return (
-                <tr 
-                  key={item.id} 
-                  className={'hover:bg-blue-50/50 transition group ' + (
-                    isDeviated ? 'bg-rose-50/30' : isSaving ? 'bg-emerald-50/20' : ''
-                  )}
-                >
-                  {viewPreset === 'quick_fast' ? (
-                    /* صفوف النمط السريع */
-                    <>
-                      <td className="p-2.5 text-center font-black text-slate-700 border-l border-slate-200 bg-slate-50/80">
-                        <input
-                          type="text"
-                          value={item.itemNo}
-                          onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
-                          className="w-full text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 rounded p-1 font-mono font-black"
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-blue-900 border-l border-slate-200 bg-blue-50/40">
-                        <input
-                          id={'input-estimatedTotal-' + actualIndex}
-                          type="number"
-                          value={item.estimatedTotal === 0 ? '' : item.estimatedTotal}
-                          onChange={(e) => onUpdateItem(actualIndex, 'estimatedTotal', parseFloat(e.target.value) || 0)}
-                          onKeyDown={(e) => handleKeyDown(e, actualIndex, 'estimatedTotal')}
-                          className="w-full text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-black text-blue-900 text-sm shadow-2xs"
-                          placeholder="0.00"
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-indigo-900 border-l border-slate-200 bg-indigo-50/40">
-                        <input
-                          id={'input-bidderTotal-' + actualIndex}
-                          type="number"
-                          value={item.bidderTotal === 0 ? '' : item.bidderTotal}
-                          onChange={(e) => onUpdateItem(actualIndex, 'bidderTotal', parseFloat(e.target.value) || 0)}
-                          onKeyDown={(e) => handleKeyDown(e, actualIndex, 'bidderTotal')}
-                          className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-black text-indigo-900 text-sm shadow-2xs"
-                          placeholder="0.00"
-                        />
-                        {(item.hasMathError || item.hasTextDiscrepancy) && (
-                          <div className="mt-1 space-y-1 text-right">
-                            {item.hasMathError && (
-                              <div className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                                <span>خطأ ضرب: المدون ({item.enteredBidderTotal?.toLocaleString() || '-'}) ← صُحح للمفرد</span>
-                              </div>
-                            )}
-                            {item.hasTextDiscrepancy && (
-                              <div className="text-[10px] font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                                📝 تفقيط: {item.writtenText}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="p-2.5 text-center border-l border-slate-200">
-                        <span className={'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ' + (
-                          isDeviated 
-                            ? 'bg-rose-100 text-rose-800 border border-rose-300' 
-                            : isSaving 
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                            : 'bg-slate-100 text-slate-700'
-                        )}>
-                          {item.deviationPercent > 0 ? '+' : ''}{item.deviationPercent.toFixed(2)}%
-                        </span>
-                      </td>
-
-                      <td className={'p-2.5 text-center font-black border-l border-slate-200 text-sm ' + (
-                        item.deviatedAmount > 0 ? 'bg-rose-100/60 text-rose-800 font-extrabold' : 'text-slate-300'
-                      )}>
-                        {item.deviatedAmount > 0 ? formatNumber(item.deviatedAmount) : '-'}
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-purple-950 border-l border-slate-200 bg-purple-50/20 text-sm">
-                        {formatNumber(item.weightedUnitPrice)}
-                      </td>
-
-                      <td className="p-2.5 text-center border-l border-slate-200">
-                        {isDeviated ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200">
-                            <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            منحرفة {item.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
-                          </span>
-                        ) : item.deviationPercent < 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            مطابق (للأقل ↓)
-                          </span>
-                        ) : item.deviationPercent > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
-                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
-                            مطابق (للأعلى ↑)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-slate-700 bg-slate-50 px-2.5 py-0.5 rounded-md border border-slate-200">
-                            <CheckCircle2 className="w-3 h-3 text-slate-600" />
-                            مطابق تماماً
-                          </span>
-                        )}
-                      </td>
-                    </>
-                  ) : viewPreset === 'source_excel' ? (
-                    /* صفوف معاينة Excel */
-                    <>
-                      <td className="p-2.5 text-center font-black text-slate-700 border-l border-slate-200 bg-slate-50/80">
-                        <input
-                          type="text"
-                          value={item.itemNo}
-                          onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
-                          className="w-full text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 rounded p-1 font-mono font-black"
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-indigo-900 border-l border-slate-200 bg-indigo-50/50">
-                        <input
-                          id={'input-bidderTotal-' + actualIndex}
-                          type="number"
-                          value={item.bidderTotal === 0 ? '' : item.bidderTotal}
-                          onChange={(e) => onUpdateItem(actualIndex, 'bidderTotal', parseFloat(e.target.value) || 0)}
-                          onKeyDown={(e) => handleKeyDown(e, actualIndex, 'bidderTotal')}
-                          className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-black text-indigo-900 text-sm shadow-2xs"
-                          placeholder="0.00"
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-blue-900 border-l border-slate-200 bg-blue-50/50">
-                        <input
-                          id={'input-estimatedTotal-' + actualIndex}
-                          type="number"
-                          value={item.estimatedTotal === 0 ? '' : item.estimatedTotal}
-                          onChange={(e) => onUpdateItem(actualIndex, 'estimatedTotal', parseFloat(e.target.value) || 0)}
-                          onKeyDown={(e) => handleKeyDown(e, actualIndex, 'estimatedTotal')}
-                          className="w-full text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-black text-blue-900 text-sm shadow-2xs"
-                          placeholder="0.00"
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center border-l border-slate-200">
-                        <span className={'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ' + (
-                          isDeviated 
-                            ? 'bg-rose-100 text-rose-800 border border-rose-300' 
-                            : isSaving 
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                            : 'bg-slate-100 text-slate-700'
-                        )}>
-                          {item.deviationPercent > 0 ? '+' : ''}{item.deviationPercent.toFixed(2)}%
-                        </span>
-                      </td>
-
-                      <td className={'p-2.5 text-center font-black border-l border-slate-200 text-sm ' + (
-                        item.deviatedAmount > 0 ? 'bg-rose-100/60 text-rose-800 font-extrabold' : 'text-slate-400'
-                      )}>
-                        {item.deviatedAmount > 0 ? formatNumber(item.deviatedAmount) : '0.00'}
-                      </td>
-
-                      <td className="p-2.5 text-center font-mono font-bold text-purple-700 border-l border-slate-200 bg-purple-50/10">
-                        {item.priceRatio.toFixed(4)}
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-purple-900 border-l border-slate-200 bg-purple-50/20 text-sm">
-                        {formatNumber(item.newPrice)}
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-slate-800 border-l border-slate-200">
-                        {item.quantity || 1}
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-purple-950 border-l border-slate-200 bg-purple-50/30 text-sm">
-                        {formatNumber(item.weightedUnitPrice)}
-                      </td>
-                    </>
-                  ) : (
-                    /* صفوف النمط الشامل */
-                    <>
-                      <td className="p-2.5 text-center font-black text-slate-700 border-l border-slate-200 bg-slate-50/80">
-                        <input
-                          type="text"
-                          value={item.itemNo}
-                          onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
-                          className="w-full text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 rounded p-1 font-mono font-black"
-                        />
-                      </td>
-
-                      <td className="p-2.5 border-l border-slate-200">
-                        <input
-                          type="text"
-                          value={item.description || ''}
-                          onChange={(e) => onUpdateItem(actualIndex, 'description', e.target.value)}
-                          className="w-full bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 rounded p-1 text-slate-900 font-semibold"
-                          placeholder={'فقرة ' + item.itemNo}
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-blue-900 border-l border-slate-200 bg-blue-50/40">
-                        <input
-                          id={'input-estimatedTotal-' + actualIndex}
-                          type="number"
-                          value={item.estimatedTotal === 0 ? '' : item.estimatedTotal}
-                          onChange={(e) => onUpdateItem(actualIndex, 'estimatedTotal', parseFloat(e.target.value) || 0)}
-                          onKeyDown={(e) => handleKeyDown(e, actualIndex, 'estimatedTotal')}
-                          className="w-full text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-black text-blue-900 text-sm shadow-2xs"
-                          placeholder="0.00"
-                        />
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-indigo-900 border-l border-slate-200 bg-indigo-50/40">
-                        <input
-                          id={'input-bidderTotal-' + actualIndex}
-                          type="number"
-                          value={item.bidderTotal === 0 ? '' : item.bidderTotal}
-                          onChange={(e) => onUpdateItem(actualIndex, 'bidderTotal', parseFloat(e.target.value) || 0)}
-                          onKeyDown={(e) => handleKeyDown(e, actualIndex, 'bidderTotal')}
-                          className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-black text-indigo-900 text-sm shadow-2xs"
-                          placeholder="0.00"
-                        />
-                        {(item.hasMathError || item.hasTextDiscrepancy) && (
-                          <div className="mt-1 space-y-1 text-right">
-                            {item.hasMathError && (
-                              <div className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                                <span>خطأ ضرب: المدون ({item.enteredBidderTotal?.toLocaleString() || '-'}) ← صُحح للمفرد</span>
-                              </div>
-                            )}
-                            {item.hasTextDiscrepancy && (
-                              <div className="text-[10px] font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                                📝 تفقيط: {item.writtenText}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="p-2.5 text-center border-l border-slate-200">
-                        <span className={'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ' + (
-                          isDeviated 
-                            ? 'bg-rose-100 text-rose-800 border border-rose-300' 
-                            : isSaving 
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                            : 'bg-slate-100 text-slate-700'
-                        )}>
-                          {item.deviationPercent > 0 ? '+' : ''}{item.deviationPercent.toFixed(2)}%
-                        </span>
-                      </td>
-
-                      <td className={'p-2.5 text-center font-black border-l border-slate-200 text-sm ' + (
-                        item.deviatedAmount > 0 ? 'bg-rose-100/60 text-rose-800 font-extrabold' : 'text-slate-300'
-                      )}>
-                        {item.deviatedAmount > 0 ? formatNumber(item.deviatedAmount) : '-'}
-                      </td>
-
-                      <td className="p-2.5 text-center font-black text-purple-900 border-l border-slate-200 bg-purple-50/20 text-sm">
-                        {formatNumber(item.newPrice)}
-                      </td>
-
-                      <td className="p-2.5 text-center border-l border-slate-200">
-                        {isDeviated ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200">
-                            <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            منحرفة {item.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
-                          </span>
-                        ) : item.deviationPercent < 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            مطابق (للأقل ↓)
-                          </span>
-                        ) : item.deviationPercent > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
-                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
-                            مطابق (للأعلى ↑)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-slate-700 bg-slate-50 px-2.5 py-0.5 rounded-md border border-slate-200">
-                            <CheckCircle2 className="w-3 h-3 text-slate-600" />
-                            مطابق تماماً
-                          </span>
-                        )}
-                      </td>
-                    </>
-                  )}
-
-                  {/* إجراءات */}
-                  <td className="p-2.5 text-center">
-                    <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition">
-                      <button
-                        onClick={() => onDuplicateItem(actualIndex)}
-                        className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 transition cursor-pointer"
-                        title="تكرار الفقرة"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => onDeleteItem(actualIndex)}
-                        className="p-1.5 hover:bg-rose-100 rounded-lg text-rose-600 transition cursor-pointer"
-                        title="حذف الفقرة"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+            <tbody className="divide-y divide-slate-200 bg-white font-medium">
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
+                    <div className="max-w-md mx-auto space-y-2">
+                      <p className="text-base text-slate-700 font-black">الجدول فارغ حالياً</p>
+                      <p className="text-xs text-slate-500">
+                        استورد جدول الإكسل من الأعلى عبر <strong>[ استيراد جدول (Excel / Word) ]</strong> أو انقر <strong>(+ إضافة فقرة)</strong>.
+                      </p>
                     </div>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
+              ) : filteredItems.map((item) => {
+                const actualIndex = items.findIndex(i => i.id === item.id);
+                const isDeviated = item.isDeviated;
+                const isSaving = item.diffAmount < 0;
+                const hasError = item.hasMathError || item.hasTextDiscrepancy;
 
-          {/* المجاميع الإجمالية */}
-          <tfoot className="bg-slate-950 text-white font-black text-xs sm:text-sm sticky bottom-0 z-20 shadow-lg border-t-2 border-slate-800">
-            {viewPreset === 'quick_fast' ? (
-              <tr>
-                <td className="p-3.5 text-center bg-black font-black border-l border-slate-800 text-amber-400">
-                  المجموع
-                </td>
-                <td className="p-3.5 text-center font-black text-blue-400 border-l border-slate-800 bg-blue-950/70 text-sm">
-                  {formatNumber(totals.totalEstimatedAmount)}
-                </td>
-                <td className="p-3.5 text-center font-black text-indigo-300 border-l border-slate-800 bg-indigo-950/70 text-sm">
-                  {formatNumber(totals.totalBidderAmount)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-amber-300 font-black">
-                  {totals.totalDeviationPercent.toFixed(2)}%
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 bg-rose-950 font-black text-rose-300 text-sm">
-                  {formatNumber(totals.deviatedItemsSum)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-purple-300">-</td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-slate-400 text-xs">
-                  {totals.deviatedItemsCount} منحرفة
-                </td>
-                <td className="p-3.5 text-center">-</td>
-              </tr>
-            ) : viewPreset === 'source_excel' ? (
-              <tr>
-                <td className="p-3.5 text-center bg-black font-black border-l border-slate-800 text-amber-400">
-                  المجموع
-                </td>
-                <td className="p-3.5 text-center font-black text-indigo-300 border-l border-slate-800 bg-indigo-950/70 text-sm">
-                  {formatNumber(totals.totalBidderAmount)}
-                </td>
-                <td className="p-3.5 text-center font-black text-blue-400 border-l border-slate-800 bg-blue-950/70 text-sm">
-                  {formatNumber(totals.totalEstimatedAmount)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-amber-300 font-black">
-                  {totals.totalDeviationPercent.toFixed(2)}%
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 bg-rose-950 font-black text-rose-300 text-sm">
-                  {formatNumber(totals.deviatedItemsSum)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-purple-300 font-mono">
-                  {totals.overallPriceRatio.toFixed(4)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 bg-purple-950 font-black text-purple-300 text-sm">
-                  {formatNumber(totals.newPricesTotal)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800">-</td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-purple-300">-</td>
-                <td className="p-3.5 text-center">-</td>
-              </tr>
-            ) : (
-              <tr>
-                <td colSpan={2} className="p-3.5 text-center bg-black font-black border-l border-slate-800 text-amber-400">
-                  المجموع الإجمالي
-                </td>
-                <td className="p-3.5 text-center font-black text-blue-400 border-l border-slate-800 bg-blue-950/70 text-sm">
-                  {formatNumber(totals.totalEstimatedAmount)}
-                </td>
-                <td className="p-3.5 text-center font-black text-indigo-300 border-l border-slate-800 bg-indigo-950/70 text-sm">
-                  {formatNumber(totals.totalBidderAmount)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-amber-300 font-black">
-                  {totals.totalDeviationPercent.toFixed(2)}%
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 bg-rose-950 font-black text-rose-300 text-sm">
-                  {formatNumber(totals.deviatedItemsSum)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 bg-purple-950 font-black text-purple-300 text-sm">
-                  {formatNumber(totals.newPricesTotal)}
-                </td>
-                <td className="p-3.5 text-center border-l border-slate-800 text-slate-400 text-xs">
-                  {totals.deviatedItemsCount} منحرفة
-                </td>
-                <td className="p-3.5 text-center">-</td>
-              </tr>
-            )}
-          </tfoot>
-        </table>
-      </div>
+                const displayUnitPrice = item.enteredUnitPrice !== undefined && item.enteredUnitPrice > 0
+                  ? item.enteredUnitPrice
+                  : item.quantity > 0 ? (item.bidderTotal / item.quantity) : 0;
 
-      {/* شريط الإرشادات */}
-      <div className="p-3 bg-slate-100 border-t border-slate-200 flex flex-wrap items-center justify-between text-xs text-slate-600 font-medium">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-1">
-            <kbd className="bg-white px-2 py-0.5 rounded border border-slate-300 font-mono font-bold text-slate-900 shadow-2xs">Enter</kbd>
-            للانتقال للسطر التالي أو إنشاء سطر جديد
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1 text-blue-700 font-bold">
-            <ClipboardPaste className="w-3.5 h-3.5" />
-            يمكنك نسخ أي جدول من Excel ولصقه هنا بـ (Ctrl + V) لتعبئة كافة الفقرات فوراً
-          </span>
+                return (
+                  <tr 
+                    key={item.id} 
+                    className={`hover:bg-blue-50/50 transition group ${
+                      hasError ? 'bg-rose-50/50' : isDeviated ? 'bg-rose-50/20' : isSaving ? 'bg-emerald-50/15' : ''
+                    }`}
+                  >
+                    {/* Item No */}
+                    <td className="p-2 text-center font-black text-slate-700 border-l border-slate-200 bg-slate-50/80">
+                      <input
+                        type="text"
+                        value={item.itemNo}
+                        onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
+                        className="w-full text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
+                      />
+                    </td>
+
+                    {/* Description */}
+                    <td className="p-2 border-l border-slate-200">
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) => onUpdateItem(actualIndex, 'description', e.target.value)}
+                        className="w-full bg-transparent border-0 font-bold text-slate-900 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-1 text-xs"
+                      />
+                    </td>
+
+                    {/* Quantity */}
+                    <td className="p-2 text-center border-l border-slate-200 bg-slate-50/50">
+                      <input
+                        type="number"
+                        value={item.quantity || 1}
+                        onChange={(e) => {
+                          const newQty = parseFloat(e.target.value) || 1;
+                          onUpdateItem(actualIndex, 'quantity', newQty);
+                          if (item.enteredUnitPrice) {
+                            onUpdateItem(actualIndex, 'bidderTotal', item.enteredUnitPrice * newQty);
+                          }
+                        }}
+                        className="w-16 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </td>
+
+                    {/* Bidder Unit Price (سعر المفرد) */}
+                    <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/30">
+                      <input
+                        type="number"
+                        value={displayUnitPrice === 0 ? '' : displayUnitPrice}
+                        onChange={(e) => {
+                          const newUnit = parseFloat(e.target.value) || 0;
+                          onUpdateItem(actualIndex, 'enteredUnitPrice', newUnit);
+                          onUpdateItem(actualIndex, 'bidderTotal', newUnit * (item.quantity || 1));
+                        }}
+                        placeholder="0.00"
+                        className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                      />
+                    </td>
+
+                    {/* Bidder Total Amount (مبلغ المجهز الإجمالي) */}
+                    <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/60 font-mono font-black text-indigo-950 text-xs">
+                      <input
+                        type="number"
+                        value={item.bidderTotal === 0 ? '' : item.bidderTotal}
+                        onChange={(e) => onUpdateItem(actualIndex, 'bidderTotal', parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        className="w-full text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                      />
+                    </td>
+
+                    {/* Estimated Total (المبلغ التخميني) */}
+                    <td className="p-2 text-center border-l border-slate-200 bg-blue-50/40">
+                      <input
+                        type="number"
+                        value={item.estimatedTotal === 0 ? '' : item.estimatedTotal}
+                        onChange={(e) => onUpdateItem(actualIndex, 'estimatedTotal', parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        className="w-full text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
+                      />
+                    </td>
+
+                    {/* Forensic Math & Text Audit Column */}
+                    <td className="p-2 border-l border-slate-200 text-xs leading-tight">
+                      {hasError ? (
+                        <div className="space-y-1">
+                          {item.hasMathError && (
+                            <div className="bg-rose-100 text-rose-900 border border-rose-300 px-2 py-1 rounded-lg font-bold flex items-start gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-black text-rose-950">خطأ ضرب:</span> دوّن المجهز رقماً ({item.enteredBidderTotal?.toLocaleString() || '-'}) ← صُحح قانونياً ({item.bidderTotal.toLocaleString()})
+                              </div>
+                            </div>
+                          )}
+                          {item.hasTextDiscrepancy && (
+                            <div className="bg-purple-100 text-purple-900 border border-purple-300 px-2 py-1 rounded-lg font-bold">
+                              📝 <span className="font-black">التفقيط المكتوب:</span> {item.writtenText}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>سليم ومطابق حسابياً</span>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Deviation % */}
+                    <td className="p-2 text-center border-l border-slate-200">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
+                        isDeviated 
+                          ? 'bg-rose-100 text-rose-800 border border-rose-300' 
+                          : isSaving 
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                          : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {item.estimatedTotal > 0 
+                          ? `${item.deviationPercent > 0 ? '+' : ''}${item.deviationPercent.toFixed(2)}%`
+                          : '-'}
+                      </span>
+                    </td>
+
+                    {/* Weighted Unit Price */}
+                    <td className="p-2 text-center font-black text-purple-950 border-l border-slate-200 bg-purple-50/20 text-xs font-mono">
+                      {item.estimatedTotal > 0 ? formatNumber(item.weightedUnitPrice) : '-'}
+                    </td>
+
+                    {/* Evaluation Badge */}
+                    <td className="p-2 text-center border-l border-slate-200">
+                      {item.estimatedTotal === 0 ? (
+                        <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                          بانتظار التخميني
+                        </span>
+                      ) : isDeviated ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          منحرفة {item.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
+                        </span>
+                      ) : item.deviationPercent < 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          مطابق (للأقل ↓)
+                        </span>
+                      ) : item.deviationPercent > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                          <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                          مطابق (للأعلى ↑)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-slate-700 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
+                          <CheckCircle2 className="w-3 h-3 text-slate-600" />
+                          مطابق تماماً
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="p-2 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => onDuplicateItem(actualIndex)}
+                          className="p-1 text-slate-400 hover:text-indigo-600 rounded transition cursor-pointer"
+                          title="تكرار الفقرة"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteItem(actualIndex)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          title="حذف الفقرة"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+
+                  </tr>
+                );
+              })}
+            </tbody>
+
+            {/* Table Footer Totals */}
+            <tfoot className="bg-slate-900 text-white font-black text-xs sticky bottom-0 z-10 shadow-lg">
+              <tr>
+                <td colSpan={3} className="p-3 text-center border-l border-slate-800">
+                  المجموع الكلي ({items.length} فقرة)
+                </td>
+                <td className="p-3 text-center border-l border-slate-800 font-mono text-slate-400">
+                  -
+                </td>
+                <td className="p-3 text-center border-l border-slate-800 font-mono text-indigo-300 text-sm">
+                  {items.reduce((s, i) => s + i.bidderTotal, 0).toLocaleString()} د.ع
+                </td>
+                <td className="p-3 text-center border-l border-slate-800 font-mono text-blue-300 text-sm">
+                  {items.reduce((s, i) => s + i.estimatedTotal, 0).toLocaleString()} د.ع
+                </td>
+                <td className="p-3 text-right border-l border-slate-800 text-amber-300">
+                  {itemsWithErrors.length > 0 ? `تم تصحيح (${itemsWithErrors.length}) فقرة أصولياً ✓` : 'كافة الفقرات سليمة ✓'}
+                </td>
+                <td className="p-3 text-center border-l border-slate-800 font-mono text-rose-300">
+                  {items.some(i => i.estimatedTotal > 0)
+                    ? `${(((items.reduce((s, i) => s + i.bidderTotal, 0) - items.reduce((s, i) => s + i.estimatedTotal, 0)) / (items.reduce((s, i) => s + i.estimatedTotal, 0) || 1)) * 100).toFixed(2)}%`
+                    : '-'}
+                </td>
+                <td colSpan={3} className="p-3 text-center font-mono text-slate-400">
+                  -
+                </td>
+              </tr>
+            </tfoot>
+
+          </table>
         </div>
+
       </div>
 
     </div>
