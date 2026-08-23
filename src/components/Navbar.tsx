@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             
             {/* Smart Table Import (Excel / Word) Button */}
             <button
-              onClick={onOpenSmartImport}
+              onClick={() => onOpenSmartImport()}
               className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-600 hover:to-blue-600 text-white text-xs sm:text-sm font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-indigo-400/30"
               title="استيراد جدول من ملف Excel أو Word مع مطابقة واستبعاد الأعمدة الزائدة"
             >
