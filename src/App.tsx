@@ -377,7 +377,13 @@ export function App() {
           description: desc,
           quantity: ext?.quantity || existing?.quantity || 1,
           estimatedTotal: estVal,
-          bidderTotal: bidVal
+          bidderTotal: bidVal,
+          enteredUnitPrice: ext?.enteredUnitPrice,
+          enteredBidderTotal: ext?.enteredBidderTotal,
+          writtenText: ext?.writtenText,
+          hasMathError: ext?.hasMathError,
+          hasTextDiscrepancy: ext?.hasTextDiscrepancy,
+          correctionRationale: ext?.correctionRationale
         });
       }
 
@@ -475,7 +481,13 @@ export function App() {
           description: desc,
           quantity: existing?.quantity || ext?.quantity || 1,
           estimatedTotal: existing?.estimatedTotal || 0, // الحفاظ التام على الكلفة التخمينية
-          bidderTotal: ext?.bidderTotal !== undefined ? ext.bidderTotal : (existing?.bidderTotal || 0)
+          bidderTotal: ext?.bidderTotal !== undefined ? ext.bidderTotal : (existing?.bidderTotal || 0),
+          enteredUnitPrice: ext?.enteredUnitPrice,
+          enteredBidderTotal: ext?.enteredBidderTotal,
+          writtenText: ext?.writtenText,
+          hasMathError: ext?.hasMathError,
+          hasTextDiscrepancy: ext?.hasTextDiscrepancy,
+          correctionRationale: ext?.correctionRationale
         });
       }
 

@@ -441,6 +441,21 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-black text-indigo-900 text-sm shadow-2xs"
                           placeholder="0.00"
                         />
+                        {(item.hasMathError || item.hasTextDiscrepancy) && (
+                          <div className="mt-1 space-y-1 text-right">
+                            {item.hasMathError && (
+                              <div className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span>خطأ ضرب: المدون ({item.enteredBidderTotal?.toLocaleString() || '-'}) ← صُحح للمفرد</span>
+                              </div>
+                            )}
+                            {item.hasTextDiscrepancy && (
+                              <div className="text-[10px] font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                📝 تفقيط: {item.writtenText}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-2.5 text-center border-l border-slate-200">
@@ -603,6 +618,21 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-black text-indigo-900 text-sm shadow-2xs"
                           placeholder="0.00"
                         />
+                        {(item.hasMathError || item.hasTextDiscrepancy) && (
+                          <div className="mt-1 space-y-1 text-right">
+                            {item.hasMathError && (
+                              <div className="text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span>خطأ ضرب: المدون ({item.enteredBidderTotal?.toLocaleString() || '-'}) ← صُحح للمفرد</span>
+                              </div>
+                            )}
+                            {item.hasTextDiscrepancy && (
+                              <div className="text-[10px] font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                📝 تفقيط: {item.writtenText}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-2.5 text-center border-l border-slate-200">

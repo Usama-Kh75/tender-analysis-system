@@ -329,10 +329,17 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
       const writtenVal = writtenIdx !== -1 && row[writtenIdx] ? String(row[writtenIdx]).trim() : undefined;
 
-      const auditRow = auditReport?.rows[idx];
+      const mathTotal = unitPriceVal > 0 ? (unitPriceVal * (qtyVal || 1)) : enteredBidVal;
+      const isMathErr = unitPriceVal > 0 && Math.abs(mathTotal - enteredBidVal) > 0.01;
+
+      let isTextDisc = false;
+      if (writtenVal && writtenVal.length > 2) {
+        // إذا كان هناك تفقيط مكتوب ويختلف
+        isTextDisc = auditReport?.rows[idx]?.hasTextDiscrepancy || false;
+      }
 
       const finalBidderVal = useCorrectedPrices && unitPriceVal > 0 
-        ? (unitPriceVal * (qtyVal || 1)) 
+        ? mathTotal 
         : enteredBidVal;
 
       return {
@@ -341,12 +348,12 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         quantity: qtyVal || 1,
         estimatedTotal: estVal,
         bidderTotal: docType === 'estimated' ? 0 : finalBidderVal,
-        enteredUnitPrice: unitPriceVal || (finalBidderVal / (qtyVal || 1)),
+        enteredUnitPrice: unitPriceVal,
         enteredBidderTotal: enteredBidVal,
         writtenText: writtenVal,
-        hasMathError: auditRow ? auditRow.hasMathError : false,
-        hasTextDiscrepancy: auditRow ? auditRow.hasTextDiscrepancy : false,
-        correctionRationale: auditRow?.hasMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد (مادة 13/2)' : undefined
+        hasMathError: isMathErr,
+        hasTextDiscrepancy: isTextDisc,
+        correctionRationale: isMathErr ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد (مادة 13/2)' : undefined
       };
     }).filter(item => 
       (item.estimatedTotal || 0) > 0 || 
