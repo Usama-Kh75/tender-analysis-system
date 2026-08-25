@@ -65,6 +65,7 @@ function extractJsonArray(text: string): any[] {
 
 /**
  * محرك استخراج الجداول عبر نماذج Gemini Vision المتخصصة بالرؤية الاصطناعية
+ * المتوافق 100% مع معايير Google REST API (camelCase JSON Schema)
  */
 export async function extractBOQWithGeminiVision(
   imageBase64: string,
@@ -72,7 +73,7 @@ export async function extractBOQWithGeminiVision(
   onProgress?: (progress: number, status: string) => void
 ): Promise<ExtractedTableData> {
   const cleanKey = apiKey.trim();
-  onProgress?.(10, 'جاري تحديد نماذج الرؤية الاصطناعية المعتمدة (Gemini Vision)...');
+  onProgress?.(15, 'جاري معالجة الصورة وإعداد طلب الرؤية الاصطناعية...');
 
   // إزالة الترويسة data:image/...;base64,
   let cleanBase64 = imageBase64;
@@ -108,71 +109,68 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  // قائمة نماذج Gemini Vision حصراً (استبعاد Gemma والنماذج النصية الصرفة)
-  const preferredVisionModels = [
-    'gemini-1.5-flash-latest',
+  // قائمة نماذج Google Gemini Vision المعتمدة
+  const models = [
     'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
+    'gemini-1.5-flash-latest',
     'gemini-2.0-flash',
-    'gemini-1.5-pro-latest',
     'gemini-1.5-pro',
-    'gemini-pro-vision'
+    'gemini-1.5-pro-latest'
   ];
 
   let rawContent = '';
   let lastError: any = null;
 
-  for (const model of preferredVisionModels) {
-    for (const apiVer of ['v1beta', 'v1']) {
-      try {
-        onProgress?.(35, `جاري القراءة والتحليل بنموذج الرؤية (${model})...`);
-        
-        const response = await fetch(`https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${cleanKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': cleanKey
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: systemPrompt },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: cleanBase64
-                  }
+  for (const model of models) {
+    try {
+      onProgress?.(35, `جاري القراءة والتحليل بنموذج (${model})...`);
+      
+      // Google REST API strictly expects camelCase fields: inlineData, mimeType, responseMimeType
+      const requestBody = {
+        contents: [
+          {
+            parts: [
+              { text: systemPrompt },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: cleanBase64
                 }
-              ]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              response_mime_type: "application/json"
-            }
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (rawContent && rawContent.length > 5) {
-            break; // نجاح كامل مع نموذج Vision رسمي!
+              }
+            ]
           }
-        } else {
-          const errText = await response.text();
-          lastError = new Error(`(${response.status}): ${errText}`);
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json"
         }
-      } catch (err: any) {
-        lastError = err;
+      };
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (rawContent && rawContent.length > 5) {
+          break; // نجاح كامل!
+        }
+      } else {
+        const errText = await response.text();
+        lastError = new Error(`(${response.status}): ${errText}`);
       }
-    }
-    if (rawContent && rawContent.length > 5) {
-      break;
+    } catch (err: any) {
+      lastError = err;
     }
   }
 
   if (!rawContent) {
-    throw new Error(`تعذر الاتصال بنماذج Gemini Vision: ${lastError?.message || 'تأكد من صلاحية المفتاح والاتصال'}`);
+    throw new Error(`تعذر الاتصال بنماذج Google Gemini Vision: ${lastError?.message || 'يرجى التحقق من المفتاح والاتصال'}`);
   }
 
   try {
