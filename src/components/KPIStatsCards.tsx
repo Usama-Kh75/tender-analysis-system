@@ -24,7 +24,6 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
   deviationThreshold
 }) => {
   const isHighTotalDeviation = Math.abs(totals.totalDeviationPercent) > deviationThreshold;
-  const isHighPartialDeviation = totals.partialDeviationPercent > 10;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-6">
@@ -95,19 +94,13 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
         </div>
       </div>
 
-      {/* 5. الانحراف الجزئي */}
-      <div className={`rounded-xl p-4 border shadow-xs flex flex-col justify-between transition ${
-        isHighPartialDeviation 
-          ? 'bg-amber-50 border-amber-200 text-amber-900' 
-          : 'bg-white border-slate-200 text-slate-900'
-      }`}>
+      {/* 5. الانحراف الجزئي (مؤشر استرشادي فقط - لا حد قانوني معتمد له) */}
+      <div className="rounded-xl p-4 border shadow-xs flex flex-col justify-between transition bg-white border-slate-200 text-slate-900">
         <div className="flex items-center justify-between text-slate-500 mb-1">
           <span className="text-xs font-semibold">الانحراف الجزئي</span>
           <Percent className="w-4 h-4 text-amber-600" />
         </div>
-        <div className={`text-lg font-black tracking-tight ${
-          isHighPartialDeviation ? 'text-amber-700' : 'text-slate-800'
-        }`}>
+        <div className="text-lg font-black tracking-tight text-slate-800">
           {totals.partialDeviationPercent.toFixed(2)}%
         </div>
         <div className="text-[11px] text-slate-500 mt-1">

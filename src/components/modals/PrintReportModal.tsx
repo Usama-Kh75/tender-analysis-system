@@ -23,6 +23,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     window.print();
   };
 
+  // لا يجوز طباعة توصية ترسية على عطاء مستبعد تجارياً حتى لو كان تبويبه هو المفتوح حالياً
+  const isActiveBidderExcluded = Math.abs(activeBidder.totals.totalDeviationPercent) > project.deviationThreshold;
+
   // توقيعات المحضر: رئيس اللجنة ثابت دائماً، وعدد الأعضاء يتبع حجم اللجنة الفعلي المُدخل في الإعدادات
   const signatories = [
     ...(project.committeeMembers || []).map(name => ({ role: 'عضو لجنة التحليل', name })),
@@ -209,11 +212,17 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* 3. توصية وقرار اللجنة القانوني */}
           <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed bg-slate-50">
             <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: قرار وتوصية لجنة التحليل والترسية:</h4>
-            <p>
-              استناداً إلى أحكام تعليمات تنفيذ العقود الحكومية والضوابط الصادرة بموجبها، وبعد إجراء التحليل التجاري والمالي والمطابقة مع الكلفة التخمينية، توصي اللجنة بـ:
-              <strong> إحالة وترسية المناقصة على العطاء المقدم من شركة ({activeBidder.name}) </strong>
-              بمبلغ إجمالي قدره <strong>({formatCurrency(activeBidder.totals.totalBidderAmount, project.currency)})</strong> <span className="text-slate-800 font-bold underline">({tafqeetArabic(activeBidder.totals.totalBidderAmount, 'دينار عراقي')})</span> لكونه العطاء الأفضل مالياً والأكثر اتزاناً والمطابق للمواصفات، مع اعتماد الأسعار والمفردات الموزونة المثبتة أعلاه كشرط تعاقدي عند تنفيذ أوامر الغيار.
-            </p>
+            {!isActiveBidderExcluded ? (
+              <p>
+                استناداً إلى أحكام تعليمات تنفيذ العقود الحكومية والضوابط الصادرة بموجبها، وبعد إجراء التحليل التجاري والمالي والمطابقة مع الكلفة التخمينية، توصي اللجنة بـ:
+                <strong> إحالة وترسية المناقصة على العطاء المقدم من شركة ({activeBidder.name}) </strong>
+                بمبلغ إجمالي قدره <strong>({formatCurrency(activeBidder.totals.totalBidderAmount, project.currency)})</strong> <span className="text-slate-800 font-bold underline">({tafqeetArabic(activeBidder.totals.totalBidderAmount, 'دينار عراقي')})</span> لكونه العطاء الأفضل مالياً والأكثر اتزاناً والمطابق للمواصفات، مع اعتماد الأسعار والمفردات الموزونة المثبتة أعلاه كشرط تعاقدي عند تنفيذ أوامر الغيار.
+              </p>
+            ) : (
+              <div className="p-3 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 font-bold">
+                ⚠️ تنبيه: العطاء المعروض حالياً من شركة ({activeBidder.name}) <strong>مستبعد تجارياً</strong> لتجاوز انحرافه الكلي عن الكلفة التخمينية الحد المسموح (±{project.deviationThreshold}%)، إذ بلغ ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%). لا يجوز التوصية بالترسية عليه بصيغته الحالية — يرجى اختيار عطاء مؤهل من مصفوفة المقارنة أو خلاصة الترسية قبل اعتماد هذا المحضر.
+              </div>
+            )}
             {activeBidder.totals.totalDeviationPercent > project.deviationThreshold && (
               <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
                 📌 <strong>ملاحظة إجرائية (المادة 13/ثالثاً/ب):</strong> بما أن العطاء الموصى به يتجاوز الحد الأقصى المسموح للانحراف عن الكلفة التخمينية (±{project.deviationThreshold}%) وبلغ ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%)،

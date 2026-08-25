@@ -8,6 +8,8 @@ import {
   createDefaultProject,
   downloadProjectBackup,
   parseProjectBackupFile,
+  downloadAllProjectsBackup,
+  parseAllProjectsBackupFile,
   resetAllData
 } from './utils/storageService';
 import { calculateBOQMetrics } from './utils/calculations';
@@ -138,6 +140,31 @@ export function App() {
   // حقول هوية الفقرة والكلفة التخمينية مشتركة لكل المجهزين (الكلفة التخمينية واحدة للمشروع)
   // بينما حقول السعر والتدقيق (bidderTotal, enteredUnitPrice, writtenText...) خاصة بكل مجهز على حدة
   const SHARED_ESTIMATE_FIELDS: (keyof BOQItem)[] = ['itemNo', 'description', 'unit', 'quantity', 'estimatedUnitPrice', 'estimatedTotal'];
+
+  // يوحّد حقول هوية الفقرة والكلفة التخمينية عبر كل المجهزين انطلاقاً من قائمة فقرات مرجعية (بعد استيراد Excel أو استخراج صورة)
+  // مع الحفاظ التام على سعر كل مجهز الخاص للفقرات الموجودة مسبقاً، وتصفير سعر الفقرات الجديدة له فقط
+  const syncSharedFieldsToAllBidders = (
+    bidders: Bidder[],
+    referenceItems: Partial<BOQItem>[],
+    excludeBidderId?: string
+  ): Bidder[] => {
+    return bidders.map(b => {
+      if (b.id === excludeBidderId) return b;
+
+      const updatedRaw: Partial<BOQItem>[] = referenceItems.map((ref, i) => {
+        const existing = b.items[i];
+        const merged: Partial<BOQItem> = { ...(existing || {}) };
+        SHARED_ESTIMATE_FIELDS.forEach(f => { (merged as any)[f] = (ref as any)[f]; });
+        if (!existing) {
+          merged.bidderTotal = 0;
+        }
+        return merged;
+      });
+
+      const recalc = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+      return { ...b, items: recalc.items, totals: recalc.totals };
+    });
+  };
 
   // Update Item — يُطبَّق على كل المجهزين إن كان الحقل من حقول الكلفة التخمينية المشتركة، وإلا على المجهز النشط فقط
   const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) => {
@@ -312,9 +339,12 @@ export function App() {
         status: 'pending'
       };
 
+      // توحيد هوية الفقرات والكلفة التخمينية مع بقية المجهزين الحاليين إن جلب الاستيراد صفوفاً أو قيماً تخمينية جديدة
+      const syncedExistingBidders = syncSharedFieldsToAllBidders(currentProject.bidders, mergedItems);
+
       let updatedProj: TenderProject = {
         ...currentProject,
-        bidders: [...currentProject.bidders, newBidder],
+        bidders: [...syncedExistingBidders, newBidder],
         activeBidderId: newBidder.id,
         updatedAt: new Date().toISOString()
       };
@@ -329,7 +359,7 @@ export function App() {
 
     } else if (isEstimatedOnly) {
       // 2. تحديث الكلفة التخمينية فقط للمشروع عبر كافة المجهزين بسطر بسطر
-      const maxLen = Math.max(activeBidder.items.length, extracted.length);
+      const maxLen = Math.max(extracted.length, ...currentProject.bidders.map(b => b.items.length));
 
       const updatedBidders = currentProject.bidders.map(b => {
         const mergedItems: Partial<BOQItem>[] = [];
@@ -413,7 +443,9 @@ export function App() {
         totals: recalc.totals
       };
 
-      const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
+      // توحيد أي صفوف جديدة أضافها الاستيراد (هوية الفقرة وكلفتها التخمينية) مع بقية المجهزين أيضاً
+      const otherBiddersSynced = syncSharedFieldsToAllBidders(currentProject.bidders, mergedItems, activeBidder.id);
+      const updatedBidders = otherBiddersSynced.map(b => b.id === activeBidder.id ? updatedBidder : b);
       let updatedProj: TenderProject = {
         ...currentProject,
         bidders: updatedBidders,
@@ -429,7 +461,7 @@ export function App() {
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
 
     } else {
-      // 4. استبدال كامل للجدول
+      // 4. استبدال كامل للجدول (هوية الفقرة والكلفة التخمينية وسعر المجهز معاً) — يوحَّد الجزء المشترك مع بقية المجهزين
       const recalc = calculateBOQMetrics(extracted, currentProject.deviationThreshold);
 
       const updatedBidder: Bidder = {
@@ -438,7 +470,8 @@ export function App() {
         totals: recalc.totals
       };
 
-      const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
+      const otherBiddersSynced = syncSharedFieldsToAllBidders(currentProject.bidders, extracted, activeBidder.id);
+      const updatedBidders = otherBiddersSynced.map(b => b.id === activeBidder.id ? updatedBidder : b);
       let updatedProj: TenderProject = {
         ...currentProject,
         bidders: updatedBidders,
@@ -695,6 +728,26 @@ export function App() {
       alert(`تم استيراد المشروع (${withLog.title}) بنجاح من النسخة الاحتياطية.`);
     } catch (err: any) {
       alert(`فشل استيراد النسخة الاحتياطية: ${err.message}`);
+    }
+  };
+
+  // Import All Projects Backup (JSON) — يستبدل كل المناقصات الحالية بالنسخة الشاملة المستوردة
+  const handleImportAllBackup = async (file: File) => {
+    try {
+      const imported = await parseAllProjectsBackupFile(file);
+
+      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بالنسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة). هل أنت متأكد؟`)) {
+        return;
+      }
+
+      saveAllProjects(imported);
+      setProjects(imported);
+      setActiveId(imported[0].id);
+      setActiveProjectId(imported[0].id);
+      alert(`تم استيراد (${imported.length}) مناقصة بنجاح من النسخة الاحتياطية الشاملة.`);
+      setIsSettingsOpen(false);
+    } catch (err: any) {
+      alert(`فشل استيراد النسخة الاحتياطية الشاملة: ${err.message}`);
     }
   };
 
@@ -1023,6 +1076,8 @@ export function App() {
         onSaveSettings={handleSaveSettings}
         onExportBackup={() => downloadProjectBackup(currentProject)}
         onImportBackup={handleImportBackup}
+        onExportAllBackup={() => downloadAllProjectsBackup(projects)}
+        onImportAllBackup={handleImportAllBackup}
         onDeleteProject={handleDeleteProject}
         onFactoryReset={handleFactoryReset}
         onResetAllBidders={handleResetAllBidders}

@@ -9,6 +9,8 @@ interface ProjectSettingsModalProps {
   onSaveSettings: (updated: Partial<TenderProject>) => void;
   onExportBackup: () => void;
   onImportBackup: (file: File) => void;
+  onExportAllBackup: () => void;
+  onImportAllBackup: (file: File) => void;
   onDeleteProject: () => void;
   onFactoryReset: () => void;
   onResetAllBidders: () => void;
@@ -22,6 +24,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onSaveSettings,
   onExportBackup,
   onImportBackup,
+  onExportAllBackup,
+  onImportAllBackup,
   onDeleteProject,
   onFactoryReset,
   onResetAllBidders,
@@ -212,40 +216,79 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
           </div>
 
           {/* Backup & Restore */}
-          <div className="bg-slate-100 border border-slate-300 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <FileJson2 className="w-4 h-4 text-slate-700" />
-              <label className="text-xs font-bold text-slate-800">
-                النسخ الاحتياطي واستعادة المشروع:
-              </label>
-            </div>
-            <p className="text-[11px] text-slate-600 mb-3">
-              بيانات المشروع محفوظة محلياً في متصفحك فقط. نزّل نسخة احتياطية (JSON) بشكل دوري لحمايتها من الفقدان، أو لنقل المشروع بكامل بياناته إلى جهاز آخر.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={onExportBackup}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
-              >
-                <DownloadCloud className="w-3.5 h-3.5 text-emerald-400" />
-                تنزيل نسخة احتياطية
-              </button>
+          <div className="bg-slate-100 border border-slate-300 rounded-xl p-4 space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <FileJson2 className="w-4 h-4 text-slate-700" />
+                <label className="text-xs font-bold text-slate-800">
+                  النسخ الاحتياطي واستعادة هذه المناقصة/الطلبية فقط:
+                </label>
+              </div>
+              <p className="text-[11px] text-slate-600 mb-3">
+                بيانات المشروع محفوظة محلياً في متصفحك فقط. نزّل نسخة احتياطية (JSON) بشكل دوري لحمايتها من الفقدان، أو لنقل المشروع بكامل بياناته إلى جهاز آخر.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onExportBackup}
+                  className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5 text-emerald-400" />
+                  تنزيل نسخة احتياطية
+                </button>
 
-              <label className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold px-3.5 py-2 rounded-lg border border-slate-300 shadow-xs transition cursor-pointer">
-                <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
-                استيراد نسخة احتياطية
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) onImportBackup(file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
+                <label className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold px-3.5 py-2 rounded-lg border border-slate-300 shadow-xs transition cursor-pointer">
+                  <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                  استيراد نسخة احتياطية
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onImportBackup(file);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-300 pt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <FileJson2 className="w-4 h-4 text-indigo-700" />
+                <label className="text-xs font-bold text-indigo-900">
+                  نسخة احتياطية شاملة (كل المناقصات/الطلبيات مجتمعة):
+                </label>
+              </div>
+              <p className="text-[11px] text-slate-600 mb-3">
+                ملف JSON واحد يحتوي كل مناقصاتك المحفوظة دفعة واحدة — أرشفة كاملة أو نقل شامل لجهاز آخر.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onExportAllBackup}
+                  className="flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5 text-emerald-300" />
+                  تنزيل نسخة شاملة لكل المناقصات
+                </button>
+
+                <label className="flex items-center gap-1.5 bg-white hover:bg-indigo-50 text-indigo-900 text-xs font-bold px-3.5 py-2 rounded-lg border border-indigo-300 shadow-xs transition cursor-pointer">
+                  <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                  استعادة نسخة شاملة
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onImportAllBackup(file);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
             </div>
           </div>
 

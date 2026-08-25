@@ -127,6 +127,56 @@ export function resetAllData(): TenderProject {
   return blank;
 }
 
+// حقول هوية الفقرة والكلفة التخمينية يجب أن تكون موحّدة بين كل مجهزي المشروع (راجع calculateBOQMetrics وApp.tsx)
+const SHARED_ESTIMATE_FIELDS: (keyof BOQItem)[] = ['itemNo', 'description', 'unit', 'quantity', 'estimatedUnitPrice', 'estimatedTotal'];
+
+/**
+ * توحيد هوية الفقرات والكلفة التخمينية بين كل مجهزي مشروع محفوظ مسبقاً (قد تكون بيانات قديمة
+ * سبقت اعتماد مبدأ "كلفة تخمينية واحدة للمشروع" فتباعدت بين المجهزين). تُطبَّق تلقائياً عند كل تحميل
+ * دون المساس بأسعار أي مجهز الخاصة به، وترجع المشروع كما هو إن لم يوجد أي تباعد فعلي.
+ */
+function reconcileProjectSharedFields(project: TenderProject): TenderProject {
+  if (!project.bidders || project.bidders.length <= 1) return project;
+
+  const maxLen = Math.max(...project.bidders.map(b => b.items?.length || 0));
+  if (maxLen === 0) return project;
+
+  // القيمة المرجعية لكل فقرة = قيمها لدى أول مجهز يملكها (بترتيب المجهزين في المشروع)
+  const referenceItems: Partial<BOQItem>[] = [];
+  for (let i = 0; i < maxLen; i++) {
+    const source = project.bidders.find(b => b.items[i])?.items[i];
+    referenceItems.push(source || {});
+  }
+
+  let changed = false;
+  const updatedBidders = project.bidders.map(b => {
+    const updatedRaw: Partial<BOQItem>[] = referenceItems.map((ref, i) => {
+      const existing = b.items[i];
+      const merged: Partial<BOQItem> = { ...(existing || {}) };
+      SHARED_ESTIMATE_FIELDS.forEach(f => {
+        if ((existing as any)?.[f] !== (ref as any)[f]) changed = true;
+        (merged as any)[f] = (ref as any)[f];
+      });
+      if (!existing) {
+        merged.bidderTotal = 0;
+        changed = true;
+      }
+      return merged;
+    });
+
+    const recalc = calculateBOQMetrics(updatedRaw, project.deviationThreshold);
+    return { ...b, items: recalc.items, totals: recalc.totals };
+  });
+
+  if (!changed) return project;
+
+  return addAuditLog(
+    { ...project, bidders: updatedBidders, updatedAt: new Date().toISOString() },
+    'توحيد الكلفة التخمينية تلقائياً',
+    'اكتُشف تباعد في هوية الفقرات أو الكلفة التخمينية بين المجهزين (من بيانات سابقة لاعتماد التوحيد)، وتمت مزامنتها تلقائياً دون المساس بأسعار أي مجهز'
+  );
+}
+
 export function getAllProjects(): TenderProject[] {
   const data = localStorage.getItem(STORAGE_KEY);
   if (!data) {
@@ -135,7 +185,12 @@ export function getAllProjects(): TenderProject[] {
     return [defaultProject];
   }
   try {
-    return JSON.parse(data);
+    const projects: TenderProject[] = JSON.parse(data);
+    const reconciled = projects.map(reconcileProjectSharedFields);
+    if (reconciled.some((p, i) => p !== projects[i])) {
+      saveAllProjects(reconciled);
+    }
+    return reconciled;
   } catch {
     const defaultProject = createDefaultProject();
     saveAllProjects([defaultProject]);
@@ -185,6 +240,59 @@ export function downloadProjectBackup(project: TenderProject): void {
 }
 
 /**
+ * تنزيل نسخة احتياطية شاملة لكل المناقصات/الطلبيات المحفوظة محلياً في ملف JSON واحد
+ * (بديل عن downloadProjectBackup التي تُصدّر مناقصة واحدة فقط)
+ */
+export function downloadAllProjectsBackup(projects: TenderProject[]): void {
+  const backup = {
+    __type: 'boc-tender-backup-all',
+    __version: 1,
+    exportedAt: new Date().toISOString(),
+    projectsCount: projects.length,
+    projects
+  };
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `نسخة_احتياطية_شاملة_كل_المناقصات_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * قراءة والتحقق من صحة ملف نسخة احتياطية شاملة (كل المناقصات) قبل استعادتها
+ */
+export function parseAllProjectsBackupFile(file: File): Promise<TenderProject[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const raw = JSON.parse(e.target?.result as string);
+        const projects: TenderProject[] = raw?.__type === 'boc-tender-backup-all' && Array.isArray(raw.projects)
+          ? raw.projects
+          : (Array.isArray(raw) ? raw : null);
+
+        if (!projects || projects.length === 0 || !projects.every(p => p && typeof p === 'object' && Array.isArray(p.bidders) && p.title)) {
+          reject(new Error('الملف المختار ليس نسخة احتياطية شاملة صالحة لهذا النظام'));
+          return;
+        }
+
+        resolve(projects.map(reconcileProjectSharedFields));
+      } catch (err) {
+        reject(new Error('تعذر قراءة الملف: تأكد من أنه ملف نسخة احتياطية (JSON) سليم'));
+      }
+    };
+    reader.onerror = () => reject(new Error('تعذر قراءة الملف من القرص'));
+    reader.readAsText(file);
+  });
+}
+
+/**
  * قراءة والتحقق من صحة ملف نسخة احتياطية (JSON) قبل استيراده كمشروع جديد
  */
 export function parseProjectBackupFile(file: File): Promise<TenderProject> {
@@ -200,7 +308,7 @@ export function parseProjectBackupFile(file: File): Promise<TenderProject> {
           return;
         }
 
-        resolve(project);
+        resolve(reconcileProjectSharedFields(project));
       } catch (err) {
         reject(new Error('تعذر قراءة الملف: تأكد من أنه ملف نسخة احتياطية (JSON) سليم'));
       }
