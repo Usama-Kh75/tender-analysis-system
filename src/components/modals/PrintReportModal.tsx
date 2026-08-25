@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Printer, Award, CheckCircle2, XCircle } from 'lucide-react';
+import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { bocLogoDataUrl } from '../../assets/bocLogo';
@@ -23,7 +23,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     window.print();
   };
 
-  const estimatedTotal = activeBidder.totals.totalEstimatedAmount;
+  // توقيعات المحضر: رئيس اللجنة ثابت دائماً، وعدد الأعضاء يتبع حجم اللجنة الفعلي المُدخل في الإعدادات
+  const signatories = [
+    ...(project.committeeMembers || []).map(name => ({ role: 'عضو لجنة التحليل', name })),
+    { role: 'رئيس لجنة التحليل والتقييم', name: project.committeeChairman }
+  ];
+
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -109,7 +114,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </thead>
               <tbody>
                 {project.bidders.map((b, idx) => {
-                  const isExcluded = Math.abs(b.totals.totalDeviationPercent) > 20 || b.totals.partialDeviationPercent > 25;
+                  // معيار الاستبعاد التجاري وفق الجدول المعتمد: تجاوز الانحراف الكلي للحد المعتمد فقط
+                  // (الانحراف الجزئي مؤشر استرشادي في الجدول المعتمد ولا يُستخدم فيه كسبب استبعاد مستقل)
+                  const isExcluded = Math.abs(b.totals.totalDeviationPercent) > project.deviationThreshold;
                   const isRec = b.id === activeBidder.id || b.status === 'recommended';
 
                   return (
@@ -158,7 +165,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <th className="border border-slate-300 p-2">المفرد التخميني</th>
                   <th className="border border-slate-300 p-2 text-center">مفرد المجهز</th>
                   <th className="border border-slate-300 p-2 text-center">نسبة الانحراف</th>
-                  <th className="border border-slate-300 p-2 text-center">الفقرة المنحرفة (&gt;20%)</th>
+                  <th className="border border-slate-300 p-2 text-center">الفقرة المنحرفة (&gt;{project.deviationThreshold}%)</th>
                   <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>
                   <th className="border border-slate-300 p-2 text-center">المفرد الموزون (المعتمد)</th>
                   <th className="border border-slate-300 p-2 text-center">التقييم</th>
@@ -207,28 +214,26 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <strong> إحالة وترسية المناقصة على العطاء المقدم من شركة ({activeBidder.name}) </strong>
               بمبلغ إجمالي قدره <strong>({formatCurrency(activeBidder.totals.totalBidderAmount, project.currency)})</strong> <span className="text-slate-800 font-bold underline">({tafqeetArabic(activeBidder.totals.totalBidderAmount, 'دينار عراقي')})</span> لكونه العطاء الأفضل مالياً والأكثر اتزاناً والمطابق للمواصفات، مع اعتماد الأسعار والمفردات الموزونة المثبتة أعلاه كشرط تعاقدي عند تنفيذ أوامر الغيار.
             </p>
-            {activeBidder.totals.totalDeviationPercent > 10 && activeBidder.totals.totalDeviationPercent <= 20 && (
+            {activeBidder.totals.totalDeviationPercent > project.deviationThreshold && (
               <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
-                📌 <strong>ملاحظة إجرائية ملزمة:</strong> بما أن مبلغ العطاء يزيد عن الكلفة التخمينية بنسبة ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%) وهي تتجاوز حد (+10%) وضمن السقف القانوني (+20%)، يوصى بمفاتحة وزارة المالية لتأمين وتوفير التخصيص المالي الإضافي أصولياً قبل إبرام العقد استناداً لضوابط تنفيذ العقود الحكومية.
+                📌 <strong>ملاحظة إجرائية (المادة 13/ثالثاً/ب):</strong> بما أن العطاء الموصى به يتجاوز الحد الأقصى المسموح للانحراف عن الكلفة التخمينية (±{project.deviationThreshold}%) وبلغ ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%)،
+                يقتصر دور لجنة التحليل على <strong>التوصية</strong> بإحالة الموضوع إلى اللجنة المختصة (لجنة المراجعة / اللجنة المركزية) للمصادقة على التفاوض لتخفيض السعر ضمن الحدود المسموحة دون المساس بنطاق العمل المعلن — علماً أن إجراء التفاوض ذاته ليس من اختصاص لجنة التحليل.
               </div>
             )}
           </div>
 
-          {/* 4. توقيعات اللجنة */}
-          <div className="grid grid-cols-3 gap-6 pt-6 text-center text-xs font-bold">
-            <div className="border-t border-slate-400 pt-2">
-              <div>عضو اللجنة المالي</div>
-              <div className="mt-8 text-slate-600">التوقيع: .....................</div>
-            </div>
-            <div className="border-t border-slate-400 pt-2">
-              <div>عضو اللجنة الفني / المقرر</div>
-              <div className="mt-8 text-slate-600">التوقيع: .....................</div>
-            </div>
-            <div className="border-t border-slate-400 pt-2">
-              <div>رئيس لجنة التحليل والتقييم</div>
-              <div className="text-slate-900 font-extrabold">{project.committeeChairman}</div>
-              <div className="mt-6 text-slate-600">التوقيع: .....................</div>
-            </div>
+          {/* 4. توقيعات اللجنة (رئيس اللجنة ثابت + عدد الأعضاء حسب حجم اللجنة الفعلي) */}
+          <div
+            className="grid gap-6 pt-6 text-center text-xs font-bold"
+            style={{ gridTemplateColumns: `repeat(${Math.min(signatories.length, 3)}, minmax(0, 1fr))` }}
+          >
+            {signatories.map((s, idx) => (
+              <div key={idx} className="border-t border-slate-400 pt-2">
+                <div>{s.role}</div>
+                {s.name && <div className="text-slate-900 font-extrabold mt-0.5">{s.name}</div>}
+                <div className="mt-6 text-slate-600">التوقيع: .....................</div>
+              </div>
+            ))}
           </div>
 
         </div>

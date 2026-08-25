@@ -1,22 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  X, 
-  UploadCloud, 
-  FileSpreadsheet, 
-  ClipboardPaste, 
-  Sparkles, 
-  Table as TableIcon, 
-  Check, 
-  Building2, 
-  AlertCircle,
+import {
+  X,
+  UploadCloud,
+  FileSpreadsheet,
+  ClipboardPaste,
+  Sparkles,
+  Table as TableIcon,
   Coins,
   FileEdit,
   Layers,
-  AlertTriangle,
-  Scale,
   Calculator,
-  FileCheck2,
-  HelpCircle
+  FileCheck2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { BOQItem } from '../../types/tender';
@@ -47,8 +41,6 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   currentBidderName,
   initialDocType = 'bidder'
 }) => {
-  if (!isOpen) return null;
-
   const [docType, setDocType] = useState<ImportDocType>(initialDocType);
   const [allRawData, setAllRawData] = useState<string[][]>([]);
   const [selectedHeaderRowIdx, setSelectedHeaderRowIdx] = useState<number>(0);
@@ -66,6 +58,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   useEffect(() => {
     setDocType(initialDocType);
   }, [initialDocType, isOpen]);
+
+  if (!isOpen) return null;
 
   // الكشف الذكي التلقائي عن الأدوار الدقيقة لكافة الأعمدة
   const autoDetectRoles = (headers: string[], selectedDocType: ImportDocType): ColumnRole[] => {
@@ -398,7 +392,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
-                يكتشف أخطاء الضرب الحسابي وتعارض الأرقام مع التفقيط المكتوب كتابةً ويطبق أحكام المادة (13/ثانياً) تلقائياً.
+                يكتشف أخطاء الضرب الحسابي وتعارض الأرقام مع التفقيط المكتوب كتابةً، ويعرض التصحيح كخيار يعتمده العضو المختص صراحة دون تعديل تلقائي صامت.
               </p>
             </div>
           </div>
@@ -569,7 +563,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                       </span>
                     </h3>
                     <p className="text-xs text-rose-800 font-medium">
-                      بموجب المادة (13 / ثانياً) من تعليمات العقود الحكومية: سعر المفرد المكتوب هو المعيار الملزم لتصحيح مبالغ العطاء.
+                      ضابط رقابي داخلي: سعر المفرد المدون هو أساس التصحيح الحسابي عند وجود خطأ ضرب، ويُطبَّق فقط باختياركم الصريح أدناه.
                     </p>
                   </div>
                 </div>
@@ -583,7 +577,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                       onChange={(e) => setUseCorrectedPrices(e.target.checked)}
                       className="w-4 h-4 text-emerald-600 rounded"
                     />
-                    <span>تطبيق التصحيح الحسابي القانوني التلقائي (المادة 13/2)</span>
+                    <span>اعتماد التصحيح الحسابي بسعر المفرد لهذا الاستيراد</span>
                   </label>
                 </div>
               </div>

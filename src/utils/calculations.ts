@@ -183,21 +183,13 @@ export function calculateBOQMetrics(
       priceRatio: 0,
       newPrice: 0,
       weightedUnitPrice: 0,
-      sourcePage: item.sourcePage,
-      sourceBox: item.sourceBox,
       notes: item.notes || '',
-      flags: {
-        isZeroPrice: bidderTotal === 0 && estimatedTotal > 0,
-        isHighDeviation: deviationPercent > threshold,
-        isAbnormallyLow: deviationPercent < -threshold,
-        hasMathMismatch: isMathError
-      },
       enteredUnitPrice: enteredUnit,
       enteredBidderTotal: enteredTotal,
       writtenText: writtenTxt,
       hasMathError: isMathError,
       hasTextDiscrepancy: isTextDiscrepancy,
-      correctionRationale: isMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد (مادة 13/2)' : undefined
+      correctionRationale: isMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد' : undefined
     };
   });
 

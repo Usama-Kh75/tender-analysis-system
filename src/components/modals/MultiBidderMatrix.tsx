@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  Users2, 
-  Plus, 
-  Award, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle
+import {
+  X,
+  Users2,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
-import { formatNumber, formatPercent, formatCurrency } from '../../utils/calculations';
+import { formatPercent, formatCurrency } from '../../utils/calculations';
 
 interface MultiBidderMatrixProps {
   isOpen: boolean;
@@ -18,6 +15,7 @@ interface MultiBidderMatrixProps {
   onSelectBidder: (id: string) => void;
   onAddNewBidder: (name: string) => void;
   onUpdateBidderStatus: (bidderId: string, status: Bidder['status']) => void;
+  onDeleteBidder: (bidderId: string) => void;
 }
 
 export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
@@ -26,7 +24,8 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
   project,
   onSelectBidder,
   onAddNewBidder,
-  onUpdateBidderStatus
+  onUpdateBidderStatus,
+  onDeleteBidder
 }) => {
   const [newBidderName, setNewBidderName] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -210,15 +209,25 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                         </select>
                       </td>
                       <td className="p-3 text-center">
-                        <button
-                          onClick={() => {
-                            onSelectBidder(bidder.id);
-                            onClose();
-                          }}
-                          className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-2.5 py-1 rounded transition cursor-pointer"
-                        >
-                          عرض وتعديل
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              onSelectBidder(bidder.id);
+                              onClose();
+                            }}
+                            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-2.5 py-1 rounded transition cursor-pointer"
+                          >
+                            عرض وتعديل
+                          </button>
+                          <button
+                            onClick={() => onDeleteBidder(bidder.id)}
+                            disabled={project.bidders.length <= 1}
+                            title="حذف هذا المجهز نهائياً"
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

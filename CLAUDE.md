@@ -1,0 +1,51 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+نظام تحليل وتقييم العطاءات المتكامل (BOC) — a tender/bid analysis system built for شركة نفط البصرة (Basra Oil Company). It automates the financial audit work of a government tender-opening committee: comparing bidder prices against the estimated cost (الكلفة التخمينية), detecting arithmetic errors and discrepancies between numeric and Arabic-spelled-out (تفقيط) amounts, computing deviation percentages, and producing an official printable committee report — per Iraq's "تعليمات تنفيذ العقود الحكومية لعام 2025" (2025 Government Contract Execution Instructions).
+
+**Deployment model is a hard constraint**: the deliverable is a single portable `نظام_تحليل_العطاءات.html` file that any committee member can copy to any Windows PC and just open — no install, no server, no database, no internet required for core use (internet is only needed for the optional AI OCR engine). Do not introduce dependencies that require installing anything on the end-user's machine (local LLM runtimes, native helper apps, local servers/daemons) — this has been explicitly rejected before in favor of portability. Data lives only in the browser's `localStorage`; there is no backend.
+
+## Commands
+
+```bash
+npm install       # install dependencies
+npm run dev        # start Vite dev server
+npm run build       # tsc -b type-check, then vite build (outputs dist/index.html)
+npm run lint        # oxlint
+npm run preview      # preview the production build
+```
+
+There is no test suite in this repo.
+
+### Publishing a change to the standalone HTML file
+
+The single-file deliverable is **not** auto-generated on every edit — after making changes under `src/`, you must rebuild and manually refresh it:
+
+```bash
+npm run build
+cp dist/index.html "نظام_تحليل_العطاءات.html"
+```
+
+(`vite-plugin-singlefile` inlines all JS/CSS into one `dist/index.html`; the copy step is what the end user actually opens via `تشغيل_النظام.bat`.) Always run `npm run build` (which runs `tsc -b` first) before considering a change done — it is the project's only type/build check.
+
+## Architecture
+
+**Stack**: React 19 + TypeScript, Vite 8, Tailwind CSS v4 (via `@tailwindcss/vite`), `vite-plugin-singlefile`. No router, no backend, no test framework.
+
+**State shape and flow**: `App.tsx` is the single owner of state — an array of `TenderProject` (see `src/types/tender.ts`), loaded from and persisted to `localStorage` via `src/utils/storageService.ts`. There is no reducer/store library: every mutation follows the same pattern — compute a new `Bidder`/`TenderProject`, run it through `calculateBOQMetrics()` (`src/utils/calculations.ts`) to recompute all derived totals/deviations, optionally wrap it with `addAuditLog()`, then `setProjects(prev => prev.map(...))`. A `useEffect` in `App.tsx` persists `projects` to `localStorage` on every change. All mutation handlers live in `App.tsx` and are passed down as props — components under `src/components/` are largely presentational plus their own local UI state.
+
+**The financial engine is the core domain logic**, and lives outside React entirely:
+- `src/utils/calculations.ts` — `calculateBOQMetrics()` is the single source of truth for all derived numbers (deviation %, price ratio, weighted new price, math-error flags). Anything that changes bidder items must go through this function to stay consistent; also home to `parseArabicNumber()` (Arabic/Persian digit + currency-word normalization) and `tafqeetArabic()` (number → Arabic legal spelled-out text).
+- `src/utils/bidderAuditEngine.ts` — `parseArabicTextToNumber()` parses Arabic spelled-out amounts (التفقيط) back into numbers via tokenization against `rawNumberMap`, used to detect conflicts between the written and numeric amount (legally, the written form wins per المادة 13/ثانياً — see `HANDOFF.md` §2 for the full legal/math rule table).
+- `src/utils/excelService.ts` — Excel import/export via `xlsx`, with fuzzy column-header matching for importing bidder/estimated-cost tables.
+- `src/utils/ocrService.ts` — two independent extraction engines behind one `ExtractedTableData` interface:
+  - `extractBOQWithGeminiVision()` — calls the Gemini API directly from the browser (fetch, no SDK) with a JSON-array-extraction prompt; dynamically discovers available Gemini vision models per the user's API key (`testGeminiApiKey()`) and tries them in order, with 429 retry/backoff. Model discovery is cached across multi-page uploads (see `ImageOcrModal`) — do not call `testGeminiApiKey` per page, that burns the free-tier quota fast.
+  - `extractBOQFromImage()` — fully offline Tesseract.js OCR. It does **not** just concatenate recognized text: it reconstructs the table geometrically by finding the header row (matching known Arabic BOQ column keywords like ت/الوحدة/الكمية/سعر المفرد/المجموع) via word bounding boxes, then assigns every other word to the nearest column band by x-position (`detectHeaderColumns`/`buildRowsFromHeader`). Falls back to a cruder count-the-numbers-per-line heuristic (`buildRowsHeuristic`) only if no header is detected. This engine handles printed text only — it cannot read handwriting; that requires the Gemini engine.
+- `src/utils/storageService.ts` — `localStorage` CRUD for projects, plus `downloadProjectBackup()`/`parseProjectBackupFile()` for JSON export/import of a whole project (the user's substitute for cloud sync/multi-device support, given the no-backend constraint above).
+
+**Multi-bidder / multi-page merge logic** (in `App.tsx`'s `handleApplyExtractedItems` and `ImageOcrModal`'s `processAllImages`) is intentionally conservative: imports merge row-by-row by array index, preserving whichever side (existing table vs. newly extracted) already has real data rather than blindly overwriting — e.g. importing bidder prices never touches `estimatedTotal`, and vice versa. Preserve this merge discipline when touching import/OCR code; it's what prevents an OCR misread from silently clobbering already-verified figures.
+
+**Legal/audit framing matters for UI behavior**: per المادة 13/ثانياً, the system never silently auto-corrects a bidder's submitted numbers — math-error and text-discrepancy detection only *flags* rows (`hasMathError`, `hasTextDiscrepancy` in `BOQItem`); correction is an explicit, logged committee action (see `correctionRationale`, `AuditLogEntry`). Keep this "detect and flag, never silently rewrite" pattern when adding audit features.

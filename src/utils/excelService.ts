@@ -1,9 +1,20 @@
 import * as XLSX from 'xlsx';
 import { BOQItem, TenderProject, Bidder } from '../types/tender';
 
-export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder) {
-  const wb = XLSX.utils.book_new();
+// أسماء أوراق Excel محدودة بـ 31 محرفاً ولا تقبل الرموز \ / ? * [ ]
+function sanitizeSheetName(name: string, usedNames: Set<string>): string {
+  let clean = name.replace(/[\\/?*[\]:]/g, ' ').trim().substring(0, 28) || 'مجهز';
+  let finalName = clean;
+  let suffix = 2;
+  while (usedNames.has(finalName)) {
+    finalName = `${clean} (${suffix})`.substring(0, 31);
+    suffix++;
+  }
+  usedNames.add(finalName);
+  return finalName;
+}
 
+function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive: boolean) {
   const headers = [
     'ت',
     'وصف الفقرة',
@@ -22,7 +33,7 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
     'ملاحظات'
   ];
 
-  const rows: any[][] = activeBidder.items.map(item => [
+  const rows: any[][] = bidder.items.map(item => [
     item.itemNo,
     item.description,
     item.unit,
@@ -47,36 +58,47 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
     '',
     '',
     '',
-    activeBidder.totals.totalEstimatedAmount,
+    bidder.totals.totalEstimatedAmount,
     '',
-    activeBidder.totals.totalBidderAmount,
-    activeBidder.totals.overallDiffAmount,
+    bidder.totals.totalBidderAmount,
+    bidder.totals.overallDiffAmount,
     '',
-    activeBidder.totals.deviatedItemsSum,
+    bidder.totals.deviatedItemsSum,
     '',
-    activeBidder.totals.newPricesTotal,
+    bidder.totals.newPricesTotal,
     '',
     ''
   ]);
 
   rows.push([
     'مؤشرات الانحراف',
-    `الانحراف الكلي: ${activeBidder.totals.totalDeviationPercent.toFixed(2)}%`,
-    `الانحراف الجزئي: ${activeBidder.totals.partialDeviationPercent.toFixed(2)}%`,
-    `النسبة السعرية: ${activeBidder.totals.overallPriceRatio.toFixed(4)}`,
-    `عدد الفقرات المنحرفة: ${activeBidder.totals.deviatedItemsCount}`,
+    `الانحراف الكلي: ${bidder.totals.totalDeviationPercent.toFixed(2)}%`,
+    `الانحراف الجزئي: ${bidder.totals.partialDeviationPercent.toFixed(2)}%`,
+    `النسبة السعرية: ${bidder.totals.overallPriceRatio.toFixed(4)}`,
+    `عدد الفقرات المنحرفة: ${bidder.totals.deviatedItemsCount}`,
     '', '', '', '', '', '', '', '', '', ''
   ]);
 
-  const ws = XLSX.utils.aoa_to_sheet([
-    [`مشروع: ${project.title} - رقم الإحالة: ${project.referenceNumber}`],
-    [`المجهز: ${activeBidder.name} - تاريخ التحليل: ${new Date().toLocaleDateString('ar-EG')}`],
+  return XLSX.utils.aoa_to_sheet([
+    [`مشروع: ${project.title} - رقم الطلبية/المناقصة: ${project.referenceNumber}`],
+    [`المجهز: ${bidder.name}${isActive ? ' (النشط حالياً)' : ''} - تاريخ التحليل: ${new Date().toLocaleDateString('ar-EG')}`],
     [],
     headers,
     ...rows
   ]);
+}
 
-  XLSX.utils.book_append_sheet(wb, ws, 'التحليل المالي التفصيلي');
+export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder) {
+  const wb = XLSX.utils.book_new();
+  const usedSheetNames = new Set<string>();
+
+  // ورقة تفصيلية كاملة لكل مجهز على حدة (المجهز النشط أولاً)
+  const orderedBidders = [activeBidder, ...project.bidders.filter(b => b.id !== activeBidder.id)];
+  orderedBidders.forEach(bidder => {
+    const sheetName = sanitizeSheetName(bidder.name, usedSheetNames);
+    const ws = buildBidderDetailSheet(project, bidder, bidder.id === activeBidder.id);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
 
   if (project.bidders.length > 1) {
     const compHeaders = [
@@ -132,7 +154,7 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
     XLSX.utils.book_append_sheet(wb, auditWs, 'سجل التتبع');
   }
 
-  XLSX.writeFile(wb, `${project.title || 'تحليل_العطاءات'}_${activeBidder.name}.xlsx`);
+  XLSX.writeFile(wb, `${project.title || 'تحليل_العطاءات'}.xlsx`);
 }
 
 export async function importBOQFromExcel(file: File, _threshold: number = 20): Promise<Partial<BOQItem>[]> {

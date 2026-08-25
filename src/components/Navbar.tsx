@@ -1,14 +1,15 @@
-import React from 'react';
-import { 
-  FileSpreadsheet, 
-  Camera, 
-  Users2, 
-  History, 
-  Printer, 
-  Plus, 
-  Settings, 
+import React, { useState } from 'react';
+import {
+  FileSpreadsheet,
+  Camera,
+  Users2,
+  History,
+  Printer,
+  Plus,
+  Settings,
   FolderOpen,
-  UserCheck
+  UserCheck,
+  MoreHorizontal
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { bocLogoDataUrl } from '../assets/bocLogo';
@@ -25,7 +26,6 @@ interface NavbarProps {
   onOpenAuditTrail: () => void;
   onOpenSettings: () => void;
   onOpenPrint: () => void;
-  onExportExcel: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -38,9 +38,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenMultiBidder,
   onOpenAuditTrail,
   onOpenSettings,
-  onOpenPrint,
-  onExportExcel
+  onOpenPrint
 }) => {
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+
   return (
     <header className="bg-slate-950 text-white shadow-2xl border-b border-amber-500/30 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -143,35 +144,41 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* Audit Trail */}
-            <button
-              onClick={onOpenAuditTrail}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="سجل التتبع والتعديلات"
-            >
-              <History className="w-4 h-4 text-amber-400" />
-              <span className="hidden lg:inline">سجل التتبع</span>
-            </button>
+            {/* More Actions Dropdown (Audit Trail, Export Excel, Print) */}
+            <div className="relative">
+              <button
+                onClick={() => setIsMoreOpen(prev => !prev)}
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border transition cursor-pointer ${
+                  isMoreOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
+                }`}
+                title="المزيد من الإجراءات"
+              >
+                <MoreHorizontal className="w-4 h-4 text-slate-300" />
+                <span className="hidden lg:inline">المزيد</span>
+              </button>
 
-            {/* Export Excel */}
-            <button
-              onClick={onExportExcel}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-300 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="تصدير ملف Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span className="hidden xl:inline">تصدير Excel</span>
-            </button>
-
-            {/* Print Official Report */}
-            <button
-              onClick={onOpenPrint}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="طباعة محضر اللجنة الرسمي"
-            >
-              <Printer className="w-4 h-4 text-blue-400" />
-              <span className="hidden xl:inline">محضر التحليل</span>
-            </button>
+              {isMoreOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsMoreOpen(false)} />
+                  <div className="absolute left-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <button
+                      onClick={() => { onOpenAuditTrail(); setIsMoreOpen(false); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm text-slate-200 hover:bg-slate-800 transition cursor-pointer text-right"
+                    >
+                      <History className="w-4 h-4 text-amber-400" />
+                      سجل التتبع
+                    </button>
+                    <button
+                      onClick={() => { onOpenPrint(); setIsMoreOpen(false); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm text-slate-200 hover:bg-slate-800 transition cursor-pointer text-right"
+                    >
+                      <Printer className="w-4 h-4 text-blue-400" />
+                      محضر التحليل
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Settings */}
             <button

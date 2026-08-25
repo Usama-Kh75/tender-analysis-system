@@ -1,24 +1,14 @@
 import { parseArabicTextToNumber } from '../utils/bidderAuditEngine';
 import React, { useState } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  Copy, 
-  AlertTriangle, 
-  CheckCircle2, 
-  FileSpreadsheet, 
-  Sparkles,
-  Calculator,
+import {
+  Plus,
+  Trash2,
+  Copy,
+  AlertTriangle,
+  CheckCircle2,
   RotateCcw,
-  Pencil,
   Building2,
-  Table as TableIcon,
-  ShieldCheck,
-  Coins,
-  Search,
-  Filter,
-  Check,
-  Scale
+  Search
 } from 'lucide-react';
 import { BOQItem, TenderTotals } from '../types/tender';
 import { formatNumber } from '../utils/calculations';
@@ -33,10 +23,7 @@ interface BOQTableProps {
   onAddItem: () => void;
   onDeleteItem: (index: number) => void;
   onDuplicateItem: (index: number) => void;
-  onBatchAddItems?: (newItems: Partial<BOQItem>[]) => void;
   onClearBidderPrices?: () => void;
-  onClearAllItems?: () => void;
-  onUpdateBidderName?: (newName: string) => void;
 }
 
 export const BOQTable: React.FC<BOQTableProps> = ({
@@ -47,15 +34,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onAddItem,
   onDeleteItem,
   onDuplicateItem,
-  onBatchAddItems,
-  onClearBidderPrices,
-  onClearAllItems,
-  onUpdateBidderName
+  onClearBidderPrices
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
-  const [isEditingBidderName, setIsEditingBidderName] = useState(false);
-  const [tempBidderName, setTempBidderName] = useState(bidderName);
 
   // إحصائيات الأخطاء الحسابية وتعارض التفقيط
   const itemsWithErrors = items.filter(i => i.hasMathError || i.hasTextDiscrepancy);
@@ -77,58 +59,18 @@ export const BOQTable: React.FC<BOQTableProps> = ({
     return true;
   });
 
-  const handleSaveBidderName = () => {
-    if (tempBidderName.trim() && onUpdateBidderName) {
-      onUpdateBidderName(tempBidderName.trim());
-    }
-    setIsEditingBidderName(false);
-  };
-
   return (
     <div className="space-y-4">
-      
-      {/* Top Banner: Bidder Editing & Actions Bar */}
+
+      {/* Top Banner: Active Bidder Label & Actions Bar */}
       <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-        
-        {/* Bidder Name Editor */}
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-md">
-            <Building2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <div className="text-[11px] text-slate-400 font-bold">
-              المجهز / المقاول الذي يتم تحليل وتدقيق عطائه حالياً:
-            </div>
-            {!isEditingBidderName ? (
-              <div 
-                onClick={() => {
-                  setTempBidderName(bidderName);
-                  setIsEditingBidderName(true);
-                }}
-                className="text-base sm:text-lg font-black text-white flex items-center gap-2 cursor-pointer hover:text-indigo-300 transition group"
-              >
-                <span>{bidderName}</span>
-                <Pencil className="w-4 h-4 text-indigo-400 opacity-60 group-hover:opacity-100 transition" />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 mt-1">
-                <input
-                  type="text"
-                  value={tempBidderName}
-                  onChange={(e) => setTempBidderName(e.target.value)}
-                  className="bg-slate-800 border border-indigo-400 text-white text-sm font-black px-3 py-1.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveBidderName()}
-                />
-                <button
-                  onClick={handleSaveBidderName}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black px-3 py-1.5 rounded-xl cursor-pointer"
-                >
-                  حفظ
-                </button>
-              </div>
-            )}
-          </div>
+
+        {/* Active Bidder Label (read-only — يُعدَّل اسم الشركة من مبدّل الشركة في أعلى الصفحة) */}
+        <div className="flex items-center gap-2.5 text-slate-300">
+          <Building2 className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span className="text-xs sm:text-sm font-bold">
+            جدول تحليل عطاء: <span className="text-white font-black">{bidderName}</span>
+          </span>
         </div>
 
         {/* Clear Actions */}
@@ -143,17 +85,6 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               <span>تصفير مبالغ المجهز</span>
             </button>
           )}
-
-          {onClearAllItems && (
-            <button
-              onClick={onClearAllItems}
-              className="flex items-center gap-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 text-xs font-bold px-3.5 py-2 rounded-xl border border-rose-600/40 transition cursor-pointer"
-              title="مسح وتفريغ الجدول بالكامل للبدء من الصفر"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>مسح وتفريغ الجدول بالكامل</span>
-            </button>
-          )}
         </div>
 
       </div>
@@ -164,7 +95,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           <div className="flex items-center gap-3">
             <div className="p-3 bg-rose-600 text-white rounded-2xl font-black text-sm shrink-0 flex items-center gap-2 shadow-sm">
               <AlertTriangle className="w-5 h-5" />
-              <span>تدقيق حسابي وقانوني (مادة 13/2)</span>
+              <span>تدقيق حسابي وقانوني</span>
             </div>
             <div>
               <div className="font-black text-rose-950 text-sm sm:text-base flex items-center gap-2">
@@ -174,7 +105,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 </span>
               </div>
               <p className="text-rose-900 text-xs mt-1 leading-relaxed">
-                قام النظام بتأشير كافة الأخطاء وتطبيق التصحيح الحسابي القانوني التلقائي بالاعتداد بسعر المفرد وفق المادة (13 / ثانياً) من تعليمات تنفيذ العقود الحكومية.
+                قام النظام بتأشير هذه الأخطاء فقط دون أي تصحيح تلقائي أو صامت للأرقام الأصلية المدونة من قبل مقدم العطاء. اعتماد التصحيح (بحاصل الضرب أو بالمكتوب كتابةً) قرار صريح تتخذه اللجنة يدوياً لكل فقرة.
               </p>
             </div>
           </div>
@@ -276,7 +207,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">سعر المفرد للمجهز ✏️</th>
                 <th className="p-3 w-36 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">مبلغ المجهز الإجمالي 💰</th>
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني (BOC) ✏️</th>
-                <th className="p-3 min-w-[240px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط (مادة 13/2)</th>
+                <th className="p-3 min-w-[240px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800">نسبة الانحراف %</th>
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-purple-950 text-purple-200">المفرد الموزون</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800">التقييم</th>
@@ -407,7 +338,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                                   onUpdateItem(actualIndex, 'hasMathError', false);
                                 }}
                                 className="bg-rose-700 hover:bg-rose-800 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
-                                title="تصحيح مبلغ الفقرة لحاصل ضرب المفرد في الكمية بموجب المادة 13/2"
+                                title="تصحيح مبلغ الفقرة لحاصل ضرب المفرد في الكمية"
                               >
                                 🔢 اعتماد حاصل الضرب ({((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()})
                               </button>
@@ -554,7 +485,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                   {items.reduce((s, i) => s + i.estimatedTotal, 0).toLocaleString()} د.ع
                 </td>
                 <td className="p-3 text-right border-l border-slate-800 text-amber-300">
-                  {itemsWithErrors.length > 0 ? `تم تصحيح (${itemsWithErrors.length}) فقرة أصولياً ✓` : 'كافة الفقرات سليمة ✓'}
+                  {itemsWithErrors.length > 0 ? `⚠ (${itemsWithErrors.length}) فقرة تحتاج مراجعة واعتماد تصحيح` : 'كافة الفقرات سليمة ✓'}
                 </td>
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-rose-300">
                   {items.some(i => i.estimatedTotal > 0)

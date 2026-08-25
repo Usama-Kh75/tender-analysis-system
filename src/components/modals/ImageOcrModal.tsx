@@ -1,25 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Upload, 
-  Sparkles, 
-  Check, 
-  AlertCircle, 
-  Loader2, 
-  FileText, 
+import {
+  X,
+  Upload,
+  Sparkles,
+  Loader2,
   CheckCircle2,
   Trash2,
   Plus,
   Key,
   Cpu,
-  Eye,
-  AlertTriangle,
-  Building2,
-  HelpCircle
+  Eye
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey } from '../../utils/ocrService';
-import { formatNumber } from '../../utils/calculations';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl } from '../../utils/ocrService';
 
 interface ImageOcrModalProps {
   isOpen: boolean;
@@ -72,22 +65,30 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     localStorage.setItem('gemini_ocr_api_key', key.trim());
   };
 
-  const handleImageUpload = async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      setImagePreviews(prev => [...prev, dataUrl]);
-      setActiveImageIndex(prev => prev); // keep current view
-    };
-    reader.readAsDataURL(file);
+  const readFileAsDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   };
 
-  const handleMultipleFiles = (files: FileList) => {
-    Array.from(files).forEach(file => {
-      if (file.type.startsWith('image/')) {
-        handleImageUpload(file);
-      }
-    });
+  const handleImageUpload = async (file: File) => {
+    const dataUrl = await readFileAsDataUrl(file);
+    // تصغير الصورة تلقائياً لتقليل حجم الطلب وتسريع الاستخراج وتفادي فشل الشبكة
+    const compressed = await compressImageDataUrl(dataUrl);
+    setImagePreviews(prev => [...prev, compressed]);
+  };
+
+  const handleMultipleFiles = async (files: FileList) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    // نقرأ ونضغط كل الصفحات أولاً، ثم نضيفها دفعة واحدة بترتيب الرفع الأصلي
+    // (القراءة الفردية كانت تُدرج الصفحات بترتيب اكتمال القراءة لا ترتيب الاختيار، فيختل ترتيب الصفحات عند الدمج)
+    const dataUrls = await Promise.all(imageFiles.map((f) => readFileAsDataUrl(f)));
+    const compressed = await Promise.all(dataUrls.map((d) => compressImageDataUrl(d)));
+    setImagePreviews(prev => [...prev, ...compressed]);
   };
 
   const handleRemoveImage = (index: number) => {
@@ -97,7 +98,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
-  const processImage = async (dataUrl: string) => {
+  const processImage = async (dataUrl: string, cachedModels?: string[]): Promise<string[] | undefined> => {
     // معالجة صورة واحدة
     setIsLoading(true);
     setProgressPercent(10);
@@ -110,15 +111,16 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
           setShowKeyInput(true);
           setIsLoading(false);
           alert('يرجى إدخال مفتاح Google Gemini API المجاني لتفعيل ميزة التعرف على خط اليد والصور المعقدة بالذكاء الاصطناعي.');
-          return;
+          return undefined;
         }
 
         const result = await extractBOQWithGeminiVision(dataUrl, activeKey, (p, status) => {
           setProgressPercent(p);
           setProgressStatus(status);
-        });
+        }, cachedModels);
 
         setExtractedItems(prev => [...prev, ...result.items]);
+        return result.models;
       } else {
         const result = await extractBOQFromImage(dataUrl, (p, status) => {
           setProgressPercent(p);
@@ -126,9 +128,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         });
 
         setExtractedItems(prev => [...prev, ...result.items]);
+        return undefined;
       }
     } catch (err: any) {
       alert('حدث خطأ أثناء معالجة الصورة: ' + (err.message || 'تأكد من صحة المفتاح أو الاتصال'));
+      return undefined;
     } finally {
       setIsLoading(false);
     }
@@ -137,10 +141,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const processAllImages = async () => {
     if (imagePreviews.length === 0) return;
     setExtractedItems([]); // تنظيف النتائج السابقة
+    // استكشاف النماذج النشطة مرة واحدة فقط وإعادة استخدامها لكل الصفحات
+    // بدل استعلام مكرر عن كل صفحة يستنزف حصة الطلبات المجانية بسرعة
+    let cachedModels: string[] | undefined;
     for (let i = 0; i < imagePreviews.length; i++) {
       setActiveImageIndex(i);
       setProgressStatus(`جاري معالجة الصفحة (${i + 1}) من (${imagePreviews.length})...`);
-      await processImage(imagePreviews[i]);
+      const models = await processImage(imagePreviews[i], cachedModels);
+      if (models && models.length > 0) cachedModels = models;
     }
   };
 

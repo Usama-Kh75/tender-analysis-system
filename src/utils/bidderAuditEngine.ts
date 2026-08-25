@@ -1,4 +1,4 @@
-import { parseArabicNumber, tafqeetArabic } from './calculations';
+import { parseArabicNumber } from './calculations';
 
 export interface BidderRowAudit {
   itemNo: string | number;

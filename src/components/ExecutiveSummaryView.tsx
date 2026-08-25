@@ -1,21 +1,15 @@
 import React from 'react';
-import { 
-  Award, 
-  CheckCircle2, 
-  XCircle, 
-  AlertTriangle, 
-  ShieldCheck, 
-  Building2, 
-  TrendingUp, 
-  TrendingDown, 
-  FileSpreadsheet, 
-  Printer, 
-  Sparkles,
-  ArrowUpDown,
+import {
+  Award,
+  CheckCircle2,
+  XCircle,
+  Building2,
+  FileSpreadsheet,
+  Printer,
   FileCheck
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
-import { formatNumber, formatPercent, formatCurrency } from '../utils/calculations';
+import { formatNumber, formatCurrency } from '../utils/calculations';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
@@ -35,27 +29,25 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
 
   // تقييم العطاءات تجارياً وتصنيفها
-  const evaluatedBidders = project.bidders.map((bidder, index) => {
+  const evaluatedBidders = project.bidders.map((bidder) => {
     const totalDev = bidder.totals.totalDeviationPercent;
     const partialDev = bidder.totals.partialDeviationPercent;
-    const diff = bidder.totals.totalBidderAmount - estimatedTotal;
+    // فرق كل مجهز عن كلفته التخمينية الخاصة به (وليس عن كلفة أول مجهز في القائمة)
+    const diff = bidder.totals.overallDiffAmount;
 
-    // معايير الاستبعاد والقبول التجاري وفق ضوابط 2025
-    let commercialStatus: 'recommended' | 'qualified' | 'warning' | 'excluded' = 'qualified';
+    // معيار الاستبعاد التجاري الوحيد المعتمد في الجدول المرجعي: تجاوز الانحراف الكلي لحد الانحراف المعتمد
+    // (الانحراف الجزئي مؤشر استرشادي فقط في الجدول المعتمد ولا يُستخدم فيه كسبب استبعاد أو تحذير مستقل)
+    let commercialStatus: 'recommended' | 'qualified' | 'excluded' = 'qualified';
     let commercialReason = '';
 
-    if (Math.abs(totalDev) > 20) {
+    if (Math.abs(totalDev) > project.deviationThreshold) {
       commercialStatus = 'excluded';
-      commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±20%) حيث بلغ (${totalDev.toFixed(2)}%)`;
-    } else if (partialDev > 25) {
-      commercialStatus = 'excluded';
-      commercialReason = `مستبعد تجارياً: عدم توازن سعري حاد (انحراف جزئي بنسبة ${partialDev.toFixed(2)}% في الفقرات)`;
-    } else if (partialDev > 15) {
-      commercialStatus = 'warning';
-      commercialReason = `مقبول تجارياً مع إلزام تثبيت الأسعار الموزونة عند التعاقد لحماية أوامر الغيار`;
+      commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${totalDev.toFixed(2)}%)`;
     } else {
       commercialStatus = bidder.status === 'recommended' ? 'recommended' : 'qualified';
-      commercialReason = `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً`;
+      commercialReason = partialDev > 0
+        ? `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً (انحراف جزئي استرشادي: ${partialDev.toFixed(2)}%)`
+        : `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً`;
     }
 
     return {
@@ -235,7 +227,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                     {/* الانحراف الكلي */}
                     <td className="p-3.5 text-center border-l border-slate-200 font-black">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
-                        Math.abs(bidder.totals.totalDeviationPercent) > 20
+                        Math.abs(bidder.totals.totalDeviationPercent) > project.deviationThreshold
                           ? 'bg-rose-100 text-rose-900 border border-rose-300'
                           : bidder.totals.totalDeviationPercent < 0
                           ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
@@ -247,11 +239,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
                     {/* الانحراف الجزئي */}
                     <td className="p-3.5 text-center border-l border-slate-200 font-black">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
-                        bidder.totals.partialDeviationPercent > 20
-                          ? 'bg-rose-100 text-rose-900 border border-rose-300'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}>
+                      {/* استرشادي فقط - لا يُستخدم في الجدول المعتمد كمعيار استبعاد أو تحذير مستقل */}
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700">
                         {bidder.totals.partialDeviationPercent.toFixed(2)}%
                       </span>
                       <div className="text-[10px] text-slate-500 mt-0.5">
@@ -270,11 +259,6 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                         <span className="inline-flex items-center gap-1.5 bg-rose-100 text-rose-800 border border-rose-300 text-xs font-black px-3 py-1 rounded-full">
                           <XCircle className="w-4 h-4 text-rose-600" />
                           مستبعد تجارياً
-                        </span>
-                      ) : bidder.commercialStatus === 'warning' ? (
-                        <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black px-3 py-1 rounded-full">
-                          <AlertTriangle className="w-4 h-4 text-amber-600" />
-                          مؤهل (مع شرط التوزين)
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black px-3 py-1 rounded-full">

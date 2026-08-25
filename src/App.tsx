@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  getAllProjects, 
-  saveAllProjects, 
-  getActiveProjectId, 
-  setActiveProjectId, 
-  addAuditLog, 
-  createDefaultProject 
+import {
+  getAllProjects,
+  saveAllProjects,
+  getActiveProjectId,
+  setActiveProjectId,
+  addAuditLog,
+  createDefaultProject,
+  downloadProjectBackup,
+  parseProjectBackupFile,
+  resetAllData
 } from './utils/storageService';
 import { calculateBOQMetrics } from './utils/calculations';
-import { exportTenderToExcel, importBOQFromExcel } from './utils/excelService';
+import { exportTenderToExcel } from './utils/excelService';
 import { TenderProject, Bidder, BOQItem } from './types/tender';
 
 import { Navbar } from './components/Navbar';
@@ -24,11 +27,9 @@ import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PrintReportModal } from './components/modals/PrintReportModal';
 
-import { 
-  Table2, 
-  UploadCloud, 
-  Edit3, 
-  Pencil, 
+import {
+  Table2,
+  Pencil,
   Award,
   BarChart3,
   Building2,
@@ -39,8 +40,10 @@ export function App() {
   const [projects, setProjects] = useState<TenderProject[]>([]);
   const [activeProjectId, setActiveId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>('table');
-  const [showInputGuide, setShowInputGuide] = useState<boolean>(true);
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
+  const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
+  const [isEditingBidderName, setIsEditingBidderName] = useState<boolean>(false);
+  const [tempBidderName, setTempBidderName] = useState<string>('');
 
   // Modals
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
@@ -132,61 +135,25 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Clear All Items (Empty Table)
-  const handleClearAllTableItems = () => {
-    if (!window.confirm('⚠️ تحذير: هل أنت متأكد من مسح وتفريغ الجدول بالكامل وحذف كافة الفقرات للبدء من الصفر؟')) {
-      return;
-    }
+  // حقول هوية الفقرة والكلفة التخمينية مشتركة لكل المجهزين (الكلفة التخمينية واحدة للمشروع)
+  // بينما حقول السعر والتدقيق (bidderTotal, enteredUnitPrice, writtenText...) خاصة بكل مجهز على حدة
+  const SHARED_ESTIMATE_FIELDS: (keyof BOQItem)[] = ['itemNo', 'description', 'unit', 'quantity', 'estimatedUnitPrice', 'estimatedTotal'];
 
-    const initialItem: Partial<BOQItem> = {
-      itemNo: 1,
-      description: 'فقرة 1',
-      quantity: 1,
-      estimatedTotal: 0,
-      bidderTotal: 0
-    };
-
-    const recalc = calculateBOQMetrics([initialItem], currentProject.deviationThreshold);
-
-    const updatedBidder: Bidder = {
-      ...activeBidder,
-      name: 'شركة جديدة',
-      items: recalc.items,
-      totals: recalc.totals
-    };
-
-    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
-    let updatedProj: TenderProject = {
-      ...currentProject,
-      bidders: updatedBidders,
-      updatedAt: new Date().toISOString()
-    };
-
-    updatedProj = addAuditLog(
-      updatedProj,
-      'تفريغ الجدول بالكامل',
-      `تم مسح كافة فقرات الجدول وتصفيره للبدء من الصفر`
-    );
-
-    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
-  };
-
-  // Update Item in Active Bidder
+  // Update Item — يُطبَّق على كل المجهزين إن كان الحقل من حقول الكلفة التخمينية المشتركة، وإلا على المجهز النشط فقط
   const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) => {
     const oldVal = (activeBidder.items[index] as any)[field];
-    const updatedRaw = [...activeBidder.items];
-    updatedRaw[index] = { ...updatedRaw[index], [field]: val };
+    const isSharedField = SHARED_ESTIMATE_FIELDS.includes(field);
 
-    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    const updatedBidders = currentProject.bidders.map(b => {
+      if (!isSharedField && b.id !== activeBidder.id) return b;
+      if (!b.items[index]) return b;
 
-    const updatedBidder: Bidder = {
-      ...activeBidder,
-      items: recalculation.items,
-      totals: recalculation.totals
-    };
+      const updatedRaw = [...b.items];
+      updatedRaw[index] = { ...updatedRaw[index], [field]: val };
+      const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+      return { ...b, items: recalculation.items, totals: recalculation.totals };
+    });
 
-    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
-    
     let updatedProj: TenderProject = {
       ...currentProject,
       bidders: updatedBidders,
@@ -196,16 +163,16 @@ export function App() {
     if (['estimatedTotal', 'bidderTotal', 'description'].includes(field as string)) {
       updatedProj = addAuditLog(
         updatedProj,
-        'تعديل قيمة مالية',
-        `تم تعديل حقل (${String(field)}) للفقرة رقم (${updatedRaw[index].itemNo}) من (${oldVal}) إلى (${val})`,
-        { itemNo: updatedRaw[index].itemNo, oldValue: oldVal, newValue: val }
+        isSharedField ? 'تعديل الكلفة التخمينية (مشتركة لكل المجهزين)' : 'تعديل قيمة مالية',
+        `تم تعديل حقل (${String(field)}) للفقرة رقم (${activeBidder.items[index]?.itemNo}) من (${oldVal}) إلى (${val})`,
+        { itemNo: activeBidder.items[index]?.itemNo, oldValue: oldVal, newValue: val }
       );
     }
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Add Item
+  // Add Item — يُضاف سطر فارغ لكافة المجهزين معاً، لأن الفقرة (الوصف/الوحدة/الكمية/الكلفة التخمينية) واحدة للمشروع
   const handleAddItem = () => {
     const nextNo = activeBidder.items.length + 1;
     const newItem: Partial<BOQItem> = {
@@ -216,85 +183,32 @@ export function App() {
       bidderTotal: 0
     };
 
-    const updatedRaw = [...activeBidder.items, newItem];
-    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    const updatedBidders = currentProject.bidders.map(b => {
+      const updatedRaw = [...b.items, { ...newItem, bidderTotal: 0 }];
+      const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+      return { ...b, items: recalculation.items, totals: recalculation.totals };
+    });
 
-    const updatedBidder: Bidder = {
-      ...activeBidder,
-      items: recalculation.items,
-      totals: recalculation.totals
-    };
-
-    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
-    let updatedProj: TenderProject = {
+    const updatedProj: TenderProject = {
       ...currentProject,
       bidders: updatedBidders,
       updatedAt: new Date().toISOString()
     };
-
-    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
-  };
-
-  // Batch Add Items (Direct Smart Paste Handler)
-  const handleBatchAddItems = (newItems: Partial<BOQItem>[]) => {
-    let mergedItems: Partial<BOQItem>[] = [];
-
-    // إذا كان الجدول يحتوي على عناصر فارغة (أو أسطر مبدئية) وتم لصق عدد فقرات، ندمجها من البداية
-    if (activeBidder.items.length > 0 && (activeBidder.items[0].estimatedTotal === 0 && activeBidder.items[0].bidderTotal === 0 && activeBidder.items.length === 1)) {
-      mergedItems = newItems;
-    } else if (newItems.length <= activeBidder.items.length && activeBidder.items.length > 1) {
-      // دمج الأرقام في الأسطر الحالية
-      mergedItems = activeBidder.items.map((existing, idx) => {
-        const incoming = newItems[idx];
-        if (!incoming) return existing;
-        return {
-          ...existing,
-          estimatedTotal: incoming.estimatedTotal !== 0 ? incoming.estimatedTotal : existing.estimatedTotal,
-          bidderTotal: incoming.bidderTotal !== 0 ? incoming.bidderTotal : existing.bidderTotal,
-          description: incoming.description && !incoming.description.startsWith('فقرة') ? incoming.description : existing.description
-        };
-      });
-    } else {
-      mergedItems = newItems;
-    }
-
-    const recalculation = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
-
-    const updatedBidder: Bidder = {
-      ...activeBidder,
-      items: recalculation.items,
-      totals: recalculation.totals
-    };
-
-    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
-    let updatedProj: TenderProject = {
-      ...currentProject,
-      bidders: updatedBidders,
-      updatedAt: new Date().toISOString()
-    };
-
-    updatedProj = addAuditLog(
-      updatedProj,
-      'إدراج فقرات جماعي (لصق مباشر)',
-      `تم إدراج (${newItems.length}) فقرة إلى جدول التحليل عبر الحافظة`
-    );
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
   // Delete Item
+  // Delete Item — يُحذف من جدول كافة المجهزين معاً حفاظاً على تطابق ترقيم وعدد الفقرات بينهم
   const handleDeleteItem = (index: number) => {
     const targetItem = activeBidder.items[index];
-    const updatedRaw = activeBidder.items.filter((_, i) => i !== index);
-    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
 
-    const updatedBidder: Bidder = {
-      ...activeBidder,
-      items: recalculation.items,
-      totals: recalculation.totals
-    };
+    const updatedBidders = currentProject.bidders.map(b => {
+      const updatedRaw = b.items.filter((_, i) => i !== index);
+      const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+      return { ...b, items: recalculation.items, totals: recalculation.totals };
+    });
 
-    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
     let updatedProj: TenderProject = {
       ...currentProject,
       bidders: updatedBidders,
@@ -303,33 +217,33 @@ export function App() {
 
     updatedProj = addAuditLog(
       updatedProj,
-      'حذف فقرة',
+      'حذف فقرة (من جدول كافة المجهزين)',
       `تم حذف الفقرة رقم (${targetItem?.itemNo})`
     );
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Duplicate Item
+  // Duplicate Item — يُكرَّر لدى كافة المجهزين معاً، كل مجهز باستخدام سعره الخاص للفقرة المصدر
   const handleDuplicateItem = (index: number) => {
-    const source = activeBidder.items[index];
-    const dup: Partial<BOQItem> = {
-      ...source,
-      id: `item-${Date.now()}`,
-      itemNo: `${source.itemNo} (مكرر)`,
-      description: `${source.description} (نسخة)`
-    };
+    const dupId = `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
 
-    const updatedRaw = [...activeBidder.items, dup];
-    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    const updatedBidders = currentProject.bidders.map(b => {
+      const source = b.items[index];
+      if (!source) return b;
 
-    const updatedBidder: Bidder = {
-      ...activeBidder,
-      items: recalculation.items,
-      totals: recalculation.totals
-    };
+      const dup: Partial<BOQItem> = {
+        ...source,
+        id: dupId,
+        itemNo: `${source.itemNo} (مكرر)`,
+        description: `${source.description} (نسخة)`
+      };
 
-    const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
+      const updatedRaw = [...b.items, dup];
+      const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+      return { ...b, items: recalculation.items, totals: recalculation.totals };
+    });
+
     const updatedProj: TenderProject = {
       ...currentProject,
       bidders: updatedBidders,
@@ -579,6 +493,104 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
+  // Delete Bidder
+  const handleDeleteBidder = (bidderId: string) => {
+    if (currentProject.bidders.length <= 1) {
+      alert('لا يمكن حذف آخر مجهز في المناقصة. أضف مجهزاً آخر أولاً إن أردت البدء من جديد، أو أنشئ مناقصة جديدة.');
+      return;
+    }
+
+    const target = currentProject.bidders.find(b => b.id === bidderId);
+    if (!target) return;
+
+    if (!window.confirm(`هل أنت متأكد من حذف المجهز (${target.name}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+      return;
+    }
+
+    const remainingBidders = currentProject.bidders.filter(b => b.id !== bidderId);
+    const wasActive = currentProject.activeBidderId === bidderId;
+
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: remainingBidders,
+      activeBidderId: wasActive ? remainingBidders[0].id : currentProject.activeBidderId,
+      updatedAt: new Date().toISOString()
+    };
+
+    updatedProj = addAuditLog(
+      updatedProj,
+      'حذف مجهز',
+      `تم حذف المجهز (${target.name}) نهائياً من المناقصة`
+    );
+
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
+
+  // Reset (Clear) All Bidders in Current Project — Fresh Start Without Deleting the Whole Project
+  const handleResetAllBidders = () => {
+    if (!window.confirm('⚠️ سيتم حذف جميع المجهزين المدرجين حالياً في هذه المناقصة/الطلبية والبدء بمجهز واحد فارغ. هل أنت متأكد؟')) {
+      return;
+    }
+
+    const blankItem: Partial<BOQItem> = { itemNo: 1, description: 'فقرة 1', quantity: 1, estimatedTotal: 0, bidderTotal: 0 };
+    const recalc = calculateBOQMetrics([blankItem], currentProject.deviationThreshold);
+
+    const freshBidder: Bidder = {
+      id: `bidder-${Date.now()}`,
+      name: 'شركة جديدة',
+      submissionDate: new Date().toISOString().split('T')[0],
+      items: recalc.items,
+      totals: recalc.totals,
+      status: 'pending'
+    };
+
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: [freshBidder],
+      activeBidderId: freshBidder.id,
+      updatedAt: new Date().toISOString()
+    };
+
+    updatedProj = addAuditLog(
+      updatedProj,
+      'مسح جميع المجهزين',
+      'تم حذف جميع المجهزين المدرجين والبدء بمجهز واحد فارغ لإعادة الإدخال من جديد'
+    );
+
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+    setIsSettingsOpen(false);
+  };
+
+  // Delete Entire Project (requires at least one other project to remain)
+  const handleDeleteProject = () => {
+    if (projects.length <= 1) {
+      alert('لا يمكن حذف آخر مناقصة/طلبية في النظام. إن أردت البدء من جديد بالكامل استخدم "إعادة ضبط النظام".');
+      return;
+    }
+
+    if (!window.confirm(`⚠️ سيتم حذف مناقصة/طلبية (${currentProject.title}) نهائياً بكل بياناتها (المجهزين والأسعار وسجل التدقيق). هل أنت متأكد؟`)) {
+      return;
+    }
+
+    const remaining = projects.filter(p => p.id !== currentProject.id);
+    setProjects(remaining);
+    setActiveId(remaining[0].id);
+    setActiveProjectId(remaining[0].id);
+    setIsSettingsOpen(false);
+  };
+
+  // Full Factory Reset — Wipe All Local Data, Start From a Single Blank Project
+  const handleFactoryReset = () => {
+    if (!window.confirm('⚠️ تحذير أخير: سيتم مسح جميع المناقصات والطلبيات وبياناتها المحفوظة محلياً في هذا المتصفح نهائياً بلا رجعة، والبدء بنظام فارغ تماماً. هل تريد المتابعة؟\n\nيُنصح بتنزيل نسخة احتياطية أولاً إن كانت البيانات الحالية مهمة.')) {
+      return;
+    }
+
+    const blank = resetAllData();
+    setProjects([blank]);
+    setActiveId(blank.id);
+    setIsSettingsOpen(false);
+  };
+
   // Update Bidder Status
   const handleUpdateBidderStatus = (bidderId: string, status: Bidder['status']) => {
     const updatedBidders = currentProject.bidders.map(b => b.id === bidderId ? { ...b, status } : b);
@@ -630,9 +642,9 @@ export function App() {
 
   // Create New Project
   const handleNewProject = () => {
-    const title = prompt('أدخل اسم المناقصة الجديدة:');
+    const title = prompt('أدخل اسم الطلبية أو المناقصة الجديدة:');
     if (!title) return;
-    const refNo = prompt('أدخل رقم الإحالة / المناقصة:') || `BOC-TND-${Date.now().toString().slice(-4)}`;
+    const refNo = prompt('أدخل رقم الطلبية أو المناقصة:') || `BOC-TND-${Date.now().toString().slice(-4)}`;
 
     const newProj: TenderProject = {
       ...createDefaultProject(),
@@ -655,18 +667,34 @@ export function App() {
     setActiveProjectId(newProj.id);
   };
 
-  // Excel Import Direct
-  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Import Project Backup (JSON)
+  const handleImportBackup = async (file: File) => {
     try {
-      const items = await importBOQFromExcel(file, currentProject.deviationThreshold);
-      if (items.length > 0) {
-        handleApplyExtractedItems(items, false);
-      }
+      const imported = await parseProjectBackupFile(file);
+
+      // تفادي تعارض المعرّف مع مشروع موجود مسبقاً بإعطائه معرفاً جديداً
+      const idConflict = projects.some(p => p.id === imported.id);
+      const restoredProject: TenderProject = {
+        ...imported,
+        id: idConflict ? `project-${Date.now()}` : imported.id,
+        updatedAt: new Date().toISOString()
+      };
+
+      const withLog = addAuditLog(
+        restoredProject,
+        'استعادة من نسخة احتياطية',
+        `تم استيراد هذا المشروع من ملف نسخة احتياطية (${file.name})`
+      );
+
+      setProjects(prev => {
+        const withoutOld = prev.filter(p => p.id !== withLog.id);
+        return [withLog, ...withoutOld];
+      });
+      setActiveId(withLog.id);
+      setActiveProjectId(withLog.id);
+      alert(`تم استيراد المشروع (${withLog.title}) بنجاح من النسخة الاحتياطية.`);
     } catch (err: any) {
-      alert(`حدث خطأ أثناء قراءة ملف Excel: ${err.message}`);
+      alert(`فشل استيراد النسخة الاحتياطية: ${err.message}`);
     }
   };
 
@@ -700,7 +728,6 @@ export function App() {
         onOpenAuditTrail={() => setIsAuditOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenPrint={() => setIsPrintOpen(true)}
-        onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
       />
 
       {/* Main Content Area */}
@@ -712,9 +739,36 @@ export function App() {
           {/* Top Meta Bar */}
           <div className="flex items-center justify-between gap-4 mb-3 pb-3 border-b border-slate-100 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black px-3 py-1 rounded-full font-mono shadow-2xs">
-                {currentProject.referenceNumber}
-              </span>
+              {!isEditingRefNumber ? (
+                <span
+                  onClick={() => setIsEditingRefNumber(true)}
+                  title="انقر لتعديل رقم الطلبية أو المناقصة"
+                  className="group bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-black px-3 py-1 rounded-full font-mono shadow-2xs cursor-pointer flex items-center gap-1.5 transition"
+                >
+                  {currentProject.referenceNumber || 'أدخل رقم الطلبية/المناقصة'}
+                  <Pencil className="w-3 h-3 text-amber-700 opacity-0 group-hover:opacity-100 transition" />
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={currentProject.referenceNumber}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, referenceNumber: val } : p));
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && setIsEditingRefNumber(false)}
+                    className="bg-white border border-amber-400 text-amber-900 text-xs font-black font-mono px-3 py-1 rounded-full focus:outline-none ring-2 ring-amber-500/20 w-40"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => setIsEditingRefNumber(false)}
+                    className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shrink-0 cursor-pointer"
+                  >
+                    حفظ
+                  </button>
+                </span>
+              )}
               <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
                 {currentProject.entityName}
               </span>
@@ -764,27 +818,62 @@ export function App() {
             {/* Right Controls: Active Bidder Switcher & Excel & 3 Main Tabs */}
             <div className="flex items-center gap-3 flex-wrap">
               
-              {/* Bidder Switcher & Quick Add Button */}
+              {/* Bidder Switcher, Inline Rename & Quick Add Button */}
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-2xl p-1.5 shadow-xs">
                 <div className="flex items-center gap-1 px-2">
                   <Building2 className="w-4 h-4 text-indigo-600" />
                   <span className="text-xs font-bold text-slate-600">الشركة:</span>
                 </div>
-                
-                <select
-                  value={activeBidder.id}
-                  onChange={(e) => {
-                    const updatedProj = { ...currentProject, activeBidderId: e.target.value };
-                    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
-                  }}
-                  className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-black text-indigo-700 focus:outline-none cursor-pointer"
-                >
-                  {currentProject.bidders.map(b => (
-                    <option key={b.id} value={b.id} className="text-slate-900">
-                      {b.name} ({b.status === 'recommended' ? '★ موصى بالترسية' : b.status})
-                    </option>
-                  ))}
-                </select>
+
+                {!isEditingBidderName ? (
+                  <>
+                    <select
+                      value={activeBidder.id}
+                      onChange={(e) => {
+                        const updatedProj = { ...currentProject, activeBidderId: e.target.value };
+                        setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+                      }}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-black text-indigo-700 focus:outline-none cursor-pointer max-w-[220px] truncate"
+                    >
+                      {currentProject.bidders.map(b => (
+                        <option key={b.id} value={b.id} className="text-slate-900">
+                          {b.name} ({b.status === 'recommended' ? '★ موصى بالترسية' : b.status})
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => {
+                        setTempBidderName(activeBidder.name);
+                        setIsEditingBidderName(true);
+                      }}
+                      className="p-1.5 text-slate-500 hover:text-indigo-700 hover:bg-white rounded-lg transition cursor-pointer"
+                      title="تعديل اسم الشركة النشطة حالياً"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={tempBidderName}
+                      onChange={(e) => setTempBidderName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (handleUpdateBidderName(tempBidderName.trim() || activeBidder.name), setIsEditingBidderName(false))}
+                      className="bg-white border border-indigo-400 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-black text-indigo-900 focus:outline-none ring-2 ring-indigo-500/20 w-56"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        handleUpdateBidderName(tempBidderName.trim() || activeBidder.name);
+                        setIsEditingBidderName(false);
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shrink-0 cursor-pointer"
+                    >
+                      حفظ
+                    </button>
+                  </>
+                )}
 
                 <button
                   onClick={() => handleAddNewBidder()}
@@ -850,14 +939,11 @@ export function App() {
               currency={currentProject.currency}
               deviationThreshold={currentProject.deviationThreshold}
               bidderName={activeBidder.name}
-              onUpdateBidderName={handleUpdateBidderName}
               onUpdateItem={handleUpdateItem}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}
-              onBatchAddItems={handleBatchAddItems}
               onClearBidderPrices={handleClearBidderPrices}
-              onClearAllItems={handleClearAllTableItems}
             />
           ) : activeTab === 'summary' ? (
             <ExecutiveSummaryView
@@ -872,8 +958,7 @@ export function App() {
             />
           ) : (
             <ChartsView
-              items={activeBidder.items}
-              totals={activeBidder.totals}
+              bidders={currentProject.bidders}
               currency={currentProject.currency}
               deviationThreshold={currentProject.deviationThreshold}
             />
@@ -922,6 +1007,7 @@ export function App() {
         }}
         onAddNewBidder={handleAddNewBidder}
         onUpdateBidderStatus={handleUpdateBidderStatus}
+        onDeleteBidder={handleDeleteBidder}
       />
 
       <AuditTrailModal
@@ -935,6 +1021,12 @@ export function App() {
         onClose={() => setIsSettingsOpen(false)}
         project={currentProject}
         onSaveSettings={handleSaveSettings}
+        onExportBackup={() => downloadProjectBackup(currentProject)}
+        onImportBackup={handleImportBackup}
+        onDeleteProject={handleDeleteProject}
+        onFactoryReset={handleFactoryReset}
+        onResetAllBidders={handleResetAllBidders}
+        canDeleteProject={projects.length > 1}
       />
 
       <PrintReportModal
