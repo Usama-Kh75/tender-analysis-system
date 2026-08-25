@@ -1024,6 +1024,7 @@ export function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-amber-400 font-bold">نظام تحليل وتقييم العطاءات المتكامل (BOC)</span>
+            <span className="bg-slate-800 text-slate-300 text-[10px] font-mono px-1.5 py-0.5 rounded-md border border-slate-700">v{__APP_VERSION__}</span>
             <span>•</span>
             <span>وزارة النفط / شركة نفط البصرة</span>
           </div>
