@@ -23,8 +23,48 @@ export function normalizeArabicNumbers(str: string): string {
 }
 
 /**
- * محرك استخراج الجداول عبر الذكاء الاصطناعي الرؤيوي (Gemini Vision API)
- * مع الاكتشاف الديناميكي الذكي للنماذج المتاحة لمفتاح المستخدم (Dynamic Model Discovery)
+ * استخراج نص JSON نقي حتى لو أرجع النموذج نصوصاً أو شروحات إضافية
+ */
+function extractJsonArray(text: string): any[] {
+  if (!text) return [];
+  
+  // 1. محاولة مباشرة عبر Regex لاستخراج مصفوفة JSON بين [ و ]
+  const arrayMatch = text.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    try {
+      return JSON.parse(arrayMatch[0]);
+    } catch (e) {
+      // محاولة تنظيف إضافية
+    }
+  }
+
+  // 2. إزالة markdown blocks
+  const clean = text
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(clean);
+    return Array.isArray(parsed) ? parsed : (parsed.items || parsed.table || []);
+  } catch (e) {
+    // 3. محاولة استخراج كائنات فردية إذا كانت المصفوفة مقطوعة
+    const objectMatches = text.match(/\{[^{}]*\}/g);
+    if (objectMatches && objectMatches.length > 0) {
+      const items: any[] = [];
+      for (const objStr of objectMatches) {
+        try {
+          items.push(JSON.parse(objStr));
+        } catch (_) {}
+      }
+      if (items.length > 0) return items;
+    }
+    throw new Error(`تعذر تفكيك استجابة الذكاء الاصطناعي: ${text.substring(0, 150)}...`);
+  }
+}
+
+/**
+ * محرك استخراج الجداول عبر نماذج Gemini Vision المتخصصة بالرؤية الاصطناعية
  */
 export async function extractBOQWithGeminiVision(
   imageBase64: string,
@@ -32,7 +72,7 @@ export async function extractBOQWithGeminiVision(
   onProgress?: (progress: number, status: string) => void
 ): Promise<ExtractedTableData> {
   const cleanKey = apiKey.trim();
-  onProgress?.(10, 'جاري فحص النماذج المتاحة لمفتاح API...');
+  onProgress?.(10, 'جاري تحديد نماذج الرؤية الاصطناعية المعتمدة (Gemini Vision)...');
 
   // إزالة الترويسة data:image/...;base64,
   let cleanBase64 = imageBase64;
@@ -44,7 +84,7 @@ export async function extractBOQWithGeminiVision(
   }
 
   const systemPrompt = `أنت خبير تدقيق وتحليل جداول كميات ومناقصات وعطاءات حكومية.
-قم بتحليل الصورة المرفقة (سواء كانت مطبوعة أو مكتوبة بخط اليد أو مصورة بكاميرا) واستخرج كافة صفوف الجدول المالي بدقة متناهية.
+قم بتحليل صورة جدول العطاء المرفقة واستخرج كافة الصفوف بدقة متناهية.
 
 لكل صف، استخرج الحقول الآتية بصيغة JSON حصراً:
 - itemNo: رقم أو تسلسل الفقرة (مثلاً 1 أو 447)
@@ -55,7 +95,7 @@ export async function extractBOQWithGeminiVision(
 - writtenText: سعر المفرد أو مبلغ الفقرة المكتوب كتابةً بالتفقيط (مثلاً "ألفان وأربعمائة دينار")
 - total: مبلغ الفقرة الإجمالي المكتوب أو المحسوب كرقم (مثلاً 5760000)
 
-أرجع النتيجة كمصفوفة JSON نقية فقط بالشكل التالي دون أي نصوص إضافية:
+يجب أن تكون إجابتك عبارة عن مصفوفة JSON فقط كالتالي دون أي مقدمات أو شروحات:
 [
   {
     "itemNo": 1,
@@ -68,48 +108,24 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  // 1. محاولة استكشاف النماذج المتاحة لحساب المستخدم أولاً
-  let targetModels = [
-    'gemini-2.0-flash',
+  // قائمة نماذج Gemini Vision حصراً (استبعاد Gemma والنماذج النصية الصرفة)
+  const preferredVisionModels = [
     'gemini-1.5-flash-latest',
     'gemini-1.5-flash',
-    'gemini-2.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-2.0-flash',
     'gemini-1.5-pro-latest',
     'gemini-1.5-pro',
-    'gemini-pro-vision',
-    'gemini-pro'
+    'gemini-pro-vision'
   ];
 
-  try {
-    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`, {
-      headers: {
-        'x-goog-api-key': cleanKey
-      }
-    });
-    if (listRes.ok) {
-      const listData = await listRes.json();
-      if (listData?.models && Array.isArray(listData.models)) {
-        const availableVision = listData.models
-          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m: any) => m.name.replace('models/', ''));
-        if (availableVision.length > 0) {
-          targetModels = [...availableVision, ...targetModels];
-        }
-      }
-    }
-  } catch (e) {
-    // استخدام القائمة الافتراضية
-  }
-
-  const uniqueModels = Array.from(new Set(targetModels));
   let rawContent = '';
   let lastError: any = null;
 
-  for (const model of uniqueModels) {
-    // تجربة v1beta و v1
+  for (const model of preferredVisionModels) {
     for (const apiVer of ['v1beta', 'v1']) {
       try {
-        onProgress?.(35, `جاري استدعاء نموذج (${model}) عبر ${apiVer}...`);
+        onProgress?.(35, `جاري القراءة والتحليل بنموذج الرؤية (${model})...`);
         
         const response = await fetch(`https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${cleanKey}`, {
           method: 'POST',
@@ -138,9 +154,9 @@ export async function extractBOQWithGeminiVision(
 
         if (response.ok) {
           const data = await response.json();
-          rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-          if (rawContent && rawContent !== '[]') {
-            break; // نجاح كامل!
+          rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (rawContent && rawContent.length > 5) {
+            break; // نجاح كامل مع نموذج Vision رسمي!
           }
         } else {
           const errText = await response.text();
@@ -150,21 +166,19 @@ export async function extractBOQWithGeminiVision(
         lastError = err;
       }
     }
-    if (rawContent && rawContent !== '[]') {
+    if (rawContent && rawContent.length > 5) {
       break;
     }
   }
 
-  if (!rawContent || rawContent === '[]') {
-    throw new Error(`تعذر الاتصال بنماذج الذكاء الاصطناعي: ${lastError?.message || 'يرجى التأكد من صلاحية المفتاح والاتصال'}`);
+  if (!rawContent) {
+    throw new Error(`تعذر الاتصال بنماذج Gemini Vision: ${lastError?.message || 'تأكد من صلاحية المفتاح والاتصال'}`);
   }
 
   try {
     onProgress?.(80, 'جاري تفكيك وهيكلة البيانات وتدقيق الحسابات...');
 
-    // تنظيف نص JSON
-    const jsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsedRows = JSON.parse(jsonStr);
+    const parsedRows = extractJsonArray(rawContent);
 
     const items: Partial<BOQItem>[] = parsedRows.map((r: any, idx: number) => {
       const itemNo = r.itemNo || idx + 1;
