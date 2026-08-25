@@ -23,7 +23,7 @@ export function normalizeArabicNumbers(str: string): string {
 }
 
 /**
- * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المعتمدة فقط
+ * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المتاحة بالضبط
  */
 export async function testGeminiApiKey(apiKey: string): Promise<{ success: boolean; message: string; models: string[] }> {
   const cleanKey = apiKey.trim();
@@ -48,21 +48,28 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ success: boole
     }
 
     const data = await res.json();
-    // استبعاد Gemma والنماذج النصية حصراً والاحتفاظ بنماذج Gemini Vision فقط
+    // استخراج كافة النماذج التي تدعم generateContent وتدعم الرؤية
     const modelsList: string[] = (data?.models || [])
       .filter((m: any) => {
         const name = (m.name || '').toLowerCase();
         return name.includes('gemini') && 
-               !name.includes('gemma') && 
                !name.includes('embedding') && 
                !name.includes('aqa') &&
                m.supportedGenerationMethods?.includes('generateContent');
       })
       .map((m: any) => m.name.replace('models/', ''));
 
+    if (modelsList.length === 0) {
+      return {
+        success: false,
+        message: 'تم الاتصال ولكن لم يتم العثور على نماذج Gemini نشطة في هذا المشروع. تأكد من إنشاء المفتاح من aistudio.google.com',
+        models: []
+      };
+    }
+
     return {
       success: true,
-      message: `تم الاتصال بنجاح! نماذج الرؤية النشطة: (${modelsList.length}) نموذج (مثل: ${modelsList.slice(0, 3).join(', ')}).`,
+      message: `تم الاتصال بنجاح! النماذج النشطة في حسابك (${modelsList.length}): ${modelsList.slice(0, 4).join(' ، ')}`,
       models: modelsList
     };
   } catch (err: any) {
@@ -124,7 +131,7 @@ export async function extractBOQWithGeminiVision(
   onProgress?: (progress: number, status: string) => void
 ): Promise<ExtractedTableData> {
   const cleanKey = apiKey.trim();
-  onProgress?.(10, 'جاري تحضير نموذج الرؤية السريع (Gemini Flash)...');
+  onProgress?.(10, 'جاري استكشاف النماذج النشطة في حساب Google الخاص بك...');
 
   // إزالة الترويسة data:image/...;base64,
   let cleanBase64 = imageBase64;
@@ -160,21 +167,36 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  // قائمة نماذج Gemini Vision السريعة حصراً (ترتيب الأسرع والأدق أولاً)
-  const visionModels = [
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro',
-    'gemini-1.5-pro-latest'
-  ];
+  // 1. الاستعلام المباشر عن النماذج المتاحة لمفتاح المستخدم بالضبط
+  let modelsToTry: string[] = [];
+  try {
+    const checkRes = await testGeminiApiKey(cleanKey);
+    if (checkRes.success && checkRes.models.length > 0) {
+      // ترتيب النماذج: flash أولاً ثم الباقي
+      modelsToTry = checkRes.models.sort((a, b) => {
+        if (a.includes('flash') && !b.includes('flash')) return -1;
+        if (!a.includes('flash') && b.includes('flash')) return 1;
+        return 0;
+      });
+    }
+  } catch (_) {}
+
+  // إذا لم نتمكن من قائمة النماذج، نستخدم النماذج القياسية
+  if (modelsToTry.length === 0) {
+    modelsToTry = [
+      'gemini-1.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-8b',
+      'gemini-1.5-pro'
+    ];
+  }
 
   let rawContent = '';
-  let lastError: any = null;
+  let errorReports: string[] = [];
 
-  for (const model of visionModels) {
+  for (const model of modelsToTry) {
     try {
-      onProgress?.(35, `جاري استخراج البيانات بسرعة فائقة بنموذج (${model})...`);
+      onProgress?.(35, `جاري الاستخراج بالنموذج النشط (${model})...`);
       
       const requestBody = {
         contents: [
@@ -209,19 +231,19 @@ export async function extractBOQWithGeminiVision(
         const data = await response.json();
         rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         if (rawContent && rawContent.length > 5) {
-          break; // نجاح كامل وفوري!
+          break; // نجاح كامل!
         }
       } else {
         const errText = await response.text();
-        lastError = new Error(`(${response.status}): ${errText}`);
+        errorReports.push(`${model}: (${response.status}) ${errText.substring(0, 100)}`);
       }
     } catch (err: any) {
-      lastError = err;
+      errorReports.push(`${model}: ${err.message}`);
     }
   }
 
   if (!rawContent) {
-    throw new Error(`تعذر الاتصال بنماذج Gemini Vision: ${lastError?.message || 'يرجى التحقق من المفتاح والاتصال'}`);
+    throw new Error(`تعذر الاتصال بالنماذج: ${errorReports.join(' | ')}`);
   }
 
   try {
