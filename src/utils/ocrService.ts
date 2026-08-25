@@ -42,8 +42,6 @@ export async function extractBOQWithGeminiVision(
     cleanBase64 = parts[1];
   }
 
-  onProgress?.(35, 'جاري إرسال وتحليل الصورة عبر الذكاء الاصطناعي الرؤيوي...');
-
   const systemPrompt = `أنت خبير تدقيق وتحليل جداول كميات ومناقصات وعطاءات حكومية.
 قم بتحليل الصورة المرفقة (سواء كانت مطبوعة أو مكتوبة بخط اليد أو مصورة بكاميرا) واستخرج كافة صفوف الجدول المالي بدقة متناهية.
 
@@ -70,20 +68,19 @@ export async function extractBOQWithGeminiVision(
 ]`;
 
   const candidateModels = [
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash-latest',
-    'gemini-2.5-flash',
     'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro'
+    'gemini-1.5-pro'
   ];
 
   let rawContent = '';
-  let lastError = null;
+  let lastError: any = null;
 
   for (const model of candidateModels) {
     try {
-      onProgress?.(35, `جاري استدعاء نموذج (${model})...`);
+      onProgress?.(35, `جاري الاتصال بنموذج (${model})...`);
       
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`, {
         method: 'POST',
@@ -112,7 +109,9 @@ export async function extractBOQWithGeminiVision(
       if (response.ok) {
         const data = await response.json();
         rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-        break; // نجح الاتصال بنجاح!
+        if (rawContent && rawContent !== '[]') {
+          break; // نجح الاتصال بنجاح!
+        }
       } else {
         const errText = await response.text();
         lastError = new Error(`(${response.status}): ${errText}`);
@@ -122,14 +121,13 @@ export async function extractBOQWithGeminiVision(
     }
   }
 
-  if (!rawContent) {
+  if (!rawContent || rawContent === '[]') {
     throw new Error(`تعذر الاتصال بالنماذج المتاحة: ${lastError?.message || 'تأكد من صحة المفتاح والاتصال'}`);
   }
 
+  try {
     onProgress?.(75, 'جاري تفكيك وهيكلة البيانات وتدقيق الحسابات...');
 
-
-    
     // تنظيف نص JSON
     const jsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsedRows = JSON.parse(jsonStr);
@@ -178,9 +176,8 @@ export async function extractBOQWithGeminiVision(
     };
 
   } catch (error: any) {
-    console.error('Gemini Vision Extraction Error:', error);
-    onProgress?.(100, 'حدث خطأ أثناء معالجة الصورة بالذكاء الاصطناعي');
-    throw error;
+    console.error('Gemini JSON parsing error:', error);
+    throw new Error('فشل تفكيك استجابة الذكاء الاصطناعي: ' + error.message);
   }
 }
 
