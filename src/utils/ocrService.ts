@@ -23,7 +23,7 @@ export function normalizeArabicNumbers(str: string): string {
 }
 
 /**
- * فحص واختبار مفتاح Gemini واسترجاع النماذج المتاحة للمشروع
+ * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المعتمدة فقط
  */
 export async function testGeminiApiKey(apiKey: string): Promise<{ success: boolean; message: string; models: string[] }> {
   const cleanKey = apiKey.trim();
@@ -48,13 +48,21 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ success: boole
     }
 
     const data = await res.json();
+    // استبعاد Gemma والنماذج النصية حصراً والاحتفاظ بنماذج Gemini Vision فقط
     const modelsList: string[] = (data?.models || [])
-      .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+      .filter((m: any) => {
+        const name = (m.name || '').toLowerCase();
+        return name.includes('gemini') && 
+               !name.includes('gemma') && 
+               !name.includes('embedding') && 
+               !name.includes('aqa') &&
+               m.supportedGenerationMethods?.includes('generateContent');
+      })
       .map((m: any) => m.name.replace('models/', ''));
 
     return {
       success: true,
-      message: `تم الاتصال بنجاح! النماذج النشطة في حسابك: (${modelsList.length}) نموذج.`,
+      message: `تم الاتصال بنجاح! نماذج الرؤية النشطة: (${modelsList.length}) نموذج (مثل: ${modelsList.slice(0, 3).join(', ')}).`,
       models: modelsList
     };
   } catch (err: any) {
@@ -116,7 +124,7 @@ export async function extractBOQWithGeminiVision(
   onProgress?: (progress: number, status: string) => void
 ): Promise<ExtractedTableData> {
   const cleanKey = apiKey.trim();
-  onProgress?.(10, 'جاري فحص النماذج النشطة في حسابك...');
+  onProgress?.(10, 'جاري تحضير نموذج الرؤية السريع (Gemini Flash)...');
 
   // إزالة الترويسة data:image/...;base64,
   let cleanBase64 = imageBase64;
@@ -152,33 +160,21 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  // 1. استكشاف النماذج النشطة للمفتاح ديناميكياً
-  let activeModels: string[] = [];
-  try {
-    const checkRes = await testGeminiApiKey(cleanKey);
-    if (checkRes.success && checkRes.models.length > 0) {
-      activeModels = checkRes.models;
-    }
-  } catch (_) {}
-
-  // دمج مع النماذج الافتراضية
-  const priorityList = [
+  // قائمة نماذج Gemini Vision السريعة حصراً (ترتيب الأسرع والأدق أولاً)
+  const visionModels = [
     'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
     'gemini-2.0-flash',
     'gemini-1.5-pro',
-    'gemini-1.5-pro-latest',
-    'gemini-2.5-flash'
+    'gemini-1.5-pro-latest'
   ];
-
-  const allModelsToTry = Array.from(new Set([...activeModels, ...priorityList]));
 
   let rawContent = '';
   let lastError: any = null;
 
-  for (const model of allModelsToTry) {
+  for (const model of visionModels) {
     try {
-      onProgress?.(35, `جاري القراءة والتحليل بنموذج (${model})...`);
+      onProgress?.(35, `جاري استخراج البيانات بسرعة فائقة بنموذج (${model})...`);
       
       const requestBody = {
         contents: [
@@ -213,7 +209,7 @@ export async function extractBOQWithGeminiVision(
         const data = await response.json();
         rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         if (rawContent && rawContent.length > 5) {
-          break; // نجاح كامل!
+          break; // نجاح كامل وفوري!
         }
       } else {
         const errText = await response.text();
@@ -225,7 +221,7 @@ export async function extractBOQWithGeminiVision(
   }
 
   if (!rawContent) {
-    throw new Error(`تعذر الاتصال بنماذج Google Gemini: ${lastError?.message || 'يرجى التحقق من صلاحية المفتاح أو استخدام استيراد Excel'}`);
+    throw new Error(`تعذر الاتصال بنماذج Gemini Vision: ${lastError?.message || 'يرجى التحقق من المفتاح والاتصال'}`);
   }
 
   try {
