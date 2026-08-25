@@ -69,40 +69,66 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: systemPrompt },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: cleanBase64
-              }
-            }
-          ]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          response_mime_type: "application/json"
-        }
-      })
-    });
+  const candidateModels = [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro'
+  ];
 
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`فشل الاتصال بمحرك الذكاء الاصطناعي (${response.status}): ${errBody}`);
+  let rawContent = '';
+  let lastError = null;
+
+  for (const model of candidateModels) {
+    try {
+      onProgress?.(35, `جاري استدعاء نموذج (${model})...`);
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: systemPrompt },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: cleanBase64
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            response_mime_type: "application/json"
+          }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+        break; // نجح الاتصال بنجاح!
+      } else {
+        const errText = await response.text();
+        lastError = new Error(`(${response.status}): ${errText}`);
+      }
+    } catch (err: any) {
+      lastError = err;
     }
+  }
+
+  if (!rawContent) {
+    throw new Error(`تعذر الاتصال بالنماذج المتاحة: ${lastError?.message || 'تأكد من صحة المفتاح والاتصال'}`);
+  }
 
     onProgress?.(75, 'جاري تفكيك وهيكلة البيانات وتدقيق الحسابات...');
 
-    const data = await response.json();
-    const rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+
     
     // تنظيف نص JSON
     const jsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
