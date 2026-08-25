@@ -64,7 +64,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
       setImagePreview(dataUrl);
-      processImage(dataUrl);
+      setExtractedItems([]); // تنظيف النتائج السابقة
     };
     reader.readAsDataURL(file);
   };
@@ -351,14 +351,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   />
                 </div>
 
-                {/* Re-process Button */}
+                {/* Main Action Button */}
                 <button
                   onClick={() => imagePreview && processImage(imagePreview)}
                   disabled={isLoading}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs font-black py-2 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black py-3 rounded-2xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>إعادة القراءة والتحليل بالذكاء الاصطناعي ↺</span>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>{extractedItems.length === 0 ? '🚀 بدء القراءة واستخراج الجدول الآن' : 'إعادة القراءة والتحليل ↺'}</span>
                 </button>
               </div>
 
@@ -409,8 +409,16 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     </div>
                   </div>
                 ) : extractedItems.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 font-bold bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    لم يتم استخراج فقرات بعد. تأكد من تفعيل مفتاح الذكاء الاصطناعي وانقر "إعادة القراءة".
+                  <div className="p-12 text-center flex flex-col items-center justify-center gap-3 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-black text-slate-800">
+                      تم تحميل الصورة بنجاح!
+                    </p>
+                    <p className="text-xs text-slate-500 max-w-sm">
+                      تأكد من تعديل اتجاه الصورة لتكون أفقية مستقيمة باستخدام زر <strong>(🔄 تدوير 90°)</strong>، ثم انقر على زر <strong>(🚀 بدء القراءة واستخراج الجدول)</strong> بالأسفل.
+                    </p>
                   </div>
                 ) : (
                   <div className="max-h-[380px] overflow-auto border border-slate-200 rounded-2xl">
