@@ -23,6 +23,50 @@ export function normalizeArabicNumbers(str: string): string {
 }
 
 /**
+ * فحص واختبار مفتاح Gemini واسترجاع النماذج المتاحة للمشروع
+ */
+export async function testGeminiApiKey(apiKey: string): Promise<{ success: boolean; message: string; models: string[] }> {
+  const cleanKey = apiKey.trim();
+  if (!cleanKey) {
+    return { success: false, message: 'يرجى إدخال مفتاح API أولاً', models: [] };
+  }
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`, {
+      headers: {
+        'x-goog-api-key': cleanKey
+      }
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return {
+        success: false,
+        message: `فشل الاتصال (${res.status}): ${err}`,
+        models: []
+      };
+    }
+
+    const data = await res.json();
+    const modelsList: string[] = (data?.models || [])
+      .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m: any) => m.name.replace('models/', ''));
+
+    return {
+      success: true,
+      message: `تم الاتصال بنجاح! النماذج النشطة في حسابك: (${modelsList.length}) نموذج.`,
+      models: modelsList
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `خطأ في الاتصال بالإنترنت: ${err.message}`,
+      models: []
+    };
+  }
+}
+
+/**
  * استخراج نص JSON نقي حتى لو أرجع النموذج نصوصاً أو شروحات إضافية
  */
 function extractJsonArray(text: string): any[] {
@@ -65,7 +109,6 @@ function extractJsonArray(text: string): any[] {
 
 /**
  * محرك استخراج الجداول عبر نماذج Gemini Vision المتخصصة بالرؤية الاصطناعية
- * المتوافق 100% مع معايير Google REST API (camelCase JSON Schema)
  */
 export async function extractBOQWithGeminiVision(
   imageBase64: string,
@@ -73,7 +116,7 @@ export async function extractBOQWithGeminiVision(
   onProgress?: (progress: number, status: string) => void
 ): Promise<ExtractedTableData> {
   const cleanKey = apiKey.trim();
-  onProgress?.(15, 'جاري معالجة الصورة وإعداد طلب الرؤية الاصطناعية...');
+  onProgress?.(10, 'جاري فحص النماذج النشطة في حسابك...');
 
   // إزالة الترويسة data:image/...;base64,
   let cleanBase64 = imageBase64;
@@ -109,23 +152,34 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  // قائمة نماذج Google Gemini Vision المعتمدة
-  const models = [
+  // 1. استكشاف النماذج النشطة للمفتاح ديناميكياً
+  let activeModels: string[] = [];
+  try {
+    const checkRes = await testGeminiApiKey(cleanKey);
+    if (checkRes.success && checkRes.models.length > 0) {
+      activeModels = checkRes.models;
+    }
+  } catch (_) {}
+
+  // دمج مع النماذج الافتراضية
+  const priorityList = [
     'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
     'gemini-2.0-flash',
     'gemini-1.5-pro',
-    'gemini-1.5-pro-latest'
+    'gemini-1.5-pro-latest',
+    'gemini-2.5-flash'
   ];
+
+  const allModelsToTry = Array.from(new Set([...activeModels, ...priorityList]));
 
   let rawContent = '';
   let lastError: any = null;
 
-  for (const model of models) {
+  for (const model of allModelsToTry) {
     try {
       onProgress?.(35, `جاري القراءة والتحليل بنموذج (${model})...`);
       
-      // Google REST API strictly expects camelCase fields: inlineData, mimeType, responseMimeType
       const requestBody = {
         contents: [
           {
@@ -149,7 +203,8 @@ export async function extractBOQWithGeminiVision(
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-goog-api-key': cleanKey
         },
         body: JSON.stringify(requestBody)
       });
@@ -170,7 +225,7 @@ export async function extractBOQWithGeminiVision(
   }
 
   if (!rawContent) {
-    throw new Error(`تعذر الاتصال بنماذج Google Gemini Vision: ${lastError?.message || 'يرجى التحقق من المفتاح والاتصال'}`);
+    throw new Error(`تعذر الاتصال بنماذج Google Gemini: ${lastError?.message || 'يرجى التحقق من صلاحية المفتاح أو استخدام استيراد Excel'}`);
   }
 
   try {

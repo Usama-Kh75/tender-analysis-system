@@ -18,7 +18,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey } from '../../utils/ocrService';
 import { formatNumber } from '../../utils/calculations';
 
 interface ImageOcrModalProps {
@@ -46,6 +46,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [engineMode, setEngineMode] = useState<'ai_vision' | 'local_ocr'>('ai_vision');
   const [apiKey, setApiKey] = useState<string>('');
   const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
+  const [keyTestStatus, setKeyTestStatus] = useState<{ isTesting: boolean; success?: boolean; message?: string }>({ isTesting: false });
 
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_ocr_api_key') || '';
@@ -53,6 +54,17 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
+
+  const handleTestKey = async () => {
+    if (!apiKey.trim()) return;
+    setKeyTestStatus({ isTesting: true });
+    try {
+      const res = await testGeminiApiKey(apiKey);
+      setKeyTestStatus({ isTesting: false, success: res.success, message: res.message });
+    } catch (e: any) {
+      setKeyTestStatus({ isTesting: false, success: false, message: e.message });
+    }
+  };
 
   const handleSaveApiKey = (key: string) => {
     setApiKey(key);
@@ -248,30 +260,51 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
         {/* API Key Drawer (if expanded) */}
         {showKeyInput && (
-          <div className="bg-indigo-50 p-4 border-b border-indigo-200 flex flex-wrap items-center justify-between gap-3 text-xs animate-in slide-in-from-top-2">
-            <div className="flex-1 min-w-[280px]">
-              <label className="block font-black text-indigo-950 mb-1">
-                مفتاح Google Gemini API (مجاني 100% وبدون بطاقة ائتمانية):
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  placeholder="ألصق المفتاح هنا (AIzaSy...)"
-                  value={apiKey}
-                  onChange={(e) => handleSaveApiKey(e.target.value)}
-                  className="flex-1 bg-white border border-indigo-300 rounded-xl px-3 py-1.5 font-mono text-xs focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  onClick={() => setShowKeyInput(false)}
-                  className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-indigo-700 cursor-pointer"
-                >
-                  حفظ وتطبيق
-                </button>
+          <div className="bg-indigo-50 p-4 border-b border-indigo-200 flex flex-col gap-3 text-xs animate-in slide-in-from-top-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex-1 min-w-[280px]">
+                <label className="block font-black text-indigo-950 mb-1">
+                  مفتاح Google Gemini API (مجاني 100% وبدون بطاقة ائتمانية):
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="ألصق المفتاح هنا..."
+                    value={apiKey}
+                    onChange={(e) => handleSaveApiKey(e.target.value)}
+                    className="flex-1 bg-white border border-indigo-300 rounded-xl px-3 py-1.5 font-mono text-xs focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    onClick={handleTestKey}
+                    disabled={keyTestStatus.isTesting}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>{keyTestStatus.isTesting ? 'جاري الفحص...' : '🔍 فحص واختبار المفتاح'}</span>
+                  </button>
+                  <button
+                    onClick={() => setShowKeyInput(false)}
+                    className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-indigo-700 cursor-pointer"
+                  >
+                    حفظ وإغلاق
+                  </button>
+                </div>
+              </div>
+              <div className="text-[11px] text-slate-600 max-w-sm">
+                يُحفظ المفتاح محلياً في متصفحك فقط، ويتيح قراءة أصعب الجداول المكتوبة بخط اليد والصور الملتقطة بكاميرا الهاتف في ثانية واحدة.
               </div>
             </div>
-            <div className="text-[11px] text-slate-600 max-w-sm">
-              يُحفظ المفتاح محلياً في متصفحك فقط، ويتيح قراءة أصعب الجداول المكتوبة بخط اليد والصور الملتقطة بكاميرا الهاتف في ثانية واحدة.
-            </div>
+
+            {/* Test result feedback banner */}
+            {keyTestStatus.message && (
+              <div className={`p-2 rounded-xl text-[11px] font-bold border flex items-center gap-2 ${
+                keyTestStatus.success 
+                  ? 'bg-emerald-50 text-emerald-950 border-emerald-300' 
+                  : 'bg-rose-50 text-rose-950 border-rose-300'
+              }`}>
+                <span>{keyTestStatus.success ? '✅' : '❌'}</span>
+                <span>{keyTestStatus.message}</span>
+              </div>
+            )}
           </div>
         )}
 
