@@ -780,7 +780,6 @@ export function App() {
         onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenPrint={() => setIsPrintOpen(true)}
       />
 
       {/* Main Content Area */}
