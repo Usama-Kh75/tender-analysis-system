@@ -147,6 +147,26 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     ]);
   };
 
+  // تدوير الصورة 90 درجة لتصحيح اتجاه المسح الضوئي / الكاميرا
+  const handleRotateImage = () => {
+    if (!imagePreview) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.height;
+      canvas.height = img.width;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((90 * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        const rotatedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        setImagePreview(rotatedDataUrl);
+      }
+    };
+    img.src = imagePreview;
+  };
+
   const handleApply = () => {
     if (extractedItems.length === 0) return;
     onApplyExtractedItems(extractedItems, destinationMode, bidderName.trim() || undefined);
@@ -298,20 +318,29 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
               
               {/* Left Column: Image Preview Card */}
               <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-4 shadow-sm flex flex-col gap-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
                   <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                     <Eye className="w-4 h-4 text-indigo-600" />
                     معاينة الوثيقة المرفوعة:
                   </span>
-                  <button
-                    onClick={() => {
-                      setImagePreview(null);
-                      setExtractedItems([]);
-                    }}
-                    className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
-                  >
-                    تغيير الصورة ↺
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleRotateImage}
+                      className="text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition"
+                      title="تدوير الصورة 90 درجة في حال كانت مقلوبة أو مستعرضة"
+                    >
+                      <span>🔄 تدوير 90°</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setImagePreview(null);
+                        setExtractedItems([]);
+                      }}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                    >
+                      تغيير الصورة ↺
+                    </button>
+                  </div>
                 </div>
 
                 <div className="max-h-[420px] overflow-auto rounded-2xl border border-slate-200 bg-slate-900 flex items-center justify-center p-2">
