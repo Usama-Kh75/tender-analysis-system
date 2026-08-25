@@ -24,14 +24,15 @@ export function normalizeArabicNumbers(str: string): string {
 
 /**
  * محرك استخراج الجداول عبر الذكاء الاصطناعي الرؤيوي (Gemini Vision API)
- * يدعم بدقة فائقة: خط اليد العربي، الأرقام المشرقية، الصور الملتقطة بكاميرا الهاتف، والجداول المعقدة
+ * مع الاكتشاف الديناميكي الذكي للنماذج المتاحة لمفتاح المستخدم (Dynamic Model Discovery)
  */
 export async function extractBOQWithGeminiVision(
   imageBase64: string,
   apiKey: string,
   onProgress?: (progress: number, status: string) => void
 ): Promise<ExtractedTableData> {
-  onProgress?.(15, 'جاري تهيئة الاتصال بمحرك الرؤية الاصطناعية...');
+  const cleanKey = apiKey.trim();
+  onProgress?.(10, 'جاري فحص النماذج المتاحة لمفتاح API...');
 
   // إزالة الترويسة data:image/...;base64,
   let cleanBase64 = imageBase64;
@@ -67,66 +68,99 @@ export async function extractBOQWithGeminiVision(
   }
 ]`;
 
-  const candidateModels = [
-    'gemini-2.5-flash',
+  // 1. محاولة استكشاف النماذج المتاحة لحساب المستخدم أولاً
+  let targetModels = [
     'gemini-2.0-flash',
     'gemini-1.5-flash-latest',
     'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-2.5-flash',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-pro',
+    'gemini-pro-vision',
+    'gemini-pro'
   ];
 
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`, {
+      headers: {
+        'x-goog-api-key': cleanKey
+      }
+    });
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      if (listData?.models && Array.isArray(listData.models)) {
+        const availableVision = listData.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => m.name.replace('models/', ''));
+        if (availableVision.length > 0) {
+          targetModels = [...availableVision, ...targetModels];
+        }
+      }
+    }
+  } catch (e) {
+    // استخدام القائمة الافتراضية
+  }
+
+  const uniqueModels = Array.from(new Set(targetModels));
   let rawContent = '';
   let lastError: any = null;
 
-  for (const model of candidateModels) {
-    try {
-      onProgress?.(35, `جاري الاتصال بنموذج (${model})...`);
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: systemPrompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: cleanBase64
+  for (const model of uniqueModels) {
+    // تجربة v1beta و v1
+    for (const apiVer of ['v1beta', 'v1']) {
+      try {
+        onProgress?.(35, `جاري استدعاء نموذج (${model}) عبر ${apiVer}...`);
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${cleanKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: systemPrompt },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: cleanBase64
+                  }
                 }
-              }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            response_mime_type: "application/json"
-          }
-        })
-      });
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              response_mime_type: "application/json"
+            }
+          })
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-        if (rawContent && rawContent !== '[]') {
-          break; // نجح الاتصال بنجاح!
+        if (response.ok) {
+          const data = await response.json();
+          rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+          if (rawContent && rawContent !== '[]') {
+            break; // نجاح كامل!
+          }
+        } else {
+          const errText = await response.text();
+          lastError = new Error(`(${response.status}): ${errText}`);
         }
-      } else {
-        const errText = await response.text();
-        lastError = new Error(`(${response.status}): ${errText}`);
+      } catch (err: any) {
+        lastError = err;
       }
-    } catch (err: any) {
-      lastError = err;
+    }
+    if (rawContent && rawContent !== '[]') {
+      break;
     }
   }
 
   if (!rawContent || rawContent === '[]') {
-    throw new Error(`تعذر الاتصال بالنماذج المتاحة: ${lastError?.message || 'تأكد من صحة المفتاح والاتصال'}`);
+    throw new Error(`تعذر الاتصال بنماذج الذكاء الاصطناعي: ${lastError?.message || 'يرجى التأكد من صلاحية المفتاح والاتصال'}`);
   }
 
   try {
-    onProgress?.(75, 'جاري تفكيك وهيكلة البيانات وتدقيق الحسابات...');
+    onProgress?.(80, 'جاري تفكيك وهيكلة البيانات وتدقيق الحسابات...');
 
     // تنظيف نص JSON
     const jsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
