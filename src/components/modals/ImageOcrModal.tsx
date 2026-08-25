@@ -36,7 +36,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   onClose,
   onApplyExtractedItems
 }) => {
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -75,13 +76,29 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     const reader = new FileReader();
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
-      setImagePreview(dataUrl);
-      setExtractedItems([]); // تنظيف النتائج السابقة
+      setImagePreviews(prev => [...prev, dataUrl]);
+      setActiveImageIndex(prev => prev); // keep current view
     };
     reader.readAsDataURL(file);
   };
 
+  const handleMultipleFiles = (files: FileList) => {
+    Array.from(files).forEach(file => {
+      if (file.type.startsWith('image/')) {
+        handleImageUpload(file);
+      }
+    });
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    if (activeImageIndex >= index && activeImageIndex > 0) {
+      setActiveImageIndex(activeImageIndex - 1);
+    }
+  };
+
   const processImage = async (dataUrl: string) => {
+    // معالجة صورة واحدة
     setIsLoading(true);
     setProgressPercent(10);
     setProgressStatus('جاري تهيئة معالجة الصورة...');
@@ -101,14 +118,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
           setProgressStatus(status);
         });
 
-        setExtractedItems(result.items);
+        setExtractedItems(prev => [...prev, ...result.items]);
       } else {
         const result = await extractBOQFromImage(dataUrl, (p, status) => {
           setProgressPercent(p);
           setProgressStatus(status);
         });
 
-        setExtractedItems(result.items);
+        setExtractedItems(prev => [...prev, ...result.items]);
       }
     } catch (err: any) {
       alert('حدث خطأ أثناء معالجة الصورة: ' + (err.message || 'تأكد من صحة المفتاح أو الاتصال'));
@@ -117,10 +134,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
+  const processAllImages = async () => {
+    if (imagePreviews.length === 0) return;
+    setExtractedItems([]); // تنظيف النتائج السابقة
+    for (let i = 0; i < imagePreviews.length; i++) {
+      setActiveImageIndex(i);
+      setProgressStatus(`جاري معالجة الصفحة (${i + 1}) من (${imagePreviews.length})...`);
+      await processImage(imagePreviews[i]);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageUpload(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleMultipleFiles(e.dataTransfer.files);
     }
   };
 
@@ -159,9 +186,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     ]);
   };
 
-  // تدوير الصورة 90 درجة لتصحيح اتجاه المسح الضوئي / الكاميرا
+  // تدوير الصورة النشطة 90 درجة لتصحيح اتجاه المسح الضوئي / الكاميرا
   const handleRotateImage = () => {
-    if (!imagePreview) return;
+    if (imagePreviews.length === 0) return;
+    const currentImg = imagePreviews[activeImageIndex];
+    if (!currentImg) return;
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -173,10 +202,10 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         ctx.rotate((90 * Math.PI) / 180);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
         const rotatedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        setImagePreview(rotatedDataUrl);
+        setImagePreviews(prev => prev.map((p, i) => i === activeImageIndex ? rotatedDataUrl : p));
       }
     };
-    img.src = imagePreview;
+    img.src = currentImg;
   };
 
   const handleApply = () => {
@@ -312,7 +341,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 flex flex-col gap-5" onPaste={handlePaste}>
           
           {/* Upload Dropzone (if no image or want to re-upload) */}
-          {!imagePreview ? (
+          {imagePreviews.length === 0 ? (
             <div
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
@@ -323,8 +352,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 id="ocr-file-input"
                 type="file"
                 accept="image/*"
+                multiple
                 className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)}
               />
               
               <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition shadow-xs">
@@ -333,7 +363,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
               <div>
                 <p className="text-sm sm:text-base font-black text-slate-800">
-                  اسحب وأفلت صورة جدول العطاء هنا، أو انقر للاختيار
+                  اسحب وأفلت صورة أو عدة صور لجدول العطاء هنا، أو انقر للاختيار
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   يدعم صور الكاميرا، الممسوحة ضوئياً، المستندات الورقية، أو النسخ واللصق بـ <kbd className="bg-slate-100 px-1.5 py-0.5 border rounded font-bold">Ctrl+V</kbd>
@@ -354,44 +384,75 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
                   <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                     <Eye className="w-4 h-4 text-indigo-600" />
-                    معاينة الوثيقة المرفوعة:
+                    الصور المرفوعة ({imagePreviews.length} صفحة):
                   </span>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => document.getElementById('ocr-add-more')?.click()}
+                      className="text-xs text-emerald-700 hover:text-emerald-900 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>إضافة صفحة</span>
+                    </button>
+                    <input id="ocr-add-more" type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)} />
+                    <button
                       onClick={handleRotateImage}
                       className="text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition"
-                      title="تدوير الصورة 90 درجة في حال كانت مقلوبة أو مستعرضة"
+                      title="تدوير الصورة النشطة 90 درجة"
                     >
                       <span>🔄 تدوير 90°</span>
                     </button>
                     <button
                       onClick={() => {
-                        setImagePreview(null);
+                        setImagePreviews([]);
                         setExtractedItems([]);
+                        setActiveImageIndex(0);
                       }}
                       className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
                     >
-                      تغيير الصورة ↺
+                      مسح الكل ↺
                     </button>
                   </div>
                 </div>
 
-                <div className="max-h-[420px] overflow-auto rounded-2xl border border-slate-200 bg-slate-900 flex items-center justify-center p-2">
+                {/* Thumbnail Strip for multiple pages */}
+                {imagePreviews.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {imagePreviews.map((img, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setActiveImageIndex(idx)}
+                        className={`relative shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden cursor-pointer transition ${
+                          idx === activeImageIndex ? 'border-indigo-600 ring-2 ring-indigo-300' : 'border-slate-200 hover:border-indigo-300'
+                        }`}
+                      >
+                        <img src={img} alt={`صفحة ${idx + 1}`} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-0 left-0 right-0 bg-slate-900/70 text-white text-[9px] text-center font-bold">{idx + 1}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(idx); }}
+                          className="absolute top-0 right-0 bg-rose-600 text-white rounded-bl-lg p-0.5 text-[8px] font-bold cursor-pointer hover:bg-rose-700"
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="max-h-[350px] overflow-auto rounded-2xl border border-slate-200 bg-slate-900 flex items-center justify-center p-2">
                   <img 
-                    src={imagePreview} 
+                    src={imagePreviews[activeImageIndex]} 
                     alt="Document Preview" 
-                    className="max-w-full max-h-[400px] object-contain rounded-lg shadow-sm"
+                    className="max-w-full max-h-[330px] object-contain rounded-lg shadow-sm"
                   />
                 </div>
 
                 {/* Main Action Button */}
                 <button
-                  onClick={() => imagePreview && processImage(imagePreview)}
+                  onClick={processAllImages}
                   disabled={isLoading}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black py-3 rounded-2xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>{extractedItems.length === 0 ? '🚀 بدء القراءة واستخراج الجدول الآن' : 'إعادة القراءة والتحليل ↺'}</span>
+                  <span>{extractedItems.length === 0 ? `🚀 بدء القراءة واستخراج الجدول (${imagePreviews.length} صفحة)` : `إعادة القراءة (${imagePreviews.length} صفحة) ↺`}</span>
                 </button>
               </div>
 
