@@ -10,7 +10,6 @@ import {
   UserCheck
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
-import { bocLogoDataUrl } from '../assets/bocLogo';
 
 interface NavbarProps {
   project: TenderProject;
@@ -41,19 +40,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           
-          {/* Right Side: BOC Logo & Full Official Title with Author (Permanent & Sticky) */}
+          {/* Right Side: Full Official Title with Author (Permanent & Sticky) */}
           <div className="flex items-center gap-3.5">
             <div className="flex items-center gap-3 bg-slate-900/90 border border-amber-500/30 p-2 pr-3 pl-4 rounded-2xl shadow-lg">
-              
-              {/* Official BOC Logo */}
-              <div className="w-12 h-12 rounded-xl bg-white p-1 flex items-center justify-center shadow-md overflow-hidden shrink-0">
-                <img
-                  src={bocLogoDataUrl}
-                  alt="شركة نفط البصرة"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              
+
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="font-black text-sm sm:text-base tracking-wide text-amber-400">

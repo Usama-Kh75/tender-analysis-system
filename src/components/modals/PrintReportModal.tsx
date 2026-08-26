@@ -2,7 +2,6 @@ import React from 'react';
 import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
-import { bocLogoDataUrl } from '../../assets/bocLogo';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -69,17 +68,6 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <div>وزارة النفط</div>
                 <div className="text-amber-900 font-extrabold text-sm">شركة نفط البصرة (BOC)</div>
                 <div>هيأة المشاريع والمشتريات</div>
-              </div>
-
-              <div className="flex flex-col items-center">
-                <div className="w-16 h-16 rounded-xl border border-slate-300 flex items-center justify-center p-1 bg-white shadow-xs overflow-hidden">
-                  <img
-                    src={bocLogoDataUrl}
-                    alt="شركة نفط البصرة"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <span className="text-[10px] font-black text-amber-800 mt-1">BASRA OIL COMPANY</span>
               </div>
 
               <div className="text-left text-xs font-bold text-slate-700">
