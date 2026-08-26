@@ -25,8 +25,8 @@ export function createDefaultProject(): TenderProject {
 
   const bidder1: Bidder = {
     id: 'bidder-1',
-    name: 'شركة النور للمقاولات العامة والتجهيزات النفطية',
-    commercialRecord: 'CR-98421-BOC',
+    name: 'شركة النور للمقاولات العامة والتجهيزات',
+    commercialRecord: 'CR-98421',
     submissionDate: new Date().toISOString().split('T')[0],
     items: calc1.items,
     totals: calc1.totals,
@@ -37,7 +37,7 @@ export function createDefaultProject(): TenderProject {
   const bidder2: Bidder = {
     id: 'bidder-2',
     name: 'شركة الفرات للتجارة والمقاولات الهندسية',
-    commercialRecord: 'CR-11204-BOC',
+    commercialRecord: 'CR-11204',
     submissionDate: new Date().toISOString().split('T')[0],
     items: calc2.items,
     totals: calc2.totals,
@@ -54,10 +54,10 @@ export function createDefaultProject(): TenderProject {
   };
 
   return {
-    id: 'project-boc-1',
-    title: 'مشروع تطوير وتجهيز محطات العزل والضخ المركزية - هيأة حقول النفط',
-    referenceNumber: 'BOC-TND-2026-084',
-    entityName: 'وزارة النفط - شركة نفط البصرة (BOC)',
+    id: 'project-1',
+    title: 'مشروع تطوير وتجهيز محطات العزل والضخ المركزية',
+    referenceNumber: 'TND-2026-084',
+    entityName: 'الجهة المتعاقدة',
     committeeChairman: 'المهندس أسامة خليل هاشم (رئيس لجنة التحليل والتقييم)',
     committeeMembers: [
       'م. علي جاسم محمد (عضو فني ومقرر)', 
@@ -95,7 +95,7 @@ export function createBlankProject(): TenderProject {
     id: `project-${Date.now()}`,
     title: 'طلبية / مناقصة جديدة',
     referenceNumber: '',
-    entityName: 'وزارة النفط - شركة نفط البصرة (BOC)',
+    entityName: '',
     committeeChairman: '',
     committeeMembers: [],
     currency: 'د.ع',
@@ -206,7 +206,7 @@ export function getActiveProjectId(): string {
   const id = localStorage.getItem(ACTIVE_PROJECT_KEY);
   if (id) return id;
   const all = getAllProjects();
-  return all[0]?.id || 'project-boc-1';
+  return all[0]?.id || 'project-1';
 }
 
 export function setActiveProjectId(id: string): void {

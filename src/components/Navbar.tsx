@@ -47,16 +47,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="font-black text-sm sm:text-base tracking-wide text-amber-400">
-                    نظام تحليل وتقييم العطاءات المتكامل
-                  </span>
-                  <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-md shadow-xs">
-                    BOC
+                    نظام تحليل العطاءات التجاري المتكامل
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-[11px] font-medium mt-0.5 flex-wrap">
-                  <span className="text-slate-300 font-bold">وزارة النفط • شركة نفط البصرة</span>
-                  <span className="text-slate-500">•</span>
                   <span className="text-emerald-400 font-bold flex items-center gap-1 bg-emerald-950/90 px-2 py-0.5 rounded-md border border-emerald-500/40">
                     <UserCheck className="w-3.5 h-3.5" />
                     إعداد: م. أسامة خليل هاشم

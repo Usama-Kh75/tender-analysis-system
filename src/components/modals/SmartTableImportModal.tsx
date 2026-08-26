@@ -388,7 +388,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               <h2 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
                 معالج الاستيراد والتدقيق الحسابي والقانوني لجداول العطاءات
                 <span className="text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded-md font-bold">
-                  BOC Math & Legal Auditor
+                  Math & Legal Auditor
                 </span>
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
@@ -460,7 +460,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                     <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
                       <Coins className="w-5 h-5" />
                     </div>
-                    <div className="text-sm font-black text-blue-950">2. جدول الكلفة التخمينية (BOC)</div>
+                    <div className="text-sm font-black text-blue-950">2. جدول الكلفة التخمينية</div>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     لاستيراد الكلفة التخمينية والفقرات مع <strong>الحفاظ الكامل على أسعار المجهزين</strong> دون مساس.

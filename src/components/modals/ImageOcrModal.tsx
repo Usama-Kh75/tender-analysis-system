@@ -483,7 +483,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     >
                       <option value="bidder_only">تعبئة أسعار المجهز الحالي</option>
                       <option value="new_bidder">إنشاء مجهز / شركة جديدة</option>
-                      <option value="estimated_only">تعبئة الكلفة التخمينية (BOC)</option>
+                      <option value="estimated_only">تعبئة الكلفة التخمينية</option>
                     </select>
 
                     {destinationMode === 'new_bidder' && (

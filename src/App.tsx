@@ -400,7 +400,7 @@ export function App() {
       updatedProj = addAuditLog(
         updatedProj,
         'تحديث الكلفة التخمينية للمشروع',
-        `تم استيراد وتحديث جدول الكلفة التخمينية لشركة نفط البصرة (${extracted.length} فقرة)`
+        `تم استيراد وتحديث جدول الكلفة التخمينية للمشروع (${extracted.length} فقرة)`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
@@ -677,7 +677,7 @@ export function App() {
   const handleNewProject = () => {
     const title = prompt('أدخل اسم الطلبية أو المناقصة الجديدة:');
     if (!title) return;
-    const refNo = prompt('أدخل رقم الطلبية أو المناقصة:') || `BOC-TND-${Date.now().toString().slice(-4)}`;
+    const refNo = prompt('أدخل رقم الطلبية أو المناقصة:') || `TND-${Date.now().toString().slice(-4)}`;
 
     const newProj: TenderProject = {
       ...createDefaultProject(),
@@ -1023,10 +1023,8 @@ export function App() {
       <footer className="bg-slate-950 text-slate-400 text-xs py-4 border-t border-slate-800 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-amber-400 font-bold">نظام تحليل وتقييم العطاءات المتكامل (BOC)</span>
+            <span className="text-amber-400 font-bold">نظام تحليل العطاءات التجاري المتكامل</span>
             <span className="bg-slate-800 text-slate-300 text-[10px] font-mono px-1.5 py-0.5 rounded-md border border-slate-700">v{__APP_VERSION__}</span>
-            <span>•</span>
-            <span>وزارة النفط / شركة نفط البصرة</span>
           </div>
 
           <div className="text-emerald-400 font-bold">

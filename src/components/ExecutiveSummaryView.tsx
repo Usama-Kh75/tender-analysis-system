@@ -81,9 +81,11 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
               <span className="p-1.5 bg-amber-500 text-slate-950 rounded-lg font-black text-xs">
                 خلاصة شاملة
               </span>
-              <span className="text-xs text-amber-200 font-bold">
-                شركة نفط البصرة • هيأة المشاريع والمشتريات
-              </span>
+              {project.entityName && (
+                <span className="text-xs text-amber-200 font-bold">
+                  {project.entityName}
+                </span>
+              )}
             </div>
 
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">

@@ -40,7 +40,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
         <div className="p-4 bg-slate-950 text-white flex items-center justify-between no-print border-b border-amber-500/30">
           <div className="flex items-center gap-2">
             <Printer className="w-5 h-5 text-amber-400" />
-            <h2 className="text-base font-bold">معاينة وطباعة محضر لجنة فتح وتحليل العطاءات والترسية - شركة نفط البصرة</h2>
+            <h2 className="text-base font-bold">معاينة وطباعة محضر لجنة فتح وتحليل العطاءات والترسية</h2>
           </div>
           
           <div className="flex items-center gap-2">
@@ -60,14 +60,13 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
         {/* Printable Document */}
         <div className="flex-1 overflow-y-auto p-8 sm:p-12 bg-white text-slate-900 print:p-0 print:m-0">
           
-          {/* Official BOC Header */}
+          {/* Official Header */}
           <div className="border-b-2 border-slate-900 pb-4 mb-6 text-center relative">
             <div className="flex items-center justify-between mb-2">
               <div className="text-right text-xs font-bold text-slate-700">
-                <div>جمهورية العراق</div>
-                <div>وزارة النفط</div>
-                <div className="text-amber-900 font-extrabold text-sm">شركة نفط البصرة (BOC)</div>
-                <div>هيأة المشاريع والمشتريات</div>
+                {project.entityName && (
+                  <div className="text-amber-900 font-extrabold text-sm">{project.entityName}</div>
+                )}
               </div>
 
               <div className="text-left text-xs font-bold text-slate-700">
