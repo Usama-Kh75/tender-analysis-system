@@ -31,6 +31,10 @@ cp dist/index.html "نظام_تحليل_العطاءات.html"
 
 (`vite-plugin-singlefile` inlines all JS/CSS into one `dist/index.html`; the copy step is what the end user actually opens via `تشغيل_النظام.bat`.) Always run `npm run build` (which runs `tsc -b` first) before considering a change done — it is the project's only type/build check.
 
+### Installable web app (PWA)
+
+The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/tender-analysis-system/`) so it can be installed as a Windows app from Edge/Chrome. `.github/workflows/pages.yml` deploys **only on a `v*` tag push** (not every push) — the installed app fetches the latest deployed version, so every release must be deliberate: bump `package.json` version, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`. PWA pieces: `public/manifest.json` + icons, `pwa/sw.js` (template; the `serviceWorker()` plugin in `vite.config.ts` emits `dist/sw.js` with the version baked in), and `src/pwa.ts`, which activates only on `http(s)` so the portable `file://` copy is unaffected. The SW cache prefix `tender-analysis-` must stay unique: the origin `usama-kh75.github.io` is shared with other apps (localStorage too). The installed app's data is separate from the portable file's; moving projects between them goes through the JSON backup.
+
 ## Architecture
 
 **Stack**: React 19 + TypeScript, Vite 8, Tailwind CSS v4 (via `@tailwindcss/vite`), `vite-plugin-singlefile`. No router, no backend, no test framework.
