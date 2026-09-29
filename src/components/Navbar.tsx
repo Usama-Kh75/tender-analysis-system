@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useSyncExternalStore } from 'react';
 import {
+  MonitorDown,
   FileSpreadsheet,
   Camera,
   Users2,
@@ -10,6 +11,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
+import { canInstallApp, installApp, subscribeInstall } from '../pwa';
 
 interface NavbarProps {
   project: TenderProject;
@@ -35,6 +37,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuditTrail,
   onOpenSettings
 }) => {
+  const canInstall = useSyncExternalStore(subscribeInstall, canInstallApp);
+
   return (
     <header className="bg-slate-950 text-white shadow-2xl border-b border-amber-500/30 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -132,6 +136,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               <History className="w-4 h-4 text-amber-400" />
               <span className="hidden lg:inline">سجل التتبع</span>
             </button>
+
+            {/* Install as app — only when the browser reports it's installable */}
+            {canInstall && (
+              <button
+                onClick={installApp}
+                className="flex items-center gap-1.5 whitespace-nowrap bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-black px-3 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-amber-300/50"
+                title="تثبيت النظام كتطبيق على الحاسوب — يعمل بنافذته الخاصة وبلا إنترنت"
+                aria-label="تثبيت كتطبيق"
+              >
+                <MonitorDown className="w-4 h-4" />
+                <span className="hidden md:inline">تثبيت</span>
+              </button>
+            )}
 
             {/* Settings */}
             <button

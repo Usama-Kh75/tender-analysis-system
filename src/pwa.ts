@@ -19,4 +19,43 @@ export function setupPwa(): void {
 
   // البيانات في localStorage وحده: نطلب من المتصفح ألا يحذفها عند امتلاء القرص
   navigator.storage?.persist?.().catch(() => { });
+
+  // أيقونة التثبيت في شريط العنوان يخفيها Chrome الحديث غالباً في قائمته، فنعرض
+  // زر تثبيت داخل النظام نفسه — لكن فقط حين يؤكد المتصفح بهذا الحدث أنه قابل للتثبيت
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installEvent = e as InstallPromptEvent;
+    notify();
+  });
+  window.addEventListener('appinstalled', () => {
+    installEvent = null;
+    notify();
+  });
+}
+
+interface InstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+let installEvent: InstallPromptEvent | null = null;
+const listeners = new Set<() => void>();
+const notify = () => listeners.forEach(fn => fn());
+
+// واجهة useSyncExternalStore: هل يمكن عرض زر التثبيت الآن؟
+export const canInstallApp = (): boolean => installEvent !== null;
+export const subscribeInstall = (fn: () => void): (() => void) => {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+};
+
+export async function installApp(): Promise<void> {
+  const ev = installEvent;
+  if (!ev) return;
+  installEvent = null; // الحدث يُستعمل مرة واحدة
+  notify();
+  try {
+    await ev.prompt();
+    await ev.userChoice;
+  } catch { /* أغلق المستخدم النافذة أو رفضها المتصفح */ }
 }
