@@ -69,18 +69,29 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // الصفحة: من الشبكة أولاً ليصل آخر إصدار، ومن المخزن إن انقطع الإنترنت
+  // الصفحة: من الشبكة أولاً ليصل آخر إصدار، ومن المخزن إن انقطع الإنترنت.
+  // اتصال ضعيف متقطع لا يرفض الطلب بل يعلّقه طويلاً، فننتظر الشبكة 3 ثوانٍ فقط
+  // ثم نفتح النسخة المحفوظة، ويكمل الجلب في الخلفية فيصل التحديث في الفتحة التالية
   if (req.mode === 'navigate') {
+    const network = fetch(req).then(async res => {
+      if (res.ok) {
+        const c = await caches.open(SHELL);
+        await c.put('./index.html', res.clone());
+      }
+      return res;
+    });
+    e.waitUntil(network.catch(() => { }));
     e.respondWith((async () => {
+      const cached = () => caches.match('./index.html').then(r => r || caches.match('./'));
+      const timeout = new Promise(resolve => setTimeout(resolve, 3000));
       try {
-        const res = await fetch(req);
-        if (res.ok) {
-          const c = await caches.open(SHELL);
-          e.waitUntil(c.put('./index.html', res.clone()).catch(() => { }));
-        }
-        return res;
+        const res = await Promise.race([network, timeout.then(cached)]);
+        // خطأ خادم عابر (مثل 404 لحظة النشر) لا يُغلق التطبيق ما دامت لدينا نسخة
+        if (res && !res.ok) return (await cached()) || res;
+        if (res) return res;
+        return await network; // لا نسخة محفوظة بعد: ننتظر الشبكة مهما طالت
       } catch (err) {
-        return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error();
+        return (await cached()) || Response.error();
       }
     })());
     return;
