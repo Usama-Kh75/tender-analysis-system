@@ -73,16 +73,22 @@ self.addEventListener('fetch', e => {
   // اتصال ضعيف متقطع لا يرفض الطلب بل يعلّقه طويلاً، فننتظر الشبكة 3 ثوانٍ فقط
   // ثم نفتح النسخة المحفوظة، ويكمل الجلب في الخلفية فيصل التحديث في الفتحة التالية
   if (req.mode === 'navigate') {
-    const network = fetch(req).then(async res => {
+    // الرد يُسلَّم فور وصوله؛ الحفظ في المخزن منفصل عنه، فلا يؤخّره ولا يُفشله
+    // النسخة تُؤخذ قبل تسليم الرد (بعد بدء قراءته يتعذر نسخه)
+    const network = fetch(req).then(res => {
       if (res.ok) {
-        const c = await caches.open(SHELL);
-        await c.put('./index.html', res.clone());
+        const copy = res.clone();
+        e.waitUntil(caches.open(SHELL).then(c => c.put('./index.html', copy)).catch(() => { }));
       }
       return res;
     });
     e.waitUntil(network.catch(() => { }));
     e.respondWith((async () => {
-      const cached = () => caches.match('./index.html').then(r => r || caches.match('./'));
+      // من مخزن هذا الإصدار وحده: النطاق مشترك مع تطبيقات أخرى
+      const cached = async () => {
+        const c = await caches.open(SHELL);
+        return (await c.match('./index.html')) || (await c.match('./'));
+      };
       const timeout = new Promise(resolve => setTimeout(resolve, 3000));
       try {
         const res = await Promise.race([network, timeout.then(cached)]);
