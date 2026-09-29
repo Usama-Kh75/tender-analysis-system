@@ -73,10 +73,11 @@ self.addEventListener('fetch', e => {
   // اتصال ضعيف متقطع لا يرفض الطلب بل يعلّقه طويلاً، فننتظر الشبكة 3 ثوانٍ فقط
   // ثم نفتح النسخة المحفوظة، ويكمل الجلب في الخلفية فيصل التحديث في الفتحة التالية
   if (req.mode === 'navigate') {
-    // الرد يُسلَّم فور وصوله؛ الحفظ في المخزن منفصل عنه، فلا يؤخّره ولا يُفشله
-    // النسخة تُؤخذ قبل تسليم الرد (بعد بدء قراءته يتعذر نسخه)
+    // الرد يُسلَّم فور وصوله، وحفظه منفصل عنه فلا يؤخّره ولا يُفشله. النسخة تُؤخذ
+    // قبل التسليم (بعد بدء قراءته يتعذر نسخه)، ولا تُحفظ إلا الصفحة الرئيسية نفسها
+    const isShell = /\/(index\.html)?$/.test(url.pathname);
     const network = fetch(req).then(res => {
-      if (res.ok) {
+      if (res.ok && isShell && !res.redirected && (res.headers.get('content-type') || '').includes('text/html')) {
         const copy = res.clone();
         e.waitUntil(caches.open(SHELL).then(c => c.put('./index.html', copy)).catch(() => { }));
       }
@@ -85,9 +86,12 @@ self.addEventListener('fetch', e => {
     e.waitUntil(network.catch(() => { }));
     e.respondWith((async () => {
       // من مخزن هذا الإصدار وحده: النطاق مشترك مع تطبيقات أخرى
+      // عطل في المخزن يُعامل كغياب النسخة، فنبقى ننتظر الشبكة بدل إسقاط الفتح
       const cached = async () => {
-        const c = await caches.open(SHELL);
-        return (await c.match('./index.html')) || (await c.match('./'));
+        try {
+          const c = await caches.open(SHELL);
+          return (await c.match('./index.html')) || (await c.match('./'));
+        } catch (err) { return undefined; }
       };
       const timeout = new Promise(resolve => setTimeout(resolve, 3000));
       try {
