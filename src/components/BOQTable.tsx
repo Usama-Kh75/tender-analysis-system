@@ -1,5 +1,5 @@
 import { parseArabicTextToNumber } from '../utils/bidderAuditEngine';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus,
   Trash2,
@@ -45,6 +45,18 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
 
+  // ارتفاع شريط الشركة المثبت يُقاس فعلياً (قد يلتف اسم شركة طويل إلى سطرين)، لتثبت
+  // عناوين الأعمدة تحته مباشرة على الشاشات العريضة دون أن تختفي خلفه
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barHeight, setBarHeight] = useState(76);
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setBarHeight(Math.round(bar.getBoundingClientRect().height)));
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
+
   // إحصائيات الأخطاء الحسابية وتعارض التفقيط
   const itemsWithErrors = items.filter(i => i.hasMathError || i.hasTextDiscrepancy);
   const mathErrorsCount = items.filter(i => i.hasMathError).length;
@@ -66,12 +78,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ '--bidder-bar-h': `${barHeight}px` } as React.CSSProperties}>
 
       {/* Top Banner: Active Bidder Label & Actions Bar
           مثبت تحت الشريط العلوي (ارتفاعه 81px) أثناء التمرير في الجدول، فيبقى اسم الشركة وأدوات
           الإدخال ظاهرين. على الشاشات الضيقة لا يُثبت: تلتف أزراره فيصير طويلاً ويحجب الجدول */}
-      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-4 sm:sticky sm:top-[81px] z-40">
+      <div ref={barRef} className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-4 sm:sticky sm:top-[81px] z-40">
 
         {/* Active Bidder Label (read-only — يُعدَّل اسم الشركة من مبدّل الشركة في أعلى الصفحة) */}
         <div className="flex items-center gap-2.5 text-slate-300">
@@ -154,7 +166,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
       )}
 
       {/* Main Table Container */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden" id="boq-table-container">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden xl:overflow-clip" id="boq-table-container">
         
         {/* Table Toolbar */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
@@ -223,11 +235,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           </button>
         </div>
 
-        {/* The Comprehensive BOQ Table */}
-        <div className="overflow-x-auto max-h-[640px] relative">
+        {/* The Comprehensive BOQ Table
+            على الشاشات العريضة (xl، والجدول يتسع فيها كاملاً) يُمرَّر الجدول مع الصفحة وتثبت عناوين
+            أعمدته تحت شريط الشركة وسطر المجاميع أسفل الشاشة. على الأضيق يبقى صندوقاً بتمرير خاص،
+            لأنه يحتاج تمريراً أفقياً، وأي حاوية تمرير تحصر التثبيت داخلها */}
+        <div className="overflow-x-auto max-h-[640px] relative xl:overflow-visible xl:max-h-none">
           <table className="w-full text-xs sm:text-sm text-right border-collapse">
             
-            <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 z-20 shadow-xs select-none">
+            <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
                 <th className="p-3 min-w-[200px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
