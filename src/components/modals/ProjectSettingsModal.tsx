@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Settings, Save, ShieldAlert, DownloadCloud, UploadCloud, FileJson2, Trash2, RotateCcw, Plus, Users } from 'lucide-react';
 import type { TenderProject, ContractType } from '../../types/tender';
-import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER } from '../../utils/contractTypes';
+import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER, contractTypeInfo } from '../../utils/contractTypes';
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
@@ -39,7 +39,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const [committeeMembers, setCommitteeMembers] = useState<string[]>(project.committeeMembers || []);
   const [currency, setCurrency] = useState(project.currency);
   const [deviationThreshold, setDeviationThreshold] = useState(project.deviationThreshold || 20);
-  const [contractType, setContractType] = useState<ContractType | ''>(project.contractType ?? '');
+  const [contractType, setContractType] = useState<ContractType | ''>(contractTypeInfo(project.contractType) ? project.contractType! : '');
 
   if (!isOpen) return null;
 

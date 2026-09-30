@@ -33,10 +33,18 @@ export const CONTRACT_TYPES: Record<ContractType, ContractTypeInfo> = {
 
 export const CONTRACT_TYPE_ORDER: ContractType[] = ['works', 'supply', 'services'];
 
+/**
+ * معلومات النوع، أو undefined لنوع غير محدد أو غير معروف. النوع يأتي من localStorage أو من ملف
+ * نسخة احتياطية (قد يكون معدَّلاً يدوياً أو من إصدار أحدث)، فلا يُفهرس الجدول مباشرة.
+ */
+export function contractTypeInfo(type?: string): ContractTypeInfo | undefined {
+  return type && Object.hasOwn(CONTRACT_TYPES, type) ? CONTRACT_TYPES[type as ContractType] : undefined;
+}
+
 /** مرجع معايير المفاضلة بحسب النوع، أو بصيغة عامة إن لم يُحدد النوع */
-export function preferenceReference(type?: ContractType): { clause: string; examples: string } {
-  if (type) {
-    const info = CONTRACT_TYPES[type];
+export function preferenceReference(type?: string): { clause: string; examples: string } {
+  const info = contractTypeInfo(type);
+  if (info) {
     return { clause: `ضوابط رقم (5) ${info.preferenceClause}`, examples: info.preferenceExamples };
   }
   return {

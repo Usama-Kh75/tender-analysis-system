@@ -4,7 +4,7 @@ import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { buildRecommendation, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
-import { CONTRACT_TYPES, preferenceReference } from '../../utils/contractTypes';
+import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -98,7 +98,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             </h2>
             <div className="text-xs text-slate-600 mt-1 font-semibold">
               مشروع / طلبية: {project.title}
-              {project.contractType && <> — نوع العقد: {CONTRACT_TYPES[project.contractType].label}</>}
+              {contractTypeInfo(project.contractType) && <> — نوع العقد: {contractTypeInfo(project.contractType)!.label}</>}
             </div>
           </div>
 

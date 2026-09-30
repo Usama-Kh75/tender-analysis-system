@@ -29,7 +29,7 @@ import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PrintReportModal } from './components/modals/PrintReportModal';
 import { NewProjectModal } from './components/modals/NewProjectModal';
-import { CONTRACT_TYPES } from './utils/contractTypes';
+import { CONTRACT_TYPES, contractTypeInfo } from './utils/contractTypes';
 
 import {
   Table2,
@@ -836,9 +836,9 @@ export function App() {
               <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
                 {currentProject.entityName}
               </span>
-              {currentProject.contractType ? (
+              {contractTypeInfo(currentProject.contractType) ? (
                 <span className="bg-indigo-50 text-indigo-900 text-xs font-bold px-3.5 py-1 rounded-full border border-indigo-200">
-                  نوع العقد: {CONTRACT_TYPES[currentProject.contractType].label}
+                  نوع العقد: {contractTypeInfo(currentProject.contractType)!.label}
                 </span>
               ) : (
                 <button
