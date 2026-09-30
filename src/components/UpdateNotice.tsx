@@ -1,6 +1,6 @@
 import React, { useState, useSyncExternalStore } from 'react';
 import { RefreshCw, Sparkles, X } from 'lucide-react';
-import { APP_VERSION, CHANGELOG, changesSince, versionLabel } from '../changelog';
+import { APP_VERSION, CHANGELOG, changesSince, compareVersions, versionLabel } from '../changelog';
 import { applyUpdate, getAvailableUpdate, subscribeUpdate } from '../pwa';
 
 // آخر إصدار رآه المستخدم في هذا المتصفح — لعرض «ما الجديد» مرة واحدة بعد كل تحديث
@@ -22,8 +22,12 @@ function readSeen(): string | null {
 // فوراً، ولو قُرئ بعده لبدا التثبيت الجديد مستخدماً سابقاً وظهرت له «ما الجديد»
 const INITIAL_SEEN = readSeen();
 
+// يُحفظ الأحدث بين المسجَّل والحالي: تبويب قديم ما زال مفتوحاً لا يرجع الرقم إلى الوراء
 function markSeen() {
-  try { localStorage.setItem(SEEN_KEY, APP_VERSION); } catch { /* تخزين محظور: لا شيء */ }
+  try {
+    const stored = localStorage.getItem(SEEN_KEY);
+    if (!stored || compareVersions(APP_VERSION, stored) > 0) localStorage.setItem(SEEN_KEY, APP_VERSION);
+  } catch { /* تخزين محظور: لا شيء */ }
 }
 
 interface UpdateNoticeProps {
@@ -35,6 +39,7 @@ interface UpdateNoticeProps {
 export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManualClose }) => {
   const available = useSyncExternalStore(subscribeUpdate, getAvailableUpdate);
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
 
   // يُحسب مرة واحدة عند الفتح: التغييرات منذ آخر إصدار رآه المستخدم
   const [autoEntries, setAutoEntries] = useState(() => {
@@ -65,10 +70,11 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
             <div className="text-slate-300 text-[11px] mt-0.5">بياناتك محفوظة ولا يمسها التحديث.</div>
           </div>
           <button
-            onClick={applyUpdate}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-3 py-2 rounded-xl cursor-pointer whitespace-nowrap"
+            onClick={() => { setUpdating(true); applyUpdate(); }}
+            disabled={updating}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-3 py-2 rounded-xl cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           >
-            تحديث الآن
+            {updating ? 'جارٍ التحديث…' : 'تحديث الآن'}
           </button>
           <button
             onClick={() => setDismissedUpdate(available)}

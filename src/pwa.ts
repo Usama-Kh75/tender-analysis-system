@@ -41,22 +41,27 @@ export function setupPwa(): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkForUpdate();
   });
+  window.addEventListener('online', checkForUpdate);
 }
 
-// version.json يُنشر مع كل إصدار (vite.config.ts) ولا يُخزَّن في عامل الخدمة
-let lastCheck = 0;
+// version.json يُنشر مع كل إصدار (vite.config.ts) ولا يُخزَّن في عامل الخدمة.
+// المهلة تُحسب من آخر فحص ناجح فقط: فشل عابر لا يؤجل الفحص التالي ساعة
+let lastSuccessfulCheck = 0;
+let checking = false;
 async function checkForUpdate(): Promise<void> {
-  if (!navigator.onLine || Date.now() - lastCheck < 5 * 60 * 1000) return;
-  lastCheck = Date.now();
+  if (checking || !navigator.onLine || Date.now() - lastSuccessfulCheck < 5 * 60 * 1000) return;
+  checking = true;
   try {
     const res = await fetch('./version.json', { cache: 'no-store' });
     if (!res.ok) return;
     const { version } = await res.json() as { version?: string };
+    lastSuccessfulCheck = Date.now();
     if (typeof version === 'string' && compareVersions(version, APP_VERSION) > 0 && version !== availableVersion) {
       availableVersion = version;
       notify();
     }
   } catch { /* بلا اتصال أو ردّ غير صالح: يُعاد الفحص لاحقاً */ }
+  finally { checking = false; }
 }
 
 let availableVersion: string | null = null;
@@ -65,8 +70,20 @@ let availableVersion: string | null = null;
 export const getAvailableUpdate = (): string | null => availableVersion;
 export const subscribeUpdate = (fn: () => void): (() => void) => subscribeInstall(fn);
 
-// إعادة التحميل تجلب الإصدار الجديد: عامل الخدمة يطلب الصفحة من الشبكة أولاً
-export const applyUpdate = (): void => { location.reload(); };
+// يطلب من عامل الخدمة تنزيل الصفحة الجديدة وحفظها أولاً، ثم يعيد التحميل. بدون ذلك قد يُفتح
+// الإصدار القديم من المخزن إن تجاوز الاتصال مهلة الثلاث ثوانٍ (pwa/sw.js)
+export async function applyUpdate(): Promise<void> {
+  const sw = navigator.serviceWorker?.controller;
+  if (sw) {
+    await new Promise<void>(resolve => {
+      const channel = new MessageChannel();
+      const timer = setTimeout(resolve, 20000);
+      channel.port1.onmessage = () => { clearTimeout(timer); resolve(); };
+      sw.postMessage('refresh-shell', [channel.port2]);
+    });
+  }
+  location.reload();
+}
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<void>;

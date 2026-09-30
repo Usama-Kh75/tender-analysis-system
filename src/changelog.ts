@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.5.1',
+    date: '2026-09-30',
+    notes: [
+      'زر «تحديث الآن» يجلب الإصدار الجديد حتى على الاتصال البطيء.',
+      'زر «لاحقاً» لإخفاء إشعار التحديث مؤقتاً.'
+    ]
+  },
+  {
     version: '1.5.0',
     date: '2026-09-30',
     notes: [

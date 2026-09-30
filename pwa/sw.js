@@ -20,6 +20,25 @@ const SHELL_FILES = [
   './apple-touch-icon.png'
 ];
 
+// زر «تحديث الآن»: تنزيل الصفحة الجديدة وحفظها قبل إعادة التحميل، فتُفتح الجديدة حتى لو
+// تجاوز الاتصال مهلة الثلاث ثوانٍ وخُدمت الصفحة من المخزن
+self.addEventListener('message', e => {
+  if (e.data !== 'refresh-shell' || !e.ports || !e.ports[0]) return;
+  e.waitUntil((async () => {
+    let ok = false;
+    try {
+      const res = await fetch('./index.html', { cache: 'reload' });
+      if (res.ok) {
+        const c = await caches.open(SHELL);
+        await c.put('./index.html', res.clone());
+        await c.put('./', res);
+        ok = true;
+      }
+    } catch (err) { }
+    e.ports[0].postMessage(ok);
+  })());
+});
+
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const page = await fetch('./index.html', { cache: 'reload' });
