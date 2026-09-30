@@ -20,6 +20,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.5.2',
+    date: '2026-09-30',
+    notes: ['إذا تعذّر تنزيل التحديث تظهر رسالة واضحة، ويمكن إعادة المحاولة بدل أن يُفتح الإصدار القديم.']
+  },
+  {
     version: '1.5.1',
     date: '2026-09-30',
     notes: [

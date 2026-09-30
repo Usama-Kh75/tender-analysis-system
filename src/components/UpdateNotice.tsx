@@ -40,6 +40,17 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
   const available = useSyncExternalStore(subscribeUpdate, getAvailableUpdate);
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [updateFailed, setUpdateFailed] = useState(false);
+
+  const handleUpdate = async () => {
+    setUpdating(true);
+    setUpdateFailed(false);
+    const reloading = await applyUpdate();
+    if (!reloading) {
+      setUpdating(false);
+      setUpdateFailed(true);
+    }
+  };
 
   // يُحسب مرة واحدة عند الفتح: التغييرات منذ آخر إصدار رآه المستخدم
   const [autoEntries, setAutoEntries] = useState(() => {
@@ -67,10 +78,12 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
           <RefreshCw className="w-5 h-5 text-amber-400 shrink-0" />
           <div className="flex-1 text-xs sm:text-sm">
             <div className="font-black">يتوفر إصدار جديد <bdi dir="ltr">({versionLabel(available)})</bdi></div>
-            <div className="text-slate-300 text-[11px] mt-0.5">بياناتك محفوظة ولا يمسها التحديث.</div>
+            <div className={`text-[11px] mt-0.5 ${updateFailed ? 'text-rose-300' : 'text-slate-300'}`}>
+              {updateFailed ? 'تعذّر تنزيل التحديث — تحقق من الاتصال وحاول مرة أخرى.' : 'بياناتك محفوظة ولا يمسها التحديث.'}
+            </div>
           </div>
           <button
-            onClick={() => { setUpdating(true); applyUpdate(); }}
+            onClick={handleUpdate}
             disabled={updating}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-3 py-2 rounded-xl cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           >

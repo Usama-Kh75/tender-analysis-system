@@ -71,18 +71,25 @@ export const getAvailableUpdate = (): string | null => availableVersion;
 export const subscribeUpdate = (fn: () => void): (() => void) => subscribeInstall(fn);
 
 // يطلب من عامل الخدمة تنزيل الصفحة الجديدة وحفظها أولاً، ثم يعيد التحميل. بدون ذلك قد يُفتح
-// الإصدار القديم من المخزن إن تجاوز الاتصال مهلة الثلاث ثوانٍ (pwa/sw.js)
-export async function applyUpdate(): Promise<void> {
-  const sw = navigator.serviceWorker?.controller;
-  if (sw) {
-    await new Promise<void>(resolve => {
-      const channel = new MessageChannel();
-      const timer = setTimeout(resolve, 20000);
-      channel.port1.onmessage = () => { clearTimeout(timer); resolve(); };
-      sw.postMessage('refresh-shell', [channel.port2]);
-    });
+// الإصدار القديم من المخزن إن تجاوز الاتصال مهلة الثلاث ثوانٍ (pwa/sw.js).
+// يعيد false دون إعادة تحميل إن تعذّر التنزيل، ليعرض الزر خطأً قابلاً لإعادة المحاولة.
+export async function applyUpdate(): Promise<boolean> {
+  try {
+    const sw = navigator.serviceWorker?.controller;
+    if (sw) {
+      const ok = await new Promise<boolean>(resolve => {
+        const channel = new MessageChannel();
+        const timer = setTimeout(() => resolve(false), 20000);
+        channel.port1.onmessage = e => { clearTimeout(timer); resolve(e.data === true); };
+        sw.postMessage('refresh-shell', [channel.port2]);
+      });
+      if (!ok) return false;
+    }
+    location.reload();
+    return true;
+  } catch {
+    return false;
   }
-  location.reload();
 }
 
 interface InstallPromptEvent extends Event {
