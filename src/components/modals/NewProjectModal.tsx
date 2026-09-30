@@ -57,7 +57,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               {CONTRACT_TYPE_ORDER.map(type => (
                 <label
                   key={type}
-                  className={`cursor-pointer rounded-xl border-2 px-3 py-3 text-center text-sm font-black transition ${
+                  className={`cursor-pointer rounded-xl border-2 px-3 py-3 text-center text-sm font-black transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-2 ${
                     contractType === type
                       ? 'border-indigo-600 bg-indigo-50 text-indigo-900'
                       : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
