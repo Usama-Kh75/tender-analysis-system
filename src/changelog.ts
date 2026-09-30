@@ -20,6 +20,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.5.3',
+    date: '2026-09-30',
+    notes: ['نافذة «ما الجديد» تُغلق بمفتاح Esc، ويقرأ قارئ الشاشة محتواها عند فتحها.']
+  },
+  {
     version: '1.5.2',
     date: '2026-09-30',
     notes: ['إذا تعذّر تنزيل التحديث تظهر رسالة واضحة، ويمكن إعادة المحاولة بدل أن يُفتح الإصدار القديم.']

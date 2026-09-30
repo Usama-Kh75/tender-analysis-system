@@ -1,4 +1,4 @@
-import React, { useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { RefreshCw, Sparkles, X } from 'lucide-react';
 import { APP_VERSION, CHANGELOG, changesSince, compareVersions, versionLabel } from '../changelog';
 import { applyUpdate, getAvailableUpdate, subscribeUpdate } from '../pwa';
@@ -68,6 +68,14 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
     onManualClose();
   };
 
+  const dialogOpen = entries.length > 0;
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   return (
     <>
       {available && available !== dismissedUpdate && (
@@ -99,11 +107,12 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
       )}
 
       {entries.length > 0 && (
-        <div className="no-print fixed inset-0 z-[70] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="no-print fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="whats-new-title"
+            aria-describedby="whats-new-notes"
             className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
           >
             <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
@@ -123,7 +132,7 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
               </button>
             </div>
 
-            <div className="p-5 space-y-4 overflow-y-auto bg-slate-50">
+            <div id="whats-new-notes" className="p-5 space-y-4 overflow-y-auto bg-slate-50">
               {entries.map(entry => (
                 <div key={entry.version}>
                   <div dir="ltr" className="text-xs font-black text-indigo-800 mb-1.5 font-mono text-right">{versionLabel(entry.version)}</div>
