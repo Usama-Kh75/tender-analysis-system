@@ -629,7 +629,7 @@ export function App() {
     // التوصية بالإحالة لعطاء واحد: اختيار مجهز للترسية يلغي اختيار أي مجهز سابق،
     // وإلا بقي أكثر من «موصى به» وصارت التوصية في المحضر ملتبسة
     const displaced = status === 'recommended'
-      ? currentProject.bidders.filter(b => b.id !== bidderId && b.status === 'recommended')
+      ? currentProject.bidders.filter(b => b.id !== bidderId && (b.status === 'recommended' || b.status === 'awarded'))
       : [];
     const updatedBidders = currentProject.bidders.map(b =>
       b.id === bidderId ? { ...b, status } : displaced.includes(b) ? { ...b, status: 'pending' as const } : b

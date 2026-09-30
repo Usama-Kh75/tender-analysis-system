@@ -24,13 +24,13 @@ export const PREFERENCE_BAND_PERCENT = 1;
 // المبالغ تُعد متساوية حين يقل فرقها عن أصغر فئة نقدية معتبرة
 const SAME_AMOUNT_TOLERANCE = 0.01;
 
-export type RecommendationKind = 'award' | 'tie' | 'referral' | 'retender';
+export type RecommendationKind = 'award' | 'tie' | 'referral' | 'retender' | 'no-estimate';
 
 export interface Recommendation {
   kind: RecommendationKind;
   /** العطاءات المؤهلة تجارياً (ضمن الحدود وغير مستبعدة من اللجنة)، مرتبة من الأوطأ */
   eligible: Bidder[];
-  /** العطاء المعني بالتوصية: الموصى به (award)، أو الأوطأ بين المتقاربة (tie)، أو المحال للتفاوض (referral) */
+  /** العطاء المعني بالتوصية: الموصى به (award)، أو الأوطأ بين المتقاربة (tie)، أو المحال للتفاوض (referral)، أو أقل العطاءات (retender) */
   primary?: Bidder;
   /** العطاءات المتقاربة ضمن نطاق المفاضلة، ويشمل الأوطأ نفسه (tie فقط، أو تنبيه مرافق لـ award) */
   closeBids: Bidder[];
@@ -41,7 +41,7 @@ export interface Recommendation {
   /** اختارت اللجنة عطاءً مؤهلاً غير الأوطأ — يستلزم تثبيت المسوغات في التقرير */
   chosenNotLowest: boolean;
   /** سبب إعادة الإعلان المقترح (retender فقط) */
-  retenderReason?: 'all-below' | 'all-rejected';
+  retenderReason?: 'lowest-below' | 'all-rejected';
 }
 
 export const isCommerciallyExcluded = (bidder: Bidder, threshold: number): boolean =>
@@ -58,15 +58,25 @@ export function buildRecommendation(project: TenderProject): Recommendation {
 
   const none = { closeBids: [], exactTie: false, chosenByCommittee: false, chosenNotLowest: false };
 
+  // بلا كلفة تخمينية تظهر كل الانحرافات صفراً، فلا يمكن تطبيق المادة (13)/ثالثاً/أ ولا صياغة توصية
+  if (project.bidders.every(b => !(b.totals.totalEstimatedAmount > 0))) {
+    return { ...none, kind: 'no-estimate', eligible: [] };
+  }
+
   if (eligible.length === 0) {
-    // المادة (13)/ثالثاً/ب: الاستثناء يخص حالة الزيادة على الحدود فقط، لا النقصان عنها
-    const aboveLimit = candidates
-      .filter(b => b.totals.totalDeviationPercent > threshold)
-      .sort(byAmount);
-    if (aboveLimit.length > 0) {
-      return { ...none, kind: 'referral', eligible, primary: aboveLimit[0] };
+    // المادة (13)/ثالثاً/ب مشروطة بأن يكون «أقل العطاءات» نفسه زائداً على الحدود؛ فإن كان
+    // أقلها ناقصاً عنها لم ينطبق الاستثناء وإن زادت عطاءات أخرى — وينطبق المادة (20)/رابعاً
+    const lowestCandidate = [...candidates].sort(byAmount)[0];
+    if (lowestCandidate && lowestCandidate.totals.totalDeviationPercent > threshold) {
+      return { ...none, kind: 'referral', eligible, primary: lowestCandidate };
     }
-    return { ...none, kind: 'retender', eligible, retenderReason: candidates.length > 0 ? 'all-below' : 'all-rejected' };
+    return {
+      ...none,
+      kind: 'retender',
+      eligible,
+      primary: lowestCandidate,
+      retenderReason: lowestCandidate ? 'lowest-below' : 'all-rejected'
+    };
   }
 
   const lowest = eligible[0];

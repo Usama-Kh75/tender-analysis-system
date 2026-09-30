@@ -340,8 +340,13 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 )}
                 {rec.kind === 'retender' && (
                   <>
-                    لا يوجد عطاء مؤهل — التوصية بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان (المادة 20/{rec.retenderReason === 'all-below' ? 'رابعاً' : 'ثالثاً'}).
+                    لا يوجد عطاء مؤهل — التوصية بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان (المادة 20/{rec.retenderReason === 'lowest-below' ? 'رابعاً' : 'ثالثاً'}).
                   </>
+                )}
+                {rec.kind === 'no-estimate' && (
+                  <span className="text-rose-700">
+                    لم تُدخل الكلفة التخمينية بعد — لا تُصاغ توصية قبل إدخالها.
+                  </span>
                 )}
               </div>
             </div>
