@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   RotateCcw,
   Building2,
+  FileSpreadsheet,
+  Camera,
   Search
 } from 'lucide-react';
 import { BOQItem, TenderTotals } from '../types/tender';
@@ -24,6 +26,8 @@ interface BOQTableProps {
   onDeleteItem: (index: number) => void;
   onDuplicateItem: (index: number) => void;
   onClearBidderPrices?: () => void;
+  onOpenSmartImport?: () => void;
+  onOpenOcr?: () => void;
 }
 
 export const BOQTable: React.FC<BOQTableProps> = ({
@@ -34,7 +38,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onAddItem,
   onDeleteItem,
   onDuplicateItem,
-  onClearBidderPrices
+  onClearBidderPrices,
+  onOpenSmartImport,
+  onOpenOcr
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
@@ -73,8 +79,28 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           </span>
         </div>
 
-        {/* Clear Actions */}
+        {/* أدوات إدخال البيانات: بجانب اسم الشركة ليرى المستخدم إلى أي جدول تذهب البيانات قبل الضغط */}
         <div className="flex items-center gap-2 flex-wrap">
+          {onOpenSmartImport && (
+            <button
+              onClick={onOpenSmartImport}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-600 hover:to-blue-600 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-indigo-400/30"
+              title={`استيراد جدول من ملف Excel أو Word إلى جدول (${bidderName}) مع مطابقة واستبعاد الأعمدة الزائدة`}
+            >
+              <FileSpreadsheet className="w-4 h-4 text-indigo-200" />
+              <span>استيراد جدول <bdi dir="ltr">(Excel / Word)</bdi></span>
+            </button>
+          )}
+          {onOpenOcr && (
+            <button
+              onClick={onOpenOcr}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-emerald-400/30"
+              title={`استخراج جدول من صورة أو PDF إلى جدول (${bidderName})`}
+            >
+              <Camera className="w-4 h-4" />
+              <span>استخراج من صورة / <bdi dir="ltr">PDF</bdi></span>
+            </button>
+          )}
           {onClearBidderPrices && (
             <button
               onClick={onClearBidderPrices}

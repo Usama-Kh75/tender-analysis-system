@@ -1,8 +1,6 @@
 import React, { useSyncExternalStore } from 'react';
 import {
   MonitorDown,
-  FileSpreadsheet,
-  Camera,
   Users2,
   History,
   Plus,
@@ -19,8 +17,6 @@ interface NavbarProps {
   activeBidder: Bidder;
   onSelectProject: (id: string) => void;
   onNewProject: () => void;
-  onOpenSmartImport: (type?: 'bidder' | 'estimated' | 'both') => void;
-  onOpenOcr: () => void;
   onOpenMultiBidder: () => void;
   onOpenAuditTrail: () => void;
   onOpenSettings: () => void;
@@ -31,8 +27,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   projects,
   onSelectProject,
   onNewProject,
-  onOpenSmartImport,
-  onOpenOcr,
   onOpenMultiBidder,
   onOpenAuditTrail,
   onOpenSettings
@@ -93,27 +87,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Left Side: Clean Action Tools */}
           <div className="flex items-center gap-2">
             
-            {/* Smart Table Import (Excel / Word) Button */}
-            <button
-              onClick={() => onOpenSmartImport()}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-600 hover:to-blue-600 text-white text-xs sm:text-sm font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-indigo-400/30"
-              title="استيراد جدول من ملف Excel أو Word مع مطابقة واستبعاد الأعمدة الزائدة"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-indigo-200" />
-              <span className="hidden sm:inline">استيراد جدول (Excel / Word)</span>
-              <span className="sm:hidden">استيراد</span>
-            </button>
-
-            {/* OCR Button */}
-            <button
-              onClick={onOpenOcr}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-emerald-400/30"
-            >
-              <Camera className="w-4 h-4" />
-              <span className="hidden sm:inline">استخراج من صورة / PDF</span>
-              <span className="sm:hidden">OCR</span>
-            </button>
-
             {/* Multi-Bidder Comparison */}
             <button
               onClick={onOpenMultiBidder}

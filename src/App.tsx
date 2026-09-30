@@ -807,11 +807,6 @@ export function App() {
           setActiveProjectId(id);
         }}
         onNewProject={() => setIsNewProjectOpen(true)}
-        onOpenSmartImport={(type) => {
-          setSmartImportDocType(type || 'bidder');
-          setIsSmartImportOpen(true);
-        }}
-        onOpenOcr={() => setIsOcrOpen(true)}
         onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -1044,6 +1039,11 @@ export function App() {
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}
               onClearBidderPrices={handleClearBidderPrices}
+              onOpenSmartImport={() => {
+                setSmartImportDocType('bidder');
+                setIsSmartImportOpen(true);
+              }}
+              onOpenOcr={() => setIsOcrOpen(true)}
             />
           ) : activeTab === 'summary' ? (
             <ExecutiveSummaryView
