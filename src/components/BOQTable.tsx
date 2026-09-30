@@ -68,8 +68,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   return (
     <div className="space-y-4">
 
-      {/* Top Banner: Active Bidder Label & Actions Bar */}
-      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      {/* Top Banner: Active Bidder Label & Actions Bar
+          مثبت تحت الشريط العلوي (ارتفاعه 81px) أثناء التمرير في الجدول، فيبقى اسم الشركة وأدوات
+          الإدخال ظاهرين. على الشاشات الضيقة لا يُثبت: تلتف أزراره فيصير طويلاً ويحجب الجدول */}
+      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-wrap items-center justify-between gap-4 sm:sticky sm:top-[81px] z-40">
 
         {/* Active Bidder Label (read-only — يُعدَّل اسم الشركة من مبدّل الشركة في أعلى الصفحة) */}
         <div className="flex items-center gap-2.5 text-slate-300">
