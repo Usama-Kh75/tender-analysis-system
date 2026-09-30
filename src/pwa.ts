@@ -1,3 +1,5 @@
+import { APP_VERSION, compareVersions } from './changelog';
+
 // تفعيل وضع التطبيق القابل للتثبيت (PWA) — فقط حين يُفتح النظام من رابط الويب.
 // الملف المحمول المفتوح من القرص (file://) لا يدعم عامل الخدمة، فيبقى كما هو.
 export function setupPwa(): void {
@@ -31,7 +33,40 @@ export function setupPwa(): void {
     installEvent = null;
     notify();
   });
+
+  // فحص توفر إصدار أحدث: بعد الفتح بقليل، وكل ساعة، وكلما عاد المستخدم إلى النافذة
+  // (التطبيق المثبَّت يبقى مفتوحاً أياماً، والنافذة المفتوحة لا تتبدل وحدها)
+  setTimeout(checkForUpdate, 5000);
+  setInterval(checkForUpdate, 60 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
 }
+
+// version.json يُنشر مع كل إصدار (vite.config.ts) ولا يُخزَّن في عامل الخدمة
+let lastCheck = 0;
+async function checkForUpdate(): Promise<void> {
+  if (!navigator.onLine || Date.now() - lastCheck < 5 * 60 * 1000) return;
+  lastCheck = Date.now();
+  try {
+    const res = await fetch('./version.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const { version } = await res.json() as { version?: string };
+    if (typeof version === 'string' && compareVersions(version, APP_VERSION) > 0 && version !== availableVersion) {
+      availableVersion = version;
+      notify();
+    }
+  } catch { /* بلا اتصال أو ردّ غير صالح: يُعاد الفحص لاحقاً */ }
+}
+
+let availableVersion: string | null = null;
+
+// واجهة useSyncExternalStore: رقم الإصدار الأحدث المنشور إن وُجد
+export const getAvailableUpdate = (): string | null => availableVersion;
+export const subscribeUpdate = (fn: () => void): (() => void) => subscribeInstall(fn);
+
+// إعادة التحميل تجلب الإصدار الجديد: عامل الخدمة يطلب الصفحة من الشبكة أولاً
+export const applyUpdate = (): void => { location.reload(); };
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<void>;

@@ -17,6 +17,12 @@ function serviceWorker(): Plugin {
         fileName: 'sw.js',
         source: readFileSync('pwa/sw.js', 'utf8').replace('__APP_VERSION__', pkg.version),
       })
+      // رقم آخر إصدار منشور: يقارنه التطبيق المفتوح برقمه ليعرض «يتوفر إصدار جديد» (src/pwa.ts)
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version: pkg.version }),
+      })
     },
   }
 }
