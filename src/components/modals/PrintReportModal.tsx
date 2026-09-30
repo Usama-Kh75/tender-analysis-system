@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
+import { buildRecommendation, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -22,8 +23,18 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     window.print();
   };
 
-  // لا يجوز طباعة توصية ترسية على عطاء مستبعد تجارياً حتى لو كان تبويبه هو المفتوح حالياً
-  const isActiveBidderExcluded = Math.abs(activeBidder.totals.totalDeviationPercent) > project.deviationThreshold;
+  // التوصية تُحسب من كل العطاءات (لا من التبويب المفتوح لحظة الطباعة) — انظر utils/recommendation.ts
+  const rec = buildRecommendation(project);
+  const subject = rec.primary ?? activeBidder;
+  const threshold = project.deviationThreshold;
+  const money = (b: Bidder) => formatCurrency(b.totals.totalBidderAmount, project.currency);
+  const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
+  const subjectLabel = {
+    award: 'للعطاء الموصى به',
+    tie: 'لأوطأ العطاءات المتقاربة',
+    referral: 'لأقل العطاءات (المقترح عرضه للتفاوض)',
+    retender: 'للعطاء المعروض'
+  }[rec.kind];
 
   // توقيعات المحضر: رئيس اللجنة ثابت دائماً، وعدد الأعضاء يتبع حجم اللجنة الفعلي المُدخل في الإعدادات
   const signatories = [
@@ -106,11 +117,13 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 {project.bidders.map((b, idx) => {
                   // معيار الاستبعاد التجاري وفق الجدول المعتمد: تجاوز الانحراف الكلي للحد المعتمد فقط
                   // (الانحراف الجزئي مؤشر استرشادي في الجدول المعتمد ولا يُستخدم فيه كسبب استبعاد مستقل)
-                  const isExcluded = Math.abs(b.totals.totalDeviationPercent) > project.deviationThreshold;
-                  const isRec = b.id === activeBidder.id || b.status === 'recommended';
+                  const isExcluded = isCommerciallyExcluded(b, threshold);
+                  const isRejected = b.status === 'disqualified';
+                  const isRec = rec.kind === 'award' && b.id === rec.primary?.id;
+                  const isClose = rec.kind === 'tie' && rec.closeBids.some(c => c.id === b.id);
 
                   return (
-                    <tr key={b.id} className={isRec ? 'bg-emerald-50 font-bold' : isExcluded ? 'bg-rose-50' : ''}>
+                    <tr key={b.id} className={isRec || isClose ? 'bg-emerald-50 font-bold' : isExcluded || isRejected ? 'bg-rose-50' : ''}>
                       <td className="border border-slate-300 p-2 text-center">{idx + 1}</td>
                       <td className="border border-slate-300 p-2 font-bold">{b.name}</td>
                       <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(b.totals.totalBidderAmount)}</td>
@@ -118,12 +131,16 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       <td className="border border-slate-300 p-2 text-center">{b.totals.partialDeviationPercent.toFixed(2)}%</td>
                       <td className="border border-slate-300 p-2 text-center font-mono">{b.totals.overallPriceRatio.toFixed(4)}</td>
                       <td className="border border-slate-300 p-2 text-center font-bold">
-                        {isExcluded ? (
-                          <span className="text-rose-800">مستبعد تجارياً (تجاوز الانحرافات)</span>
+                        {isRejected ? (
+                          <span className="text-rose-800">مستبعد بقرار اللجنة</span>
+                        ) : isExcluded ? (
+                          <span className="text-rose-800">مستبعد تجارياً — المادة (13)/ثالثاً/أ</span>
                         ) : isRec ? (
-                          <span className="text-emerald-800">★ موصى بالترسية (الأفضل والأنسب)</span>
+                          <span className="text-emerald-800">★ موصى بالإحالة</span>
+                        ) : isClose ? (
+                          <span className="text-emerald-800">متقارب — للمفاضلة</span>
                         ) : (
-                          <span className="text-slate-700">مؤهل ومتوازن</span>
+                          <span className="text-slate-700">مؤهل تجارياً</span>
                         )}
                       </td>
                     </tr>
@@ -136,15 +153,15 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* 2. التحليل التفصيلي للفقرات للعطاء الموصى به */}
           <div className="mb-6">
             <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
-              ثانياً: جدول التحليل المالي والأسعار الموزونة للعطاء الموصى به ({activeBidder.name}):
+              ثانياً: جدول التحليل المالي والأسعار الموزونة {subjectLabel} ({subject.name}):
             </h3>
 
             <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 mb-3 text-xs leading-relaxed">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-semibold">
-                <div><strong>الكلفة التخمينية:</strong> {formatCurrency(activeBidder.totals.totalEstimatedAmount, project.currency)}</div>
-                <div><strong>مبلغ العرض:</strong> {formatCurrency(activeBidder.totals.totalBidderAmount, project.currency)}</div>
-                <div><strong>النسبة السعرية:</strong> {activeBidder.totals.overallPriceRatio.toFixed(4)}</div>
-                <div><strong>الانحراف الكلي:</strong> {formatPercent(activeBidder.totals.totalDeviationPercent)}</div>
+                <div><strong>الكلفة التخمينية:</strong> {formatCurrency(subject.totals.totalEstimatedAmount, project.currency)}</div>
+                <div><strong>مبلغ العرض:</strong> {formatCurrency(subject.totals.totalBidderAmount, project.currency)}</div>
+                <div><strong>النسبة السعرية:</strong> {subject.totals.overallPriceRatio.toFixed(4)}</div>
+                <div><strong>الانحراف الكلي:</strong> {formatPercent(subject.totals.totalDeviationPercent)}</div>
               </div>
             </div>
 
@@ -162,7 +179,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {activeBidder.items.map((item) => (
+                {subject.items.map((item) => (
                   <tr key={item.id} className="border-b border-slate-300">
                     <td className="border border-slate-300 p-2 text-center font-bold">{item.itemNo}</td>
                     <td className="border border-slate-300 p-2 text-center font-bold text-blue-900">{formatNumber(item.estimatedTotal)}</td>
@@ -184,12 +201,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <tfoot className="bg-slate-100 font-black border-t-2 border-slate-900">
                 <tr>
                   <td className="border border-slate-400 p-2 text-center">المجموع</td>
-                  <td className="border border-slate-400 p-2 text-center">{formatNumber(activeBidder.totals.totalEstimatedAmount)}</td>
-                  <td className="border border-slate-400 p-2 text-center">{formatNumber(activeBidder.totals.totalBidderAmount)}</td>
-                  <td className="border border-slate-400 p-2 text-center">{formatPercent(activeBidder.totals.totalDeviationPercent)}</td>
-                  <td className="border border-slate-400 p-2 text-center text-rose-800">{formatNumber(activeBidder.totals.deviatedItemsSum)}</td>
-                  <td className="border border-slate-400 p-2 text-center font-mono">{activeBidder.totals.overallPriceRatio.toFixed(4)}</td>
-                  <td className="border border-slate-400 p-2 text-center">{formatNumber(activeBidder.totals.newPricesTotal)}</td>
+                  <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.totalEstimatedAmount)}</td>
+                  <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.totalBidderAmount)}</td>
+                  <td className="border border-slate-400 p-2 text-center">{formatPercent(subject.totals.totalDeviationPercent)}</td>
+                  <td className="border border-slate-400 p-2 text-center text-rose-800">{formatNumber(subject.totals.deviatedItemsSum)}</td>
+                  <td className="border border-slate-400 p-2 text-center font-mono">{subject.totals.overallPriceRatio.toFixed(4)}</td>
+                  <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.newPricesTotal)}</td>
                   <td className="border border-slate-400 p-2 text-center">-</td>
                 </tr>
               </tfoot>
@@ -199,21 +216,71 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* 3. توصية وقرار اللجنة القانوني */}
           <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed bg-slate-50">
             <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: قرار وتوصية لجنة التحليل والترسية:</h4>
-            {!isActiveBidderExcluded ? (
+            {/* كل صيغة مسندة إلى نص التعليمات رقم (1) لسنة 2025 — المراجع في utils/recommendation.ts */}
+            {rec.kind === 'award' && rec.primary && (
               <p>
-                استناداً إلى أحكام تعليمات تنفيذ العقود الحكومية والضوابط الصادرة بموجبها، وبعد إجراء التحليل التجاري والمالي والمطابقة مع الكلفة التخمينية، توصي اللجنة بـ:
-                <strong> إحالة وترسية المناقصة على العطاء المقدم من شركة ({activeBidder.name}) </strong>
-                بمبلغ إجمالي قدره <strong>({formatCurrency(activeBidder.totals.totalBidderAmount, project.currency)})</strong> <span className="text-slate-800 font-bold underline">({tafqeetArabic(activeBidder.totals.totalBidderAmount, 'دينار عراقي')})</span> لكونه العطاء الأفضل مالياً والأكثر اتزاناً والمطابق للمواصفات، مع اعتماد الأسعار والمفردات الموزونة المثبتة أعلاه كشرط تعاقدي عند تنفيذ أوامر الغيار.
+                استناداً إلى المادة (13) من تعليمات تنفيذ العقود الحكومية رقم (1) لسنة 2025 والضوابط الصادرة بموجبها، وبعد التحليل التجاري والمالي للعطاءات والتدقيق الحسابي لجداول الكميات ومقارنتها بالكلفة التخمينية، واستبعاد العطاءات التي تزيد أو تقل عن الكلفة التخمينية بأكثر من الحد المعتمد (±{threshold}%) وفق المادة (13)/ثالثاً/أ، توصي لجنة التحليل
+                <strong> بإحالة المناقصة على العطاء المقدم من ({rec.primary.name}) </strong>
+                بمبلغ إجمالي قدره <strong>({money(rec.primary)})</strong> <span className="text-slate-800 font-bold underline">({words(rec.primary)})</span>
+                {rec.chosenNotLowest
+                  ? '، وهو العطاء الذي اختارته اللجنة من بين العطاءات المؤهلة تجارياً'
+                  : rec.chosenByCommittee && rec.closeBids.length > 1
+                    ? `، وهو العطاء الذي اختارته اللجنة من بين العطاءات ${rec.exactTie ? 'المتساوية' : 'المتقاربة'} في مبالغها`
+                    : '، لكونه أوطأ العطاءات المؤهلة تجارياً'}
+                ، مع مراعاة نتائج التقييم الفني والقانوني، واعتماد الأسعار والمفردات الموزونة المثبتة أعلاه عند تنفيذ أوامر الغيار. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
               </p>
-            ) : (
-              <div className="p-3 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 font-bold">
-                ⚠️ تنبيه: العطاء المعروض حالياً من شركة ({activeBidder.name}) <strong>مستبعد تجارياً</strong> لتجاوز انحرافه الكلي عن الكلفة التخمينية الحد المسموح (±{project.deviationThreshold}%)، إذ بلغ ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%). لا يجوز التوصية بالترسية عليه بصيغته الحالية — يرجى اختيار عطاء مؤهل من مصفوفة المقارنة أو خلاصة الترسية قبل اعتماد هذا المحضر.
+            )}
+
+            {rec.kind === 'tie' && (
+              <div>
+                <p>
+                  استناداً إلى المادة (13) من تعليمات تنفيذ العقود الحكومية رقم (1) لسنة 2025 والضوابط الصادرة بموجبها، وبعد التحليل التجاري والمالي للعطاءات والتدقيق الحسابي لجداول الكميات ومقارنتها بالكلفة التخمينية، تبيّن أن العطاءات المؤهلة تجارياً الآتية
+                  <strong>{rec.exactTie ? ' متساوية في مبالغها' : ` متقاربة في مبالغها لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`}</strong>:
+                </p>
+                <ul className="list-disc pr-6 my-1.5 font-bold">
+                  {rec.closeBids.map(b => (
+                    <li key={b.id}>{b.name} — {money(b)} ({words(b)})</li>
+                  ))}
+                </ul>
+                <p>
+                  وعليه توصي لجنة التحليل <strong>بالمفاضلة بين هذه العطاءات وفق معايير المفاضلة الواردة في ضوابط رقم (5)</strong>، بتحويلها إلى قيمة مالية لأغراض المفاضلة (كمدة العقد أو مدة الصيانة أو الضمان أو خدمات ما بعد البيع أو المبادرات الأخرى)، والإحالة على العطاء الأفضل بنتيجتها، مع مراعاة نتائج التقييم الفني والقانوني.
+                  {rec.exactTie && (
+                    <> وعند تساوي الأسعار لأصغر فئة نقدية فلجهة التعاقد استكمال المبادرات إن لم تُقدَّم ابتداءً لتصبح جزءاً من العطاء (ضوابط رقم 5). وإذا تساوت الأسعار والشروط بعد ذلك، فلجهة التعاقد إرساء المناقصة على أكثر من متقدم إن كانت شروط المناقصة تنص على ذلك (المادة 15/رابعاً/أ).</>
+                  )}
+                </p>
+                <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
+                  💡 بعد إجراء المفاضلة: اختر العطاء الفائز من «خلاصة الترسية» بزر «اختيار للترسية»، فتتحول هذه الفقرة إلى توصية بالإحالة عليه. (هذه الملاحظة لا تظهر في الطباعة)
+                </div>
               </div>
             )}
-            {activeBidder.totals.totalDeviationPercent > project.deviationThreshold && (
+
+            {rec.kind === 'referral' && rec.primary && (
+              <p>
+                بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{threshold}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> وبانحراف ({formatPercent(rec.primary.totals.totalDeviationPercent)}) عن الكلفة التخمينية.
+                وعليه توصي لجنة التحليل <strong>برفع الموضوع إلى اللجنة المركزية للمصادقة على الإحالة للنظر في التفاوض لتخفيض الأسعار</strong> إلى الحدود المسموحة للكلفة التخمينية دون المساس بنطاق العمل المعلن، استناداً إلى المادة (13)/ثالثاً/ب — علماً أن إجراء التفاوض ذاته ليس من اختصاص لجنة التحليل.
+                وإذا لم تؤدِّ المفاوضات إلى تخفيض الأسعار ضمن الحدود المقبولة، فلجهة التعاقد إعادة الإعلان أو الدعوة وفق المادة (20)/أولاً.
+              </p>
+            )}
+
+            {rec.kind === 'retender' && (
+              <p>
+                {rec.retenderReason === 'all-below' ? (
+                  <>بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، تبيّن أن جميع العطاءات تقل عن الكلفة التخمينية بأكثر من الحد المعتمد (±{threshold}%)، فهي مستبعدة وفق المادة (13)/ثالثاً/أ. وعليه توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/رابعاً.</>
+                ) : (
+                  <>استبعدت اللجنة جميع العطاءات المقدمة. وإذا كان استبعادها لعدم مطابقتها لشروط ومعايير المناقصة، توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/ثالثاً.</>
+                )}
+              </p>
+            )}
+
+            {rec.kind === 'award' && rec.chosenNotLowest && rec.eligible[0] && (
               <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
-                📌 <strong>ملاحظة إجرائية (المادة 13/ثالثاً/ب):</strong> بما أن العطاء الموصى به يتجاوز الحد الأقصى المسموح للانحراف عن الكلفة التخمينية (±{project.deviationThreshold}%) وبلغ ({activeBidder.totals.totalDeviationPercent.toFixed(2)}%)،
-                يقتصر دور لجنة التحليل على <strong>التوصية</strong> بإحالة الموضوع إلى اللجنة المختصة (لجنة المراجعة / اللجنة المركزية) للمصادقة على التفاوض لتخفيض السعر ضمن الحدود المسموحة دون المساس بنطاق العمل المعلن — علماً أن إجراء التفاوض ذاته ليس من اختصاص لجنة التحليل.
+                📌 <strong>ملاحظة (المادة 10/أولاً/هـ):</strong> العطاء الموصى به ليس أوطأ العطاءات المؤهلة تجارياً (الأوطأ: {rec.eligible[0].name} بمبلغ {money(rec.eligible[0])}). جهة التعاقد غير ملزمة بقبول أوطأ العطاءات، ويجب تثبيت مسوغات اختيار اللجنة في التقرير النهائي.
+              </div>
+            )}
+
+            {rec.kind === 'award' && rec.closeBids.length > 1 && (
+              <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                📌 <strong>ملاحظة (ضوابط رقم 5 — معايير المفاضلة):</strong> العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`}، فيجب أن تستند المفاضلة بينها إلى معايير المفاضلة المحوّلة لقيمة مالية، وأن تُثبت نتيجتها في التقرير.
               </div>
             )}
           </div>

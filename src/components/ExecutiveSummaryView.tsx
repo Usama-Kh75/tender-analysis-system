@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency } from '../utils/calculations';
+import { buildRecommendation, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
@@ -40,7 +41,10 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
     let commercialStatus: 'recommended' | 'qualified' | 'excluded' = 'qualified';
     let commercialReason = '';
 
-    if (Math.abs(totalDev) > project.deviationThreshold) {
+    if (bidder.status === 'disqualified') {
+      commercialStatus = 'excluded';
+      commercialReason = 'مستبعد بقرار اللجنة';
+    } else if (Math.abs(totalDev) > project.deviationThreshold) {
       commercialStatus = 'excluded';
       commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${totalDev.toFixed(2)}%)`;
     } else {
@@ -66,8 +70,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
     return a.totals.totalBidderAmount - b.totals.totalBidderAmount;
   });
 
-  // تحديد أفضل عطاء مؤهل
-  const bestQualified = sortedBidders.find(b => b.commercialStatus !== 'excluded');
+  // التوصية من المحرك المشترك مع المحضر المطبوع (utils/recommendation.ts)
+  const rec = buildRecommendation(project);
 
   return (
     <div className="space-y-6 mb-8">
@@ -183,7 +187,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
             <tbody className="divide-y divide-slate-200 bg-white font-medium">
               {sortedBidders.map((bidder, idx) => {
                 const isExcluded = bidder.commercialStatus === 'excluded';
-                const isRec = bidder.id === project.activeBidderId || bidder.status === 'recommended';
+                const isRec = (rec.kind === 'award' && bidder.id === rec.primary?.id)
+                  || (rec.kind === 'tie' && rec.closeBids.some(c => c.id === bidder.id));
 
                 return (
                   <tr 
@@ -307,33 +312,53 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
         </div>
 
         {/* Footer Recommendation Statement */}
-        {bestQualified && (
-          <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
-                <Award className="w-6 h-6" />
+        <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
+              <Award className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-emerald-900">
+                التوصية التجارية للجنة التحليل:
               </div>
-              <div>
-                <div className="text-xs font-bold text-emerald-900">
-                  التوصية الفنية والمالية للجنة التحليل:
-                </div>
-                <div className="text-sm font-black text-slate-900 mt-0.5">
-                  العطاء الأفضل مالياً والأكثر اتزاناً والمطابق للضوابط هو: <span className="text-emerald-700 underline font-black">({bestQualified.name})</span> بمبلغ إجمالي <span className="font-mono">{formatCurrency(bestQualified.totals.totalBidderAmount, project.currency)}</span>.
-                </div>
+              <div className="text-sm font-black text-slate-900 mt-0.5 leading-relaxed">
+                {rec.kind === 'award' && rec.primary && (
+                  <>
+                    الإحالة على: <span className="text-emerald-700 underline font-black">({rec.primary.name})</span> بمبلغ إجمالي <span className="font-mono">{formatCurrency(rec.primary.totals.totalBidderAmount, project.currency)}</span>
+                    {rec.chosenNotLowest ? ' — باختيار اللجنة، وليس الأوطأ (تُثبت المسوغات في التقرير — المادة 10/أولاً/هـ)' : ' — أوطأ العطاءات المؤهلة تجارياً'}.
+                  </>
+                )}
+                {rec.kind === 'tie' && (
+                  <>
+                    العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`} — تُطبق معايير المفاضلة (ضوابط رقم 5)، ثم اختر الفائز بزر «اختيار للترسية».
+                  </>
+                )}
+                {rec.kind === 'referral' && rec.primary && (
+                  <>
+                    لا يوجد عطاء ضمن الحدود المقبولة — التوصية برفع الموضوع إلى اللجنة المركزية للنظر في التفاوض مع ({rec.primary.name}) لتخفيض الأسعار (المادة 13/ثالثاً/ب).
+                  </>
+                )}
+                {rec.kind === 'retender' && (
+                  <>
+                    لا يوجد عطاء مؤهل — التوصية بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان (المادة 20/{rec.retenderReason === 'all-below' ? 'رابعاً' : 'ثالثاً'}).
+                  </>
+                )}
               </div>
             </div>
+          </div>
 
+          {rec.kind === 'award' && rec.primary && rec.primary.status !== 'recommended' && (
             <button
               onClick={() => {
-                onSelectBidder(bestQualified.id);
-                onUpdateBidderStatus(bestQualified.id, 'recommended');
+                onSelectBidder(rec.primary!.id);
+                onUpdateBidderStatus(rec.primary!.id, 'recommended');
               }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-5 py-2.5 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer"
             >
               اعتماد الترسية على هذا العطاء
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
       </div>
 

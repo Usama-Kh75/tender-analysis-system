@@ -626,7 +626,14 @@ export function App() {
 
   // Update Bidder Status
   const handleUpdateBidderStatus = (bidderId: string, status: Bidder['status']) => {
-    const updatedBidders = currentProject.bidders.map(b => b.id === bidderId ? { ...b, status } : b);
+    // التوصية بالإحالة لعطاء واحد: اختيار مجهز للترسية يلغي اختيار أي مجهز سابق،
+    // وإلا بقي أكثر من «موصى به» وصارت التوصية في المحضر ملتبسة
+    const displaced = status === 'recommended'
+      ? currentProject.bidders.filter(b => b.id !== bidderId && b.status === 'recommended')
+      : [];
+    const updatedBidders = currentProject.bidders.map(b =>
+      b.id === bidderId ? { ...b, status } : displaced.includes(b) ? { ...b, status: 'pending' as const } : b
+    );
     const targetBidder = currentProject.bidders.find(b => b.id === bidderId);
 
     let updatedProj: TenderProject = {
@@ -639,6 +646,7 @@ export function App() {
       updatedProj,
       'تحديث حالة العطاء',
       `تم تعديل حالة المجهز (${targetBidder?.name}) إلى (${status})`
+        + (displaced.length ? ` — وأُلغي اختيار (${displaced.map(b => b.name).join('، ')}) للترسية` : '')
     );
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
