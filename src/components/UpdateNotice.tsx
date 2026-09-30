@@ -2,6 +2,7 @@ import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { RefreshCw, Sparkles, X } from 'lucide-react';
 import { APP_VERSION, CHANGELOG, changesSince, compareVersions, versionLabel } from '../changelog';
 import { applyUpdate, getAvailableUpdate, subscribeUpdate } from '../pwa';
+import { RESUMED_STATE, clearResumeState, saveResumeState, type ResumeState } from '../resume';
 
 // آخر إصدار رآه المستخدم في هذا المتصفح — لعرض «ما الجديد» مرة واحدة بعد كل تحديث
 const SEEN_KEY = 'tender_analysis_last_seen_version';
@@ -34,23 +35,40 @@ interface UpdateNoticeProps {
   /** فتح «ما الجديد» يدوياً (بالضغط على رقم الإصدار) */
   manualOpen: boolean;
   onManualClose: () => void;
+  /** اسم نافذة مفتوحة فيها عمل لم يُحفظ بعد (يمنع التحديث حتى تُكمل أو تُغلق)، أو null */
+  blockingWork: string | null;
+  /** موضع المستخدم الحالي، يُحفظ قبل التحديث ليُستأنف بعده */
+  getResumeState: () => ResumeState;
 }
 
-export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManualClose }) => {
+export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManualClose, blockingWork, getResumeState }) => {
   const available = useSyncExternalStore(subscribeUpdate, getAvailableUpdate);
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateFailed, setUpdateFailed] = useState(false);
+  const [blockedBy, setBlockedBy] = useState<string | null>(null);
 
+  // البيانات تُحفظ مع كل تعديل؛ ما قد يضيع هو عمل في نافذة مفتوحة لم يُطبَّق بعد
+  // (جدول مستخرج من صورة، إعدادات لم تُحفظ...) فلا يُحدَّث قبل إكماله أو إغلاقها
   const handleUpdate = async () => {
-    setUpdating(true);
     setUpdateFailed(false);
+    if (blockingWork) { setBlockedBy(blockingWork); return; }
+    setBlockedBy(null);
+    setUpdating(true);
+    saveResumeState(getResumeState());
     const reloading = await applyUpdate();
     if (!reloading) {
+      clearResumeState();
       setUpdating(false);
       setUpdateFailed(true);
     }
   };
+
+  const bannerNote = updateFailed
+    ? { tone: 'text-rose-300', text: 'تعذّر تنزيل التحديث — تحقق من الاتصال وحاول مرة أخرى.' }
+    : blockedBy && blockingWork
+      ? { tone: 'text-amber-300', text: `أكمل نافذة «${blockingWork}» أو أغلقها أولاً، ثم اضغط «حفظ والتحديث».` }
+      : { tone: 'text-slate-300', text: 'عملك محفوظ تلقائياً، وستعود إلى حيث توقفت بعد التحديث.' };
 
   // يُحسب مرة واحدة عند الفتح: التغييرات منذ آخر إصدار رآه المستخدم
   const [autoEntries, setAutoEntries] = useState(() => {
@@ -86,16 +104,14 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
           <RefreshCw className="w-5 h-5 text-amber-400 shrink-0" />
           <div className="flex-1 text-xs sm:text-sm">
             <div className="font-black">يتوفر إصدار جديد <bdi dir="ltr">({versionLabel(available)})</bdi></div>
-            <div className={`text-[11px] mt-0.5 ${updateFailed ? 'text-rose-300' : 'text-slate-300'}`}>
-              {updateFailed ? 'تعذّر تنزيل التحديث — تحقق من الاتصال وحاول مرة أخرى.' : 'بياناتك محفوظة ولا يمسها التحديث.'}
-            </div>
+            <div className={`text-[11px] mt-0.5 ${bannerNote.tone}`}>{bannerNote.text}</div>
           </div>
           <button
             onClick={handleUpdate}
             disabled={updating}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-3 py-2 rounded-xl cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           >
-            {updating ? 'جارٍ التحديث…' : 'تحديث الآن'}
+            {updating ? 'جارٍ التحديث…' : 'حفظ والتحديث'}
           </button>
           <button
             onClick={() => setDismissedUpdate(available)}
@@ -125,6 +141,9 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ manualOpen, onManual
                     {autoEntries.length > 0 ? 'تم تحديث النظام' : 'ما الجديد في النظام'}
                   </h2>
                   <p className="text-xs text-slate-400">الإصدار الحالي: <bdi dir="ltr">{versionLabel()}</bdi></p>
+                  {RESUMED_STATE && autoEntries.length > 0 && (
+                    <p className="text-xs text-emerald-300 mt-0.5">عملك محفوظ، وعدت إلى حيث توقفت.</p>
+                  )}
                 </div>
               </div>
               <button onClick={close} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">

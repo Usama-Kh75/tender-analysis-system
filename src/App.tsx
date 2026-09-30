@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   getAllProjects,
   saveAllProjects,
@@ -31,6 +31,7 @@ import { PrintReportModal } from './components/modals/PrintReportModal';
 import { NewProjectModal } from './components/modals/NewProjectModal';
 import { UpdateNotice } from './components/UpdateNotice';
 import { versionLabel } from './changelog';
+import { RESUMED_STATE } from './resume';
 import { CONTRACT_TYPES, contractTypeInfo } from './utils/contractTypes';
 
 import {
@@ -45,7 +46,8 @@ import {
 export function App() {
   const [projects, setProjects] = useState<TenderProject[]>([]);
   const [activeProjectId, setActiveId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>('table');
+  // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
+  const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
   const [isEditingBidderName, setIsEditingBidderName] = useState<boolean>(false);
@@ -76,6 +78,21 @@ export function App() {
       saveAllProjects(projects);
     }
   }, [projects]);
+
+  // استعادة موضع التمرير بعد «حفظ والتحديث»، مرة واحدة بعد أن تُرسم بيانات المشاريع
+  const scrollRestored = useRef(false);
+  useEffect(() => {
+    if (scrollRestored.current || projects.length === 0 || !RESUMED_STATE?.scrollY) return;
+    scrollRestored.current = true;
+    requestAnimationFrame(() => window.scrollTo(0, RESUMED_STATE!.scrollY));
+  }, [projects]);
+
+  // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
+  const blockingWork = isOcrOpen ? 'استخراج من صورة / PDF'
+    : isSmartImportOpen ? 'استيراد جدول (Excel / Word)'
+    : isSettingsOpen ? 'إعدادات المناقصة'
+    : isNewProjectOpen ? 'مناقصة جديدة'
+    : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
@@ -1119,7 +1136,12 @@ export function App() {
         canDeleteProject={projects.length > 1}
       />
 
-      <UpdateNotice manualOpen={isWhatsNewOpen} onManualClose={() => setIsWhatsNewOpen(false)} />
+      <UpdateNotice
+        manualOpen={isWhatsNewOpen}
+        onManualClose={() => setIsWhatsNewOpen(false)}
+        blockingWork={blockingWork}
+        getResumeState={() => ({ tab: activeTab, scrollY: window.scrollY })}
+      />
 
       <NewProjectModal
         isOpen={isNewProjectOpen}
