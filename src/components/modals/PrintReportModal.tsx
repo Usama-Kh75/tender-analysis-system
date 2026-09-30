@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
@@ -44,9 +45,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   ];
 
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+  // يُعرض في body مباشرة (لا داخل شجرة الواجهة) فتخفي قاعدة الطباعة في index.css بقية النظام،
+  // ويُطبع المحضر وحده بطوله الكامل بدل أن يُقص عند حد النافذة ويتكرر فوق الواجهة
+  return createPortal(
+    <div className="print-report-portal fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 print:static print:block print:bg-white print:p-0 print:backdrop-blur-none">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden print:max-w-none print:max-h-none print:overflow-visible print:rounded-none print:shadow-none print:border-0 print:block">
         
         {/* Controls Bar */}
         <div className="p-4 bg-slate-950 text-white flex items-center justify-between no-print border-b border-amber-500/30">
@@ -63,14 +66,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <Printer className="w-4 h-4" />
               طباعة فورية
             </button>
-            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+            <button onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* Printable Document */}
-        <div className="flex-1 overflow-y-auto p-8 sm:p-12 bg-white text-slate-900 print:p-0 print:m-0">
+        <div className="flex-1 overflow-y-auto p-8 sm:p-12 bg-white text-slate-900 print:p-0 print:m-0 print:overflow-visible">
           
           {/* Official Header */}
           <div className="border-b-2 border-slate-900 pb-4 mb-6 text-center relative">
@@ -310,5 +313,5 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
       </div>
     </div>
-  );
+  , document.body);
 };

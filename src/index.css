@@ -45,6 +45,10 @@
   .no-print {
     display: none !important;
   }
+  /* أثناء طباعة المحضر: يُطبع المحضر وحده، لا الواجهة التي خلفه */
+  body:has(> .print-report-portal) > #root {
+    display: none !important;
+  }
   .print-only {
     display: block !important;
   }
