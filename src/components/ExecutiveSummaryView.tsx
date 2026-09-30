@@ -11,6 +11,7 @@ import {
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency } from '../utils/calculations';
 import { buildRecommendation, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
+import { preferenceReference } from '../utils/contractTypes';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
@@ -330,7 +331,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 )}
                 {rec.kind === 'tie' && (
                   <>
-                    العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`} — تُطبق معايير المفاضلة (ضوابط رقم 5)، ثم اختر الفائز بزر «اختيار للترسية».
+                    العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`} — تُطبق معايير المفاضلة ({preferenceReference(project.contractType).clause})، ثم اختر الفائز بزر «اختيار للترسية».
                   </>
                 )}
                 {rec.kind === 'referral' && rec.primary && (

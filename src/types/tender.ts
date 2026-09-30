@@ -59,9 +59,17 @@ export interface AuditLogEntry {
   newValue?: any;
 }
 
+/**
+ * نوع العقد وفق تعليمات تنفيذ العقود الحكومية رقم (1) لسنة 2025 (المادة 1).
+ * الخدمات الاستشارية غير مدعومة عمداً: تُفتح عروضها الفنية ثم التجارية بعد اكتمال التقييم
+ * الفني (ضوابط رقم 4 ثانياً/3) ولا تُطرح بمناقصة عامة (المادة 6)، فلا يناسبها منطق «الأوطأ ضمن الحدود».
+ */
+export type ContractType = 'works' | 'supply' | 'services';
+
 export interface TenderProject {
   id: string;
   title: string;
+  contractType?: ContractType;        // غير محدد في المناقصات المنشأة قبل الإصدار 1.4.0
   referenceNumber: string;
   entityName: string;                 // الجهة المعلنة (الوزارة / المحافظة / الشركة)
   committeeChairman: string;          // رئيس لجنة التحليل

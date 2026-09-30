@@ -4,6 +4,7 @@ import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { buildRecommendation, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
+import { CONTRACT_TYPES, preferenceReference } from '../../utils/contractTypes';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const rec = buildRecommendation(project);
   const subject = rec.primary ?? activeBidder;
   const threshold = project.deviationThreshold;
+  const pref = preferenceReference(project.contractType);
   const money = (b: Bidder) => formatCurrency(b.totals.totalBidderAmount, project.currency);
   const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
   const subjectLabel = {
@@ -96,6 +98,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             </h2>
             <div className="text-xs text-slate-600 mt-1 font-semibold">
               مشروع / طلبية: {project.title}
+              {project.contractType && <> — نوع العقد: {CONTRACT_TYPES[project.contractType].label}</>}
             </div>
           </div>
 
@@ -231,7 +234,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   : rec.chosenByCommittee && rec.closeBids.length > 1
                     ? `، وهو العطاء الذي اختارته اللجنة من بين العطاءات ${rec.exactTie ? 'المتساوية' : 'المتقاربة'} في مبالغها`
                     : '، لكونه أوطأ العطاءات المؤهلة تجارياً'}
-                ، مع مراعاة نتائج التقييم الفني والقانوني، واعتماد الأسعار والمفردات الموزونة المثبتة أعلاه عند تنفيذ أوامر الغيار. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
+                ، مع مراعاة نتائج التقييم الفني والقانوني، واعتماد الأسعار والمفردات الموزونة المثبتة أعلاه عند إصدار أوامر التغيير وفق المادة (25)/ثالثاً. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
               </p>
             )}
 
@@ -247,9 +250,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   ))}
                 </ul>
                 <p>
-                  وعليه توصي لجنة التحليل <strong>بالمفاضلة بين هذه العطاءات وفق معايير المفاضلة الواردة في ضوابط رقم (5)</strong>، بتحويلها إلى قيمة مالية لأغراض المفاضلة (كمدة العقد أو مدة الصيانة أو الضمان أو خدمات ما بعد البيع أو المبادرات الأخرى)، والإحالة على العطاء الأفضل بنتيجتها، مع مراعاة نتائج التقييم الفني والقانوني.
+                  وعليه توصي لجنة التحليل <strong>بالمفاضلة بين هذه العطاءات وفق معايير المفاضلة الواردة في {pref.clause}</strong>، بتحويلها إلى قيمة مالية لأغراض المفاضلة (مثل: {pref.examples})، والإحالة على العطاء الأفضل بنتيجتها، مع مراعاة نتائج التقييم الفني والقانوني.
                   {rec.exactTie && (
-                    <> وعند تساوي الأسعار لأصغر فئة نقدية فلجهة التعاقد استكمال المبادرات إن لم تُقدَّم ابتداءً لتصبح جزءاً من العطاء (ضوابط رقم 5). وإذا تساوت الأسعار والشروط بعد ذلك، فلجهة التعاقد إرساء المناقصة على أكثر من متقدم إن كانت شروط المناقصة تنص على ذلك (المادة 15/رابعاً/أ).</>
+                    <> وعند تساوي الأسعار لأصغر فئة نقدية فلجهة التعاقد استكمال المبادرات إن لم تُقدَّم ابتداءً لتصبح جزءاً من العطاء ({pref.clause}). وإذا تساوت الأسعار والشروط بعد ذلك، فلجهة التعاقد إرساء المناقصة على أكثر من متقدم إن كانت شروط المناقصة تنص على ذلك (المادة 15/رابعاً/أ).</>
                   )}
                 </p>
                 <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
@@ -290,7 +293,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
             {rec.kind === 'award' && rec.closeBids.length > 1 && (
               <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
-                📌 <strong>ملاحظة (ضوابط رقم 5 — معايير المفاضلة):</strong> العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`}، فيجب أن تستند المفاضلة بينها إلى معايير المفاضلة المحوّلة لقيمة مالية، وأن تُثبت نتيجتها في التقرير.
+                📌 <strong>ملاحظة ({pref.clause} — معايير المفاضلة):</strong> العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`}، فيجب أن تستند المفاضلة بينها إلى معايير المفاضلة المحوّلة لقيمة مالية (مثل: {pref.examples})، وأن تُثبت نتيجتها في التقرير.
               </div>
             )}
           </div>

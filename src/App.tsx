@@ -14,7 +14,7 @@ import {
 } from './utils/storageService';
 import { calculateBOQMetrics } from './utils/calculations';
 import { exportTenderToExcel } from './utils/excelService';
-import { TenderProject, Bidder, BOQItem } from './types/tender';
+import { TenderProject, Bidder, BOQItem, ContractType } from './types/tender';
 
 import { Navbar } from './components/Navbar';
 import { KPIStatsCards } from './components/KPIStatsCards';
@@ -28,6 +28,8 @@ import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PrintReportModal } from './components/modals/PrintReportModal';
+import { NewProjectModal } from './components/modals/NewProjectModal';
+import { CONTRACT_TYPES } from './utils/contractTypes';
 
 import {
   Table2,
@@ -55,6 +57,7 @@ export function App() {
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
+  const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
 
   // Load from Storage
   useEffect(() => {
@@ -676,21 +679,22 @@ export function App() {
       updatedProj,
       'تعديل إعدادات المناقصة',
       `تم تحديث إعدادات المناقصة وحد الانحراف إلى (${threshold}%)`
+        + (updated.contractType && updated.contractType !== currentProject.contractType
+          ? ` — نوع العقد: ${CONTRACT_TYPES[updated.contractType].label}` : '')
     );
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
   // Create New Project
-  const handleNewProject = () => {
-    const title = prompt('أدخل اسم الطلبية أو المناقصة الجديدة:');
-    if (!title) return;
-    const refNo = prompt('أدخل رقم الطلبية أو المناقصة:') || `TND-${Date.now().toString().slice(-4)}`;
+  const handleCreateProject = ({ title, referenceNumber, contractType }: { title: string; referenceNumber: string; contractType: ContractType }) => {
+    const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
 
     const newProj: TenderProject = {
       ...createDefaultProject(),
       id: `project-${Date.now()}`,
       title,
+      contractType,
       referenceNumber: refNo,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -699,7 +703,7 @@ export function App() {
         timestamp: new Date().toISOString(),
         userName: 'المهندس أسامة خليل هاشم',
         action: 'إنشاء مناقصة جديدة',
-        details: `تم إنشاء المناقصة (${title}) بنجاح`
+        details: `تم إنشاء المناقصة (${title}) بنجاح — نوع العقد: ${CONTRACT_TYPES[contractType].label}`
       }]
     };
 
@@ -779,7 +783,7 @@ export function App() {
           setActiveId(id);
           setActiveProjectId(id);
         }}
-        onNewProject={handleNewProject}
+        onNewProject={() => setIsNewProjectOpen(true)}
         onOpenSmartImport={(type) => {
           setSmartImportDocType(type || 'bidder');
           setIsSmartImportOpen(true);
@@ -832,6 +836,19 @@ export function App() {
               <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
                 {currentProject.entityName}
               </span>
+              {currentProject.contractType ? (
+                <span className="bg-indigo-50 text-indigo-900 text-xs font-bold px-3.5 py-1 rounded-full border border-indigo-200">
+                  نوع العقد: {CONTRACT_TYPES[currentProject.contractType].label}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  title="نوع العقد يحدد معايير المفاضلة في التوصية (ضوابط رقم 5)"
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold px-3.5 py-1 rounded-full border border-rose-300 cursor-pointer transition"
+                >
+                  ⚠️ حدد نوع العقد
+                </button>
+              )}
             </div>
 
             <div className="text-xs text-slate-500 font-semibold">
@@ -1076,6 +1093,9 @@ export function App() {
       />
 
       <ProjectSettingsModal
+        // يُعاد إنشاؤه مع كل فتح ومع كل مناقصة: حقوله تُهيأ من المشروع مرة واحدة عند الإنشاء،
+        // وبدون ذلك تظهر بيانات مناقصة سابقة ويُكتب فوق الحالية عند الحفظ
+        key={`${currentProject.id}-${isSettingsOpen}`}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         project={currentProject}
@@ -1088,6 +1108,12 @@ export function App() {
         onFactoryReset={handleFactoryReset}
         onResetAllBidders={handleResetAllBidders}
         canDeleteProject={projects.length > 1}
+      />
+
+      <NewProjectModal
+        isOpen={isNewProjectOpen}
+        onClose={() => setIsNewProjectOpen(false)}
+        onCreate={handleCreateProject}
       />
 
       <PrintReportModal
