@@ -84,7 +84,10 @@ export function App() {
   useEffect(() => {
     if (scrollRestored.current || projects.length === 0 || !RESUMED_STATE?.scrollY) return;
     scrollRestored.current = true;
-    requestAnimationFrame(() => window.scrollTo(0, RESUMED_STATE!.scrollY));
+    // يُعاد التطبيق بعد استقرار الرسم: الرسوم البيانية قد تكتمل بعد الإطار الأول فيتغير طول الصفحة
+    const y = RESUMED_STATE.scrollY;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+    setTimeout(() => { if (Math.abs(window.scrollY - y) > 20) window.scrollTo(0, y); }, 600);
   }, [projects]);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
