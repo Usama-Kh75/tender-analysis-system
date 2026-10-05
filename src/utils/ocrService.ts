@@ -243,7 +243,14 @@ export function parseGeminiTable(text: string): { rows: any[]; grandTotal: numbe
     try { parsed = obj ? JSON.parse(obj[0]) : undefined; } catch { parsed = undefined; }
     if (!parsed || (!Array.isArray(parsed) && !parsed.items)) parsed = extractJsonArray(clean);
   }
-  const rows: any[] = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.table || []);
+  // شكل الرد يُتحقق منه: الفقرات مصفوفة كائنات وإلا يُرفض الرد (فيُجرَّب النموذج التالي)، لئلا يتحول
+  // نص مثل "items": "abc" إلى فقرات مختلقة حرفاً حرفاً. المصفوفة الفارغة مقبولة (صفحات بلا جدول)
+  const container = Array.isArray(parsed) ? parsed
+    : Array.isArray(parsed?.items) ? parsed.items
+    : Array.isArray(parsed?.table) ? parsed.table
+    : null;
+  if (!container) throw new Error('رد بلا مصفوفة فقرات');
+  const rows: any[] = container.filter((r: unknown) => r !== null && typeof r === 'object' && !Array.isArray(r));
   const total = !Array.isArray(parsed) && parsed?.grandTotal !== null && parsed?.grandTotal !== undefined
     ? parseArabicNumber(parsed.grandTotal) : 0;
   const totalText = !Array.isArray(parsed) && typeof parsed?.grandTotalText === 'string' && parsed.grandTotalText.trim()
