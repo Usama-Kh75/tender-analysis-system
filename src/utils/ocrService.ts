@@ -251,6 +251,7 @@ export function parseGeminiTable(text: string): { rows: any[]; grandTotal: numbe
     : null;
   if (!container) throw new Error('رد بلا مصفوفة فقرات');
   const rows: any[] = container.filter((r: unknown) => r !== null && typeof r === 'object' && !Array.isArray(r));
+  if (rows.length !== container.length) throw new Error('رد فيه عناصر ليست فقرات');
   const total = !Array.isArray(parsed) && parsed?.grandTotal !== null && parsed?.grandTotal !== undefined
     ? parseArabicNumber(parsed.grandTotal) : 0;
   const totalText = !Array.isArray(parsed) && typeof parsed?.grandTotalText === 'string' && parsed.grandTotalText.trim()
