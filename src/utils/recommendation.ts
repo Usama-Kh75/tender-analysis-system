@@ -47,19 +47,30 @@ export interface Recommendation {
 export const isCommerciallyExcluded = (bidder: Bidder, threshold: number): boolean =>
   Math.abs(bidder.totals.totalDeviationPercent) > threshold;
 
+/**
+ * شركة أُضيفت ولم تُدخل مبالغها بعد ليست عطاءً: لا تدخل الترتيب ولا التوصية ولا المحضر.
+ * كانت تظهر «الأفضل سعرياً» بمبلغ صفر، وبعد إدخال الكلفة التخمينية تُعد «أقل العطاءات»
+ * بانحراف -100% فتقود التوصية إلى إعادة الإعلان
+ */
+export const hasBidAmounts = (bidder: Bidder): boolean => bidder.totals.totalBidderAmount > 0;
+
+/** لا كلفة تخمينية بعد: كل الانحرافات صفر، فلا يُحكم بقبول ولا استبعاد */
+export const hasNoEstimate = (project: TenderProject): boolean =>
+  project.bidders.every(b => !(b.totals.totalEstimatedAmount > 0));
+
 const isRejectedByCommittee = (bidder: Bidder): boolean => bidder.status === 'disqualified';
 
 const byAmount = (a: Bidder, b: Bidder) => a.totals.totalBidderAmount - b.totals.totalBidderAmount;
 
 export function buildRecommendation(project: TenderProject): Recommendation {
   const threshold = project.deviationThreshold;
-  const candidates = project.bidders.filter(b => !isRejectedByCommittee(b));
+  const candidates = project.bidders.filter(b => hasBidAmounts(b) && !isRejectedByCommittee(b));
   const eligible = candidates.filter(b => !isCommerciallyExcluded(b, threshold)).sort(byAmount);
 
   const none = { closeBids: [], exactTie: false, chosenByCommittee: false, chosenNotLowest: false };
 
   // بلا كلفة تخمينية تظهر كل الانحرافات صفراً، فلا يمكن تطبيق المادة (13)/ثالثاً/أ ولا صياغة توصية
-  if (project.bidders.every(b => !(b.totals.totalEstimatedAmount > 0))) {
+  if (hasNoEstimate(project)) {
     return { ...none, kind: 'no-estimate', eligible: [] };
   }
 

@@ -24,6 +24,11 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
   deviationThreshold
 }) => {
   const isHighTotalDeviation = Math.abs(totals.totalDeviationPercent) > deviationThreshold;
+  // قبل إدخال الكلفة التخمينية كل الانحرافات صفر، وكانت البطاقات تعرضها خضراء «ضمن الحد المقبول»
+  // و«لا يوجد انحرافات حادة» قبل أي مقارنة ممكنة: تُعرض «—» محايدة بدلها
+  const noEstimate = !(totals.totalEstimatedAmount > 0);
+  const pendingNote = <div className="text-[11px] text-slate-400 mt-1">بانتظار الكلفة التخمينية</div>;
+  const neutralCard = 'bg-white border-slate-200 text-slate-900';
 
   // المبالغ الكبيرة (مئات المليارات شائعة في المناقصات) كانت تخرج عن حدود البطاقة:
   // يصغر الخط مع طول الرقم، ويُكسر داخل البطاقة إن طال أكثر بدل أن يتجاوزها
@@ -58,9 +63,11 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
           <span className="break-all">{formatNumber(totals.totalBidderAmount)}</span>
           <span className="text-[11px] font-normal text-slate-500 mr-1 whitespace-nowrap">{currency}</span>
         </div>
-        <div className="text-[11px] text-slate-500 mt-1 break-all">
-          فرق: {formatCurrency(totals.overallDiffAmount, currency)}
-        </div>
+        {noEstimate ? pendingNote : (
+          <div className="text-[11px] text-slate-500 mt-1 break-all">
+            فرق: {formatCurrency(totals.overallDiffAmount, currency)}
+          </div>
+        )}
       </div>
 
       {/* 3. النسبة السعرية */}
@@ -69,18 +76,22 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
           <span className="text-xs font-semibold">النسبة السعرية للمجهز</span>
           <Scale className="w-4 h-4 text-purple-600" />
         </div>
-        <div className="text-lg font-black text-purple-700 tracking-tight">
-          {totals.overallPriceRatio.toFixed(4)}
+        <div className={`text-lg font-black tracking-tight ${noEstimate ? 'text-slate-400' : 'text-purple-700'}`}>
+          {noEstimate ? '—' : totals.overallPriceRatio.toFixed(4)}
         </div>
-        <div className="text-[11px] text-slate-500 mt-1">
-          (مجموع المجهز / التخميني)
-        </div>
+        {noEstimate ? pendingNote : (
+          <div className="text-[11px] text-slate-500 mt-1">
+            (مجموع المجهز / التخميني)
+          </div>
+        )}
       </div>
 
       {/* 4. الانحراف الكلي */}
       <div className={`rounded-xl p-4 border shadow-xs flex flex-col justify-between transition ${
-        isHighTotalDeviation 
-          ? 'bg-rose-50/70 border-rose-200 text-rose-900' 
+        noEstimate
+          ? neutralCard
+          : isHighTotalDeviation
+          ? 'bg-rose-50/70 border-rose-200 text-rose-900'
           : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
       }`}>
         <div className="flex items-center justify-between mb-1 opacity-90">
@@ -92,13 +103,15 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
           )}
         </div>
         <div className={`text-lg font-black tracking-tight ${
-          isHighTotalDeviation ? 'text-rose-700' : 'text-emerald-700'
+          noEstimate ? 'text-slate-400' : isHighTotalDeviation ? 'text-rose-700' : 'text-emerald-700'
         }`}>
-          {formatPercent(totals.totalDeviationPercent)}
+          {noEstimate ? '—' : formatPercent(totals.totalDeviationPercent)}
         </div>
-        <div className="text-[11px] font-medium opacity-80 mt-1">
-          {isHighTotalDeviation ? 'يتجاوز الحد المسموح' : 'ضمن الحد المقبول'}
-        </div>
+        {noEstimate ? pendingNote : (
+          <div className="text-[11px] font-medium opacity-80 mt-1">
+            {isHighTotalDeviation ? 'يتجاوز الحد المسموح' : 'ضمن الحد المقبول'}
+          </div>
+        )}
       </div>
 
       {/* 5. الانحراف الجزئي (مؤشر استرشادي فقط - لا حد قانوني معتمد له) */}
@@ -107,36 +120,42 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
           <span className="text-xs font-semibold">الانحراف الجزئي</span>
           <Percent className="w-4 h-4 text-amber-600" />
         </div>
-        <div className="text-lg font-black tracking-tight text-slate-800">
-          {totals.partialDeviationPercent.toFixed(2)}%
+        <div className={`text-lg font-black tracking-tight ${noEstimate ? 'text-slate-400' : 'text-slate-800'}`}>
+          {noEstimate ? '—' : `${totals.partialDeviationPercent.toFixed(2)}%`}
         </div>
-        <div className="text-[11px] text-slate-500 mt-1">
-          مجموع المنحرف: {formatNumber(totals.deviatedItemsSum)}
-        </div>
+        {noEstimate ? pendingNote : (
+          <div className="text-[11px] text-slate-500 mt-1">
+            مجموع المنحرف: {formatNumber(totals.deviatedItemsSum)}
+          </div>
+        )}
       </div>
 
       {/* 6. الفقرات المنحرفة */}
       <div className={`rounded-xl p-4 border shadow-xs flex flex-col justify-between transition ${
-        totals.deviatedItemsCount > 0 
-          ? 'bg-rose-50/50 border-rose-200' 
+        noEstimate
+          ? neutralCard
+          : totals.deviatedItemsCount > 0
+          ? 'bg-rose-50/50 border-rose-200'
           : 'bg-emerald-50/50 border-emerald-200'
       }`}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-semibold text-slate-600">الفقرات المنحرفة &gt; {deviationThreshold}%</span>
-          {totals.deviatedItemsCount > 0 ? (
+          {noEstimate ? null : totals.deviatedItemsCount > 0 ? (
             <AlertTriangle className="w-4 h-4 text-rose-600" />
           ) : (
             <CheckCircle className="w-4 h-4 text-emerald-600" />
           )}
         </div>
         <div className={`text-lg font-black tracking-tight ${
-          totals.deviatedItemsCount > 0 ? 'text-rose-700' : 'text-emerald-700'
+          noEstimate ? 'text-slate-400' : totals.deviatedItemsCount > 0 ? 'text-rose-700' : 'text-emerald-700'
         }`}>
-          {totals.deviatedItemsCount} فقرة
+          {noEstimate ? '—' : `${totals.deviatedItemsCount} فقرة`}
         </div>
-        <div className="text-[11px] text-slate-500 mt-1">
-          {totals.deviatedItemsCount === 0 ? 'لا يوجد انحرافات حادة' : 'تتطلب مراجعة وتدقيق'}
-        </div>
+        {noEstimate ? pendingNote : (
+          <div className="text-[11px] text-slate-500 mt-1">
+            {totals.deviatedItemsCount === 0 ? 'لا يوجد انحرافات حادة' : 'تتطلب مراجعة وتدقيق'}
+          </div>
+        )}
       </div>
 
     </div>

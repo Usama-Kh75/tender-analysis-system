@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
-import { buildRecommendation, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
+import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
 
 interface PrintReportModalProps {
@@ -121,7 +121,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {project.bidders.map((b, idx) => {
+                {/* شركة بلا مبالغ ليست عطاءً فلا تُدرج في المحضر (انظر hasBidAmounts) */}
+                {project.bidders.filter(hasBidAmounts).map((b, idx) => {
                   // معيار الاستبعاد التجاري وفق الجدول المعتمد: تجاوز الانحراف الكلي للحد المعتمد فقط
                   // (الانحراف الجزئي مؤشر استرشادي في الجدول المعتمد ولا يُستخدم فيه كسبب استبعاد مستقل)
                   const isExcluded = isCommerciallyExcluded(b, threshold);
@@ -146,6 +147,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                           <span className="text-emerald-800">★ موصى بالإحالة</span>
                         ) : isClose ? (
                           <span className="text-emerald-800">متقارب — للمفاضلة</span>
+                        ) : rec.kind === 'no-estimate' ? (
+                          <span className="text-slate-500">بانتظار الكلفة التخمينية</span>
                         ) : (
                           <span className="text-slate-700">مؤهل تجارياً</span>
                         )}

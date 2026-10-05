@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency } from '../utils/calculations';
-import { buildRecommendation, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
+import { buildRecommendation, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 
 interface ExecutiveSummaryViewProps {
@@ -29,9 +29,12 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   onExportExcel
 }) => {
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
+  const noEstimate = hasNoEstimate(project);
+  // شركات بلا مبالغ بعد لا تُعد عروضاً (انظر hasBidAmounts)
+  const emptyBidders = project.bidders.filter(b => !hasBidAmounts(b));
 
   // تقييم العطاءات تجارياً وتصنيفها
-  const evaluatedBidders = project.bidders.map((bidder) => {
+  const evaluatedBidders = project.bidders.filter(hasBidAmounts).map((bidder) => {
     const totalDev = bidder.totals.totalDeviationPercent;
     const partialDev = bidder.totals.partialDeviationPercent;
     // فرق كل مجهز عن كلفته التخمينية الخاصة به (وليس عن كلفة أول مجهز في القائمة)
@@ -39,12 +42,16 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
     // معيار الاستبعاد التجاري الوحيد المعتمد في الجدول المرجعي: تجاوز الانحراف الكلي لحد الانحراف المعتمد
     // (الانحراف الجزئي مؤشر استرشادي فقط في الجدول المعتمد ولا يُستخدم فيه كسبب استبعاد أو تحذير مستقل)
-    let commercialStatus: 'recommended' | 'qualified' | 'excluded' = 'qualified';
+    let commercialStatus: 'recommended' | 'qualified' | 'excluded' | 'pending' = 'qualified';
     let commercialReason = '';
 
     if (bidder.status === 'disqualified') {
       commercialStatus = 'excluded';
       commercialReason = 'مستبعد بقرار اللجنة';
+    } else if (noEstimate) {
+      // كان يُكتب «عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً» قبل أي مقارنة ممكنة
+      commercialStatus = 'pending';
+      commercialReason = 'بانتظار الكلفة التخمينية: لا يُحكم بالانحراف ولا بالتوازن قبل إدخالها';
     } else if (Math.abs(totalDev) > project.deviationThreshold) {
       commercialStatus = 'excluded';
       commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${totalDev.toFixed(2)}%)`;
@@ -134,21 +141,21 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
             <div className="text-slate-400 font-semibold mb-1">إجمالي العروض المستلمة</div>
             <div className="text-base sm:text-lg font-black text-white font-mono">
-              {project.bidders.length} شركات
+              {evaluatedBidders.length} شركات
             </div>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
             <div className="text-slate-400 font-semibold mb-1">العطاءات المؤهلة تجارياً</div>
-            <div className="text-base sm:text-lg font-black text-emerald-400 font-mono">
-              {evaluatedBidders.filter(b => b.commercialStatus !== 'excluded').length} عروض
+            <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-emerald-400'}`}>
+              {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus !== 'excluded').length} عروض`}
             </div>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
             <div className="text-slate-400 font-semibold mb-1">المستبعدة تجارياً (انحرافات)</div>
-            <div className="text-base sm:text-lg font-black text-rose-400 font-mono">
-              {evaluatedBidders.filter(b => b.commercialStatus === 'excluded').length} عروض
+            <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-rose-400'}`}>
+              {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus === 'excluded').length} عروض`}
             </div>
           </div>
         </div>
@@ -227,12 +234,19 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                     {/* مبلغ العرض */}
                     <td className="p-3.5 text-center font-black text-slate-900 border-l border-slate-200 text-sm">
                       {formatNumber(bidder.totals.totalBidderAmount)}
-                      <div className={`text-[11px] font-bold ${bidder.diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                        {bidder.diff > 0 ? '+' : ''}{formatNumber(bidder.diff)} {project.currency}
-                      </div>
+                      {!noEstimate && (
+                        <div className={`text-[11px] font-bold ${bidder.diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {bidder.diff > 0 ? '+' : ''}{formatNumber(bidder.diff)} {project.currency}
+                        </div>
+                      )}
                     </td>
 
-                    {/* الانحراف الكلي */}
+                    {/* الانحراف الكلي والجزئي والنسبة السعرية: «—» قبل الكلفة التخمينية بدل أصفار توحي بالمطابقة */}
+                    {noEstimate ? (
+                      <td colSpan={3} className="p-3.5 text-center border-l border-slate-200 text-xs font-bold text-slate-400">
+                        — بانتظار الكلفة التخمينية —
+                      </td>
+                    ) : (<>
                     <td className="p-3.5 text-center border-l border-slate-200 font-black">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
                         Math.abs(bidder.totals.totalDeviationPercent) > project.deviationThreshold
@@ -260,10 +274,15 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                     <td className="p-3.5 text-center font-mono font-bold text-purple-700 border-l border-slate-200">
                       {bidder.totals.overallPriceRatio.toFixed(4)}
                     </td>
+                    </>)}
 
                     {/* الموقف التجاري */}
                     <td className="p-3.5 text-center border-l border-slate-200">
-                      {isExcluded ? (
+                      {bidder.commercialStatus === 'pending' ? (
+                        <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 border border-slate-300 text-xs font-black px-3 py-1 rounded-full">
+                          بانتظار التخميني
+                        </span>
+                      ) : isExcluded ? (
                         <span className="inline-flex items-center gap-1.5 bg-rose-100 text-rose-800 border border-rose-300 text-xs font-black px-3 py-1 rounded-full">
                           <XCircle className="w-4 h-4 text-rose-600" />
                           مستبعد تجارياً
@@ -285,7 +304,9 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
                     {/* قرار اللجنة */}
                     <td className="p-3.5 text-center">
-                      {!isExcluded ? (
+                      {noEstimate ? (
+                        <span className="text-xs text-slate-400 font-bold">—</span>
+                      ) : !isExcluded ? (
                         <button
                           onClick={() => {
                             onSelectBidder(bidder.id);
@@ -311,6 +332,13 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
             </tbody>
           </table>
         </div>
+
+        {emptyBidders.length > 0 && (
+          <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 text-xs font-bold text-slate-500">
+            شركات بلا مبالغ بعد، لا تدخل المقارنة ولا التوصية ولا المحضر: {emptyBidders.map(b => b.name).join('، ')}.
+            يمكن حذفها من «مقارنة المجهزين» إن أُضيفت خطأً.
+          </div>
+        )}
 
         {/* Footer Recommendation Statement */}
         <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { BOQItem, TenderProject, Bidder } from '../types/tender';
+import { hasBidAmounts } from './recommendation';
 
 // أسماء أوراق Excel محدودة بـ 31 محرفاً ولا تقبل الرموز \ / ? * [ ]
 function sanitizeSheetName(name: string, usedNames: Set<string>): string {
@@ -100,7 +101,9 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
 
-  if (project.bidders.length > 1) {
+  // المقارنة بين العروض فقط: شركة بلا مبالغ ليست عرضاً (كما في الخلاصة والمحضر — hasBidAmounts)
+  const bids = project.bidders.filter(hasBidAmounts);
+  if (bids.length > 1) {
     const compHeaders = [
       'اسم المجهز',
       'إجمالي مبلغ العرض',
@@ -113,7 +116,7 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
       'حالة العطاء'
     ];
 
-    const compRows = project.bidders.map(b => [
+    const compRows = bids.map(b => [
       b.name,
       b.totals.totalBidderAmount,
       b.totals.totalEstimatedAmount,

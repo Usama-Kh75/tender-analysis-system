@@ -13,7 +13,59 @@ import {
   Search
 } from 'lucide-react';
 import { BOQItem, TenderTotals } from '../types/tender';
-import { formatNumber } from '../utils/calculations';
+import { formatNumber, parseArabicNumber } from '../utils/calculations';
+
+// حقل مبلغ يعرض فواصل الآلاف (60,000,000) خارج التعديل والرقم المجرد أثناء الكتابة: بلا فواصل كان
+// 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber
+const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string }> = ({ value, onChange, className }) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      dir="ltr"
+      value={draft ?? (value ? formatNumber(value, Number.isInteger(value) ? 0 : 2) : '')}
+      onFocus={() => setDraft(value ? String(value) : '')}
+      onChange={(e) => { setDraft(e.target.value); onChange(parseArabicNumber(e.target.value)); }}
+      onBlur={() => setDraft(null)}
+      placeholder="0.00"
+      className={className}
+    />
+  );
+};
+
+// وصف الفقرة: يظهر ملفوفاً حتى ثلاثة أسطر من أوله (كان سطراً واحداً مقصوصاً)، والنقر عليه يفتح
+// حقل تعديل يعرض النص كاملاً. dir="auto" يُظهر الوصف الإنجليزي من اليسار بترتيبه الصحيح
+const DescriptionCell: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        dir="auto"
+        rows={4}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
+        className="w-full field-sizing-content min-h-[4.5rem] bg-white border-0 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1.5 py-1 text-xs leading-relaxed resize-y"
+      />
+    );
+  }
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      dir="auto"
+      title={value}
+      onClick={() => setEditing(true)}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setEditing(true); } }}
+      className="line-clamp-3 font-bold text-slate-900 text-xs leading-relaxed px-1.5 py-1 rounded cursor-text hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+    >
+      {value}
+    </div>
+  );
+};
 
 interface BOQTableProps {
   items: BOQItem[];
@@ -22,6 +74,8 @@ interface BOQTableProps {
   deviationThreshold: number;
   bidderName: string;
   onUpdateItem: (index: number, field: keyof BOQItem, val: any) => void;
+  // تعديل مركّب لعدة حقول دفعة واحدة (انظر handleUpdateItemFields في App.tsx)
+  onUpdateFields: (index: number, patch: Partial<BOQItem>, logAction?: string) => void;
   onAddItem: () => void;
   onDeleteItem: (index: number) => void;
   onDuplicateItem: (index: number) => void;
@@ -35,6 +89,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   deviationThreshold,
   bidderName,
   onUpdateItem,
+  onUpdateFields,
   onAddItem,
   onDeleteItem,
   onDuplicateItem,
@@ -56,6 +111,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
     ro.observe(bar);
     return () => ro.disconnect();
   }, []);
+
+  // أعمدة الانحراف والمفرد الموزون والتقييم لا معنى لها قبل إدخال الكلفة التخمينية (كانت تكرر «-»
+  // و«بانتظار التخميني» في كل صف)، فتُخفى ويُعرض بدلها تنبيه واحد فوق الجدول
+  const hasEstimate = items.some(i => i.estimatedTotal > 0);
 
   // إحصائيات الأخطاء الحسابية وتعارض التفقيط
   const itemsWithErrors = items.filter(i => i.hasMathError || i.hasTextDiscrepancy);
@@ -235,6 +294,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           </button>
         </div>
 
+        {!hasEstimate && items.length > 0 && (
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs font-bold text-blue-900">
+            أعمدة نسبة الانحراف والمفرد الموزون والتقييم تظهر بعد إدخال المبلغ التخميني للفقرات.
+          </div>
+        )}
+
         {/* The Comprehensive BOQ Table
             على الشاشات العريضة (xl، والجدول يتسع فيها كاملاً) يُمرَّر الجدول مع الصفحة وتثبت عناوين
             أعمدته تحت شريط الشركة وسطر المجاميع أسفل الشاشة. على الأضيق يبقى صندوقاً بتمرير خاص،
@@ -250,10 +315,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">سعر المفرد للمجهز ✏️</th>
                 <th className="p-3 w-36 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">مبلغ المجهز الإجمالي 💰</th>
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني ✏️</th>
-                <th className="p-3 min-w-[240px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
-                <th className="p-3 w-28 text-center border-l border-slate-800">نسبة الانحراف %</th>
-                <th className="p-3 w-32 text-center border-l border-slate-800 bg-purple-950 text-purple-200">المفرد الموزون</th>
-                <th className="p-3 w-28 text-center border-l border-slate-800">التقييم</th>
+                <th className="p-3 min-w-[180px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
+                {hasEstimate && (
+                  <>
+                    <th className="p-3 w-28 text-center border-l border-slate-800">نسبة الانحراف %</th>
+                    <th className="p-3 w-32 text-center border-l border-slate-800 bg-purple-950 text-purple-200">المفرد الموزون</th>
+                    <th className="p-3 w-28 text-center border-l border-slate-800">التقييم</th>
+                  </>
+                )}
                 <th className="p-3 w-16 text-center">حذف</th>
               </tr>
             </thead>
@@ -261,7 +330,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <tbody className="divide-y divide-slate-200 bg-white font-medium">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
+                  <td colSpan={hasEstimate ? 11 : 8} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
                     <div className="max-w-md mx-auto space-y-2">
                       <p className="text-base text-slate-700 font-black">الجدول فارغ حالياً</p>
                       <p className="text-xs text-slate-500">
@@ -298,31 +367,24 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       />
                     </td>
 
-                    {/* Description
-                        dir="auto": الوصف الإنجليزي في حقل عربي كان يُظهر نهاية النص فقط وينقل الرقم
-                        في أوله إلى آخره، فيبدو أن القراءة ناقصة. الآن يظهر أوله والنص الكامل عند التمرير فوقه */}
+                    {/* Description */}
                     <td className="p-2 border-l border-slate-200">
-                      <input
-                        type="text"
-                        dir="auto"
-                        title={item.description}
+                      <DescriptionCell
                         value={item.description}
-                        onChange={(e) => onUpdateItem(actualIndex, 'description', e.target.value)}
-                        className="w-full bg-transparent border-0 font-bold text-slate-900 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-1 text-xs text-ellipsis"
+                        onChange={(v) => onUpdateItem(actualIndex, 'description', v)}
                       />
                     </td>
 
-                    {/* Quantity */}
+                    {/* Quantity — مع الإجمالي في تعديل واحد (تعديلان متتاليان كانا يُرجعان الكمية القديمة) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-slate-50/50">
                       <input
                         type="number"
                         value={item.quantity || 1}
                         onChange={(e) => {
                           const newQty = parseFloat(e.target.value) || 1;
-                          onUpdateItem(actualIndex, 'quantity', newQty);
-                          if (item.enteredUnitPrice) {
-                            onUpdateItem(actualIndex, 'bidderTotal', item.enteredUnitPrice * newQty);
-                          }
+                          onUpdateFields(actualIndex, item.enteredUnitPrice
+                            ? { quantity: newQty, bidderTotal: item.enteredUnitPrice * newQty }
+                            : { quantity: newQty });
                         }}
                         className="w-16 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
                       />
@@ -330,40 +392,38 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
                     {/* Bidder Unit Price (سعر المفرد)
                         حقول المبالغ الثلاثة بحد أدنى للعرض: بدونه يضيّق المتصفح أعمدتها حتى عرض كلمة العنوان،
-                        فيُقص أول الرقم (60000000 كان يظهر 0000) ويبدو كأن القراءة خاطئة */}
+                        فيُقص أول الرقم (60000000 كان يظهر 0000) ويبدو كأن القراءة خاطئة.
+                        السعر والإجمالي في تعديل واحد، ومعهما bidderUnitPrice الذي يبني منه calculateBOQMetrics
+                        الإجمالي إن كان صفراً (بدونه لا يمكن مسح سعر الفقرة) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/30">
-                      <input
-                        type="number"
-                        value={displayUnitPrice === 0 ? '' : displayUnitPrice}
-                        onChange={(e) => {
-                          const newUnit = parseFloat(e.target.value) || 0;
-                          onUpdateItem(actualIndex, 'enteredUnitPrice', newUnit);
-                          onUpdateItem(actualIndex, 'bidderTotal', newUnit * (item.quantity || 1));
-                        }}
-                        placeholder="0.00"
-                        className="w-full min-w-[6rem] no-spinner text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                      <AmountInput
+                        value={displayUnitPrice}
+                        onChange={(newUnit) => onUpdateFields(actualIndex, {
+                          enteredUnitPrice: newUnit,
+                          bidderUnitPrice: newUnit,
+                          bidderTotal: newUnit * (item.quantity || 1)
+                        })}
+                        className="w-full min-w-[7rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
-                    {/* Bidder Total Amount (مبلغ المجهز الإجمالي) */}
+                    {/* Bidder Total Amount (مبلغ المجهز الإجمالي) — مسحه يمسح سعر المفرد معه، وإلا أعاده الحساب */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/60 font-mono font-black text-indigo-950 text-xs">
-                      <input
-                        type="number"
-                        value={item.bidderTotal === 0 ? '' : item.bidderTotal}
-                        onChange={(e) => onUpdateItem(actualIndex, 'bidderTotal', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full min-w-[6rem] no-spinner text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                      <AmountInput
+                        value={item.bidderTotal}
+                        onChange={(v) => onUpdateFields(actualIndex, v === 0
+                          ? { bidderTotal: 0, bidderUnitPrice: 0, enteredUnitPrice: 0 }
+                          : { bidderTotal: v })}
+                        className="w-full min-w-[7rem] text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
                     {/* Estimated Total (المبلغ التخميني) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-blue-50/40">
-                      <input
-                        type="number"
-                        value={item.estimatedTotal === 0 ? '' : item.estimatedTotal}
-                        onChange={(e) => onUpdateItem(actualIndex, 'estimatedTotal', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full min-w-[6rem] no-spinner text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
+                      <AmountInput
+                        value={item.estimatedTotal}
+                        onChange={(v) => onUpdateItem(actualIndex, 'estimatedTotal', v)}
+                        className="w-full min-w-[7rem] text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
                       />
                     </td>
 
@@ -383,9 +443,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                             <div className="flex items-center gap-1.5 mt-1 mr-5">
                               <button
                                 onClick={() => {
+                                  // التصحيح وإزالة العلامة في تعديل واحد: كانا تعديلين فيلغي الثاني الأول،
+                                  // فتختفي العلامة ويبقى المبلغ الخاطئ
                                   const mathCorrect = (item.enteredUnitPrice || 0) * (item.quantity || 1);
-                                  onUpdateItem(actualIndex, 'bidderTotal', mathCorrect);
-                                  onUpdateItem(actualIndex, 'hasMathError', false);
+                                  onUpdateFields(actualIndex, { bidderTotal: mathCorrect, hasMathError: false },
+                                    'اعتماد تصحيح خطأ الضرب بقرار اللجنة');
                                 }}
                                 className="bg-rose-700 hover:bg-rose-800 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
                                 title="تصحيح مبلغ الفقرة لحاصل ضرب المفرد في الكمية"
@@ -412,8 +474,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                                   if (item.writtenText) {
                                     const parsed = parseArabicTextToNumber(item.writtenText);
                                     if (parsed && parsed > 0) {
-                                      onUpdateItem(actualIndex, 'bidderTotal', parsed);
-                                      onUpdateItem(actualIndex, 'hasTextDiscrepancy', false);
+                                      onUpdateFields(actualIndex, { bidderTotal: parsed, hasTextDiscrepancy: false },
+                                        'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة');
                                     }
                                   }
                                 }}
@@ -453,6 +515,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       </div>
                     </td>
 
+                    {hasEstimate && (<>
                     {/* Deviation % */}
                     <td className="p-2 text-center border-l border-slate-200">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
@@ -501,6 +564,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         </span>
                       )}
                     </td>
+                    </>)}
 
                     {/* Actions */}
                     <td className="p-2 text-center">
@@ -536,21 +600,21 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-slate-400">
                   -
                 </td>
-                <td className="p-3 text-center border-l border-slate-800 font-mono text-indigo-300 text-sm">
+                <td className="p-3 text-center border-l border-slate-800 font-mono text-indigo-300 text-sm whitespace-nowrap">
                   {items.reduce((s, i) => s + i.bidderTotal, 0).toLocaleString()} د.ع
                 </td>
-                <td className="p-3 text-center border-l border-slate-800 font-mono text-blue-300 text-sm">
+                <td className="p-3 text-center border-l border-slate-800 font-mono text-blue-300 text-sm whitespace-nowrap">
                   {items.reduce((s, i) => s + i.estimatedTotal, 0).toLocaleString()} د.ع
                 </td>
                 <td className="p-3 text-right border-l border-slate-800 text-amber-300">
                   {itemsWithErrors.length > 0 ? `⚠ (${itemsWithErrors.length}) فقرة تحتاج مراجعة واعتماد تصحيح` : 'كافة الفقرات سليمة ✓'}
                 </td>
-                <td className="p-3 text-center border-l border-slate-800 font-mono text-rose-300">
-                  {items.some(i => i.estimatedTotal > 0)
-                    ? `${(((items.reduce((s, i) => s + i.bidderTotal, 0) - items.reduce((s, i) => s + i.estimatedTotal, 0)) / (items.reduce((s, i) => s + i.estimatedTotal, 0) || 1)) * 100).toFixed(2)}%`
-                    : '-'}
-                </td>
-                <td colSpan={3} className="p-3 text-center font-mono text-slate-400">
+                {hasEstimate && (
+                  <td className="p-3 text-center border-l border-slate-800 font-mono text-rose-300">
+                    {`${(((items.reduce((s, i) => s + i.bidderTotal, 0) - items.reduce((s, i) => s + i.estimatedTotal, 0)) / (items.reduce((s, i) => s + i.estimatedTotal, 0) || 1)) * 100).toFixed(2)}%`}
+                  </td>
+                )}
+                <td colSpan={hasEstimate ? 3 : 1} className="p-3 text-center font-mono text-slate-400">
                   -
                 </td>
               </tr>

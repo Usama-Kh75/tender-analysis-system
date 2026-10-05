@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatPercent, formatCurrency } from '../../utils/calculations';
+import { hasBidAmounts, hasNoEstimate, isCommerciallyExcluded } from '../../utils/recommendation';
 
 interface MultiBidderMatrixProps {
   isOpen: boolean;
@@ -32,9 +33,17 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
 
   if (!isOpen) return null;
 
-  const sortedBidders = [...project.bidders].sort((a, b) => {
-    return Math.abs(a.totals.totalDeviationPercent) - Math.abs(b.totals.totalDeviationPercent);
-  });
+  // الترتيب نفسه في خلاصة الترسية: من لها مبالغ أولاً، والمستبعد (بقرار اللجنة أو بالانحراف) بعدها،
+  // ثم الأقل مبلغاً. كان الترتيب بأقرب انحراف إلى الصفر، فقبل الكلفة التخمينية (كل الانحرافات صفر)
+  // تصير أول شركة في القائمة «الأفضل سعرياً» ولو كانت بلا مبالغ
+  const noEstimate = hasNoEstimate(project);
+  const isOut = (b: Bidder) => b.status === 'disqualified' || isCommerciallyExcluded(b, project.deviationThreshold);
+  const sortedBidders = [...project.bidders].sort((a, b) =>
+    Number(!hasBidAmounts(a)) - Number(!hasBidAmounts(b))
+    || Number(isOut(a)) - Number(isOut(b))
+    || a.totals.totalBidderAmount - b.totals.totalBidderAmount
+  );
+  const bestId = sortedBidders.find(b => hasBidAmounts(b) && !isOut(b))?.id;
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +67,7 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
               <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
                 مصفوفة المقارنة الشاملة للمناقصين والعطاءات
                 <span className="bg-indigo-500/30 text-indigo-300 text-xs px-2 py-0.5 rounded-full font-mono">
-                  {project.bidders.length} عروض
+                  {project.bidders.length} شركات
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -115,7 +124,8 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* تمرير أفقي بدل القص: عمود «إجراءات» كان يُقص على اليسار حين تظهر أعمدة الانحراف كلها */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-xs">
             <table className="w-full text-xs sm:text-sm text-right border-collapse">
               <thead className="bg-slate-800 text-white font-bold">
                 <tr>
@@ -134,7 +144,10 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
               <tbody className="divide-y divide-slate-200 font-medium">
                 {sortedBidders.map((bidder, index) => {
                   const isActive = bidder.id === project.activeBidderId;
-                  const isFirst = index === 0;
+                  const isFirst = bidder.id === bestId;
+                  const isEmpty = !hasBidAmounts(bidder);
+                  // قبل الكلفة التخمينية أو لشركة بلا مبالغ: «—» بدل أصفار خضراء توحي بالمطابقة
+                  const noAnalysis = noEstimate || isEmpty;
 
                   return (
                     <tr 
@@ -144,9 +157,11 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                       }`}
                     >
                       <td className="p-3 text-center">
-                        {isFirst ? (
+                        {isEmpty ? (
+                          <span className="text-slate-400 font-bold">—</span>
+                        ) : isFirst ? (
                           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 font-black text-xs border border-amber-300">
-                            1
+                            {index + 1}
                           </span>
                         ) : (
                           <span className="text-slate-500 font-bold">{index + 1}</span>
@@ -157,7 +172,12 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                           {bidder.name}
                           {isFirst && (
                             <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                              الأفضل سعرياً
+                              {noEstimate ? 'الأقل مبلغاً' : 'الأفضل سعرياً'}
+                            </span>
+                          )}
+                          {isEmpty && (
+                            <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                              بلا مبالغ بعد
                             </span>
                           )}
                           {isActive && (
@@ -173,6 +193,11 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                       <td className="p-3 text-center font-extrabold text-indigo-700">
                         {formatCurrency(bidder.totals.totalBidderAmount, project.currency)}
                       </td>
+                      {noAnalysis ? (
+                        <td colSpan={5} className="p-3 text-center text-xs font-bold text-slate-400">
+                          {isEmpty ? '— لم تُدخل مبالغ هذه الشركة —' : '— بانتظار الكلفة التخمينية —'}
+                        </td>
+                      ) : (<>
                       <td className={`p-3 text-center font-bold ${
                         bidder.totals.overallDiffAmount > 0 ? 'text-rose-600' : 'text-emerald-600'
                       }`}>
@@ -196,6 +221,7 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                       <td className="p-3 text-center font-mono font-bold text-purple-700">
                         {bidder.totals.overallPriceRatio.toFixed(4)}
                       </td>
+                      </>)}
                       <td className="p-3 text-center">
                         <select
                           value={bidder.status}

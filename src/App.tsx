@@ -13,6 +13,7 @@ import {
   resetAllData
 } from './utils/storageService';
 import { calculateBOQMetrics } from './utils/calculations';
+import { hasBidAmounts } from './utils/recommendation';
 import { exportTenderToExcel } from './utils/excelService';
 import { TenderProject, Bidder, BOQItem, ContractType } from './types/tender';
 
@@ -128,16 +129,27 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
+  // فقرة بلا أي سعر للمجهز (للتصفير ولشركة جديدة): تُصفَّر حقول السعر كلها معاً، لأن تصفير الإجمالي
+  // وحده يجعل calculateBOQMetrics يعيد بناءه من سعر المفرد × الكمية فتبقى المبالغ أو تُنسخ لشركة أخرى
+  const withoutBidderPrices = (item: BOQItem): Partial<BOQItem> => ({
+    ...item,
+    bidderTotal: 0,
+    bidderUnitPrice: 0,
+    enteredUnitPrice: 0,
+    enteredBidderTotal: 0,
+    writtenText: undefined,
+    hasMathError: undefined,
+    hasTextDiscrepancy: undefined,
+    correctionRationale: undefined
+  });
+
   // Clear Bidder Prices Only
   const handleClearBidderPrices = () => {
     if (!window.confirm(`هل أنت متأكد من رغبتك في تصفير مبالغ المجهز (${activeBidder.name}) للبدء في تعبئتها من جديد؟`)) {
       return;
     }
 
-    const resetItems = activeBidder.items.map(item => ({
-      ...item,
-      bidderTotal: 0
-    }));
+    const resetItems = activeBidder.items.map(withoutBidderPrices);
 
     const recalc = calculateBOQMetrics(resetItems, currentProject.deviationThreshold);
 
@@ -192,17 +204,29 @@ export function App() {
     });
   };
 
-  // Update Item — يُطبَّق على كل المجهزين إن كان الحقل من حقول الكلفة التخمينية المشتركة، وإلا على المجهز النشط فقط
-  const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) => {
-    const oldVal = (activeBidder.items[index] as any)[field];
-    const isSharedField = SHARED_ESTIMATE_FIELDS.includes(field);
+  // Update Item — تعديل عدة حقول لفقرة واحدة دفعة واحدة: الحقول المشتركة (هوية الفقرة والكلفة التخمينية)
+  // على كل المجهزين، وحقول السعر على المجهز النشط فقط.
+  // التعديل المركّب (الكمية مع الإجمالي، أو التصحيح مع إزالة علامة الخطأ) يجب أن يُرسل هنا في استدعاء واحد:
+  // استدعاءان متتاليان يُبنى كلاهما على المشروع نفسه قبل التعديل فيلغي الثاني الأول
+  // (كان «اعتماد حاصل الضرب» يزيل علامة الخطأ ويترك المبلغ الخاطئ)
+  const handleUpdateItemFields = (index: number, patch: Partial<BOQItem>, logAction?: string) => {
+    const before = activeBidder.items[index];
+    if (!before) return;
+    const fields = Object.keys(patch) as (keyof BOQItem)[];
+    const sharedPatch: Partial<BOQItem> = {};
+    const ownPatch: Partial<BOQItem> = {};
+    fields.forEach(f => {
+      (SHARED_ESTIMATE_FIELDS.includes(f) ? sharedPatch : ownPatch as any)[f] = patch[f];
+    });
+    const hasShared = Object.keys(sharedPatch).length > 0;
 
     const updatedBidders = currentProject.bidders.map(b => {
-      if (!isSharedField && b.id !== activeBidder.id) return b;
+      const isActive = b.id === activeBidder.id;
+      if (!isActive && !hasShared) return b;
       if (!b.items[index]) return b;
 
       const updatedRaw = [...b.items];
-      updatedRaw[index] = { ...updatedRaw[index], [field]: val };
+      updatedRaw[index] = { ...updatedRaw[index], ...sharedPatch, ...(isActive ? ownPatch : {}) };
       const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
       return { ...b, items: recalculation.items, totals: recalculation.totals };
     });
@@ -213,17 +237,21 @@ export function App() {
       updatedAt: new Date().toISOString()
     };
 
-    if (['estimatedTotal', 'bidderTotal', 'description'].includes(field as string)) {
+    fields.filter(f => ['estimatedTotal', 'bidderTotal', 'description'].includes(f as string)).forEach(f => {
+      const isShared = SHARED_ESTIMATE_FIELDS.includes(f);
       updatedProj = addAuditLog(
         updatedProj,
-        isSharedField ? 'تعديل الكلفة التخمينية (مشتركة لكل المجهزين)' : 'تعديل قيمة مالية',
-        `تم تعديل حقل (${String(field)}) للفقرة رقم (${activeBidder.items[index]?.itemNo}) من (${oldVal}) إلى (${val})`,
-        { itemNo: activeBidder.items[index]?.itemNo, oldValue: oldVal, newValue: val }
+        logAction || (isShared ? 'تعديل الكلفة التخمينية (مشتركة لكل المجهزين)' : 'تعديل قيمة مالية'),
+        `تم تعديل حقل (${String(f)}) للفقرة رقم (${before.itemNo}) من (${(before as any)[f]}) إلى (${(patch as any)[f]})`,
+        { itemNo: before.itemNo, oldValue: (before as any)[f], newValue: (patch as any)[f] }
       );
-    }
+    });
 
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
+
+  const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) =>
+    handleUpdateItemFields(index, { [field]: val } as Partial<BOQItem>);
 
   // Add Item — يُضاف سطر فارغ لكافة المجهزين معاً، لأن الفقرة (الوصف/الوحدة/الكمية/الكلفة التخمينية) واحدة للمشروع
   const handleAddItem = () => {
@@ -516,13 +544,14 @@ export function App() {
 
   // Add New Bidder
   const handleAddNewBidder = (name?: string) => {
-    const targetName = name || prompt('أدخل اسم الشركة / المجهز الجديد:') || `شركة جديدة (${currentProject.bidders.length + 1})`;
-    
-    // استنساخ الفقرات مع تصفير أسعار المجهز لإدخال عطائه الخاص
+    // إلغاء نافذة الاسم أو تركه فارغاً لا يضيف شركة (كان يضيف «شركة جديدة (ن)» فارغة تظهر في المقارنة)
+    const targetName = (name || prompt('أدخل اسم الشركة / المجهز الجديد:') || '').trim();
+    if (!targetName) return;
+
+    // استنساخ الفقرات بلا أي سعر لإدخال عطاء الشركة الخاص
     const clonedItems = activeBidder.items.map(item => ({
-      ...item,
-      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-      bidderTotal: 0
+      ...withoutBidderPrices(item),
+      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
     }));
 
     const recalc = calculateBOQMetrics(clonedItems, currentProject.deviationThreshold);
@@ -848,9 +877,11 @@ export function App() {
                   </button>
                 </span>
               )}
-              <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
-                {currentProject.entityName}
-              </span>
+              {currentProject.entityName && (
+                <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
+                  {currentProject.entityName}
+                </span>
+              )}
               {contractTypeInfo(currentProject.contractType) ? (
                 <span className="bg-indigo-50 text-indigo-900 text-xs font-bold px-3.5 py-1 rounded-full border border-indigo-200">
                   نوع العقد: {contractTypeInfo(currentProject.contractType)!.label}
@@ -929,7 +960,7 @@ export function App() {
                     >
                       {currentProject.bidders.map(b => (
                         <option key={b.id} value={b.id} className="text-slate-900">
-                          {b.name} ({b.status === 'recommended' ? '★ موصى بالترسية' : b.status})
+                          {b.name}{b.status === 'recommended' ? ' (★ موصى بالترسية)' : b.status === 'disqualified' ? ' (مستبعد)' : ''}
                         </option>
                       ))}
                     </select>
@@ -1032,6 +1063,7 @@ export function App() {
               deviationThreshold={currentProject.deviationThreshold}
               bidderName={activeBidder.name}
               onUpdateItem={handleUpdateItem}
+              onUpdateFields={handleUpdateItemFields}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}
@@ -1055,7 +1087,7 @@ export function App() {
             />
           ) : (
             <ChartsView
-              bidders={currentProject.bidders}
+              bidders={currentProject.bidders.filter(hasBidAmounts)}
               currency={currentProject.currency}
               deviationThreshold={currentProject.deviationThreshold}
             />
