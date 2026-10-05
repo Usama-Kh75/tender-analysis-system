@@ -638,7 +638,7 @@ export async function extractBOQFromImage(
     return {
       items,
       rawText: text,
-      confidence: ret.data.confidence || 80
+      confidence: typeof ret.data.confidence === 'number' ? Math.round(ret.data.confidence) : 0
     };
   } catch (error) {
     console.error('OCR Extraction Error:', error);

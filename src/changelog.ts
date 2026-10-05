@@ -23,6 +23,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.8.0',
+    date: '2026-10-05',
+    notes: [
+      'دوّر كل صفحات الملف بضغطة واحدة بزر «تدوير الكل» في نافذة الاستخراج.',
+      'ينبّهك النظام حين تكون جودة القراءة منخفضة، ويطلب تأكيدك قبل إدراج الفقرات في الجدول.'
+    ]
+  },
+  {
     version: '1.7.0',
     date: '2026-10-05',
     notes: [

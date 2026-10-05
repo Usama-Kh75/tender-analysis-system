@@ -36,6 +36,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [extractedItems, setExtractedItems] = useState<Partial<BOQItem>[]>([]);
+  // صفحات قرأها المحرك الموضعي بثقة منخفضة: تنبيه فوق النتائج وتأكيد صريح قبل الإدراج
+  const [lowConfidencePages, setLowConfidencePages] = useState<{ page: number; confidence: number }[]>([]);
   const [bidderName, setBidderName] = useState<string>('');
   const [destinationMode, setDestinationMode] = useState<'bidder_only' | 'estimated_only' | 'new_bidder'>('bidder_only');
   const [engineMode, setEngineMode] = useState<'ai_vision' | 'local_ocr'>('ai_vision');
@@ -127,8 +129,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
+  // متوسط ثقة المحرك الموضعي دون هذا الحد = قراءة غير موثوقة. قيس على عينات: جدول بخطوط شبكية 47%،
+  // ومقلوب 90° 41%، وصفحة ممسوحة 51% (كلها مشوّهة)، وجدول بلا خطوط 82% (صحيح)
+  const LOW_CONFIDENCE = 65;
+
   // نتيجة قراءة صفحة واحدة: نجاح (مع نماذج Gemini المكتشفة لإعادة استخدامها) أو خطأ يوقف المعالجة
-  type PageResult = { ok: true; models?: string[] } | { ok: false; error: string };
+  type PageResult = { ok: true; models?: string[]; confidence?: number } | { ok: false; error: string };
 
   const processImage = async (dataUrl: string, activeKey: string, cachedModels?: string[]): Promise<PageResult> => {
     setProgressPercent(10);
@@ -147,7 +153,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         setProgressStatus(status);
       });
       setExtractedItems(prev => [...prev, ...result.items]);
-      return { ok: true };
+      return { ok: true, confidence: result.confidence };
     } catch (err: any) {
       return { ok: false, error: err?.message || 'تأكد من صحة المفتاح أو الاتصال' };
     }
@@ -172,6 +178,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
 
     setExtractedItems([]); // تنظيف النتائج السابقة
+    setLowConfidencePages([]);
     setIsLoading(true);
     try {
       // استكشاف النماذج النشطة مرة واحدة فقط وإعادة استخدامها لكل الصفحات
@@ -200,6 +207,10 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
           break;
         }
         if (result.models && result.models.length > 0) cachedModels = result.models;
+        if (typeof result.confidence === 'number' && result.confidence < LOW_CONFIDENCE) {
+          const confidence = result.confidence;
+          setLowConfidencePages(prev => [...prev, { page: i + 1, confidence }]);
+        }
       }
     } finally {
       setIsLoading(false);
@@ -249,29 +260,50 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   };
 
   // تدوير الصورة النشطة 90 درجة لتصحيح اتجاه المسح الضوئي / الكاميرا
-  const handleRotateImage = () => {
-    if (imagePreviews.length === 0) return;
-    const currentImg = imagePreviews[activeImageIndex];
-    if (!currentImg) return;
+  // تدوير صورة 90° مع عقارب الساعة
+  const rotateDataUrl = (src: string): Promise<string> => new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       canvas.width = img.height;
       canvas.height = img.width;
       const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((90 * Math.PI) / 180);
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        const rotatedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        setImagePreviews(prev => prev.map((p, i) => i === activeImageIndex ? rotatedDataUrl : p));
-      }
+      if (!ctx) { resolve(src); return; }
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((90 * Math.PI) / 180);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
     };
-    img.src = currentImg;
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+
+  const handleRotateImage = async () => {
+    const currentImg = imagePreviews[activeImageIndex];
+    if (!currentImg) return;
+    const index = activeImageIndex;
+    const rotated = await rotateDataUrl(currentImg);
+    setImagePreviews(prev => prev.map((p, i) => i === index ? rotated : p));
+  };
+
+  // ملف ممسوح بالعرض تكون كل صفحاته مقلوبة عادةً: تدويرها كلها بضغطة بدل صفحة صفحة
+  const handleRotateAll = async () => {
+    if (imagePreviews.length === 0) return;
+    setIsLoading(true);
+    try {
+      const rotated = await Promise.all(imagePreviews.map(rotateDataUrl));
+      setImagePreviews(rotated);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleApply = () => {
     if (extractedItems.length === 0) return;
+    if (lowConfidencePages.length > 0 && !window.confirm(
+      `جودة القراءة منخفضة في الصفحة (${lowConfidencePages.map(p => p.page).join('، ')})، وقد تكون الفقرات المستخرجة مشوّهة.\n\n` +
+      'هل تريد إدراجها في جدول المناقصة رغم ذلك؟'
+    )) return;
     onApplyExtractedItems(extractedItems, destinationMode, bidderName.trim() || undefined);
     onClose();
   };
@@ -477,6 +509,16 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     >
                       <span>🔄 تدوير 90°</span>
                     </button>
+                    {imagePreviews.length > 1 && (
+                      <button
+                        onClick={handleRotateAll}
+                        disabled={isLoading}
+                        className="text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="تدوير كل الصفحات 90 درجة مع عقارب الساعة"
+                      >
+                        <span>🔄 تدوير الكل</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setImagePreviews([]);
@@ -568,6 +610,17 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   </div>
                 </div>
 
+                {/* تنبيه جودة القراءة: يظهر حتى لو لم يُستخرج أي سطر، فلا تبدو القراءة الفاشلة كأنها لم تبدأ */}
+                {!isLoading && lowConfidencePages.length > 0 && (
+                  <div role="alert" className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs leading-relaxed">
+                    <div className="font-black mb-0.5">
+                      ⚠️ جودة القراءة منخفضة في الصفحة ({lowConfidencePages.map(p => `${p.page} — ثقة ${p.confidence}%`).join('، ')})
+                      {extractedItems.length === 0 && ' — لم يُستخرج أي سطر'}
+                    </div>
+                    <div>قد تكون الفقرات مشوّهة. الأسباب الشائعة: صفحة مقلوبة، أو خطوط الجدول، أو مسح غير واضح. دوّر الصفحات وأعد القراءة، أو استخدم محرك الذكاء الاصطناعي (Gemini)، وراجع الفقرات قبل الإدراج.</div>
+                  </div>
+                )}
+
                 {/* Progress / Loading State */}
                 {isLoading ? (
                   <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
@@ -593,6 +646,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     </p>
                   </div>
                 ) : (
+                  <>
                   <div className="max-h-[380px] overflow-auto border border-slate-200 rounded-2xl">
                     <table className="w-full text-xs text-right border-collapse">
                       <thead className="bg-slate-900 text-white sticky top-0 z-10 font-black">
@@ -671,6 +725,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
 
                 {/* Add Row & Total Summary */}
