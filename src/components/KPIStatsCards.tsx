@@ -25,39 +25,46 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
 }) => {
   const isHighTotalDeviation = Math.abs(totals.totalDeviationPercent) > deviationThreshold;
 
+  // المبالغ الكبيرة (مئات المليارات شائعة في المناقصات) كانت تخرج عن حدود البطاقة:
+  // يصغر الخط مع طول الرقم، ويُكسر داخل البطاقة إن طال أكثر بدل أن يتجاوزها
+  const amountSize = (value: number) => {
+    const len = formatNumber(value).length;
+    return len <= 14 ? 'text-lg' : len <= 18 ? 'text-base' : 'text-sm';
+  };
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-6">
       
       {/* 1. إجمالي التخميني */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between hover:border-slate-300 transition">
+      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between hover:border-slate-300 transition min-w-0">
         <div className="flex items-center justify-between text-slate-500 mb-1">
           <span className="text-xs font-semibold">إجمالي الكلفة التخمينية</span>
           <Calculator className="w-4 h-4 text-blue-600" />
         </div>
-        <div className="text-lg font-black text-slate-900 tracking-tight">
-          {formatNumber(totals.totalEstimatedAmount)}
-          <span className="text-[11px] font-normal text-slate-500 mr-1">{currency}</span>
+        <div className={`${amountSize(totals.totalEstimatedAmount)} font-black text-slate-900 tracking-tight`}>
+          <span className="break-all">{formatNumber(totals.totalEstimatedAmount)}</span>
+          <span className="text-[11px] font-normal text-slate-500 mr-1 whitespace-nowrap">{currency}</span>
         </div>
         <div className="text-[11px] text-slate-500 mt-1">الأساس المرجعي للجنة</div>
       </div>
 
       {/* 2. إجمالي المجهز */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between hover:border-slate-300 transition">
+      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between hover:border-slate-300 transition min-w-0">
         <div className="flex items-center justify-between text-slate-500 mb-1">
           <span className="text-xs font-semibold">إجمالي مبلغ المجهز</span>
           <Layers className="w-4 h-4 text-indigo-600" />
         </div>
-        <div className="text-lg font-black text-slate-900 tracking-tight">
-          {formatNumber(totals.totalBidderAmount)}
-          <span className="text-[11px] font-normal text-slate-500 mr-1">{currency}</span>
+        <div className={`${amountSize(totals.totalBidderAmount)} font-black text-slate-900 tracking-tight`}>
+          <span className="break-all">{formatNumber(totals.totalBidderAmount)}</span>
+          <span className="text-[11px] font-normal text-slate-500 mr-1 whitespace-nowrap">{currency}</span>
         </div>
-        <div className="text-[11px] text-slate-500 mt-1">
+        <div className="text-[11px] text-slate-500 mt-1 break-all">
           فرق: {formatCurrency(totals.overallDiffAmount, currency)}
         </div>
       </div>
 
       {/* 3. النسبة السعرية */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between hover:border-slate-300 transition">
+      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between hover:border-slate-300 transition min-w-0">
         <div className="flex items-center justify-between text-slate-500 mb-1">
           <span className="text-xs font-semibold">النسبة السعرية للمجهز</span>
           <Scale className="w-4 h-4 text-purple-600" />
