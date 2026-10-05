@@ -59,7 +59,7 @@ const DescriptionCell: React.FC<{ value: string; onChange: (v: string) => void }
       dir="auto"
       title={value}
       onClick={() => setEditing(true)}
-      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setEditing(true); } }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(true); } }}
       className="line-clamp-3 font-bold text-slate-900 text-xs leading-relaxed px-1.5 py-1 rounded cursor-text hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
     >
       {value}

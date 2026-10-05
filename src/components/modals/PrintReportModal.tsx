@@ -135,9 +135,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       <td className="border border-slate-300 p-2 text-center">{idx + 1}</td>
                       <td className="border border-slate-300 p-2 font-bold">{b.name}</td>
                       <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(b.totals.totalBidderAmount)}</td>
-                      <td className="border border-slate-300 p-2 text-center">{formatPercent(b.totals.totalDeviationPercent)}</td>
-                      <td className="border border-slate-300 p-2 text-center">{b.totals.partialDeviationPercent.toFixed(2)}%</td>
-                      <td className="border border-slate-300 p-2 text-center font-mono">{b.totals.overallPriceRatio.toFixed(4)}</td>
+                      {/* قبل الكلفة التخمينية: «—» بدل أصفار توحي بالمطابقة */}
+                      {rec.kind === 'no-estimate' ? (
+                        <td colSpan={3} className="border border-slate-300 p-2 text-center text-slate-500">بانتظار الكلفة التخمينية</td>
+                      ) : (<>
+                        <td className="border border-slate-300 p-2 text-center">{formatPercent(b.totals.totalDeviationPercent)}</td>
+                        <td className="border border-slate-300 p-2 text-center">{b.totals.partialDeviationPercent.toFixed(2)}%</td>
+                        <td className="border border-slate-300 p-2 text-center font-mono">{b.totals.overallPriceRatio.toFixed(4)}</td>
+                      </>)}
                       <td className="border border-slate-300 p-2 text-center font-bold">
                         {isRejected ? (
                           <span className="text-rose-800">مستبعد بقرار اللجنة</span>
@@ -194,16 +199,17 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                     <td className="border border-slate-300 p-2 text-center font-bold">{item.itemNo}</td>
                     <td className="border border-slate-300 p-2 text-center font-bold text-blue-900">{formatNumber(item.estimatedTotal)}</td>
                     <td className="border border-slate-300 p-2 text-center font-bold text-indigo-900">{formatNumber(item.bidderTotal)}</td>
+                    {/* فقرة بلا مبلغ تخميني لا تُقيَّم: «—» بدل 0.00% و«متوازن» */}
                     <td className="border border-slate-300 p-2 text-center font-bold">
-                      {item.deviationPercent > 0 ? '+' : ''}{item.deviationPercent.toFixed(2)}%
+                      {item.estimatedTotal > 0 ? `${item.deviationPercent > 0 ? '+' : ''}${item.deviationPercent.toFixed(2)}%` : '—'}
                     </td>
                     <td className="border border-slate-300 p-2 text-center font-bold text-rose-800">
                       {item.deviatedAmount > 0 ? formatNumber(item.deviatedAmount) : '-'}
                     </td>
-                    <td className="border border-slate-300 p-2 text-center font-mono">{item.priceRatio.toFixed(4)}</td>
-                    <td className="border border-slate-300 p-2 text-center font-bold text-purple-900">{formatNumber(item.newPrice)}</td>
+                    <td className="border border-slate-300 p-2 text-center font-mono">{item.estimatedTotal > 0 ? item.priceRatio.toFixed(4) : '—'}</td>
+                    <td className="border border-slate-300 p-2 text-center font-bold text-purple-900">{item.estimatedTotal > 0 ? formatNumber(item.newPrice) : '—'}</td>
                     <td className="border border-slate-300 p-2 text-center font-bold">
-                      {item.isDeviated ? 'منحرفة' : 'متوازن'}
+                      {item.estimatedTotal > 0 ? (item.isDeviated ? 'منحرفة' : 'متوازن') : '—'}
                     </td>
                   </tr>
                 ))}

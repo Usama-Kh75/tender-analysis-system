@@ -96,7 +96,7 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
       }`}>
         <div className="flex items-center justify-between mb-1 opacity-90">
           <span className="text-xs font-bold">الانحراف الكلي</span>
-          {totals.totalDeviationPercent >= 0 ? (
+          {noEstimate ? null : totals.totalDeviationPercent >= 0 ? (
             <TrendingUp className={`w-4 h-4 ${isHighTotalDeviation ? 'text-rose-600' : 'text-emerald-600'}`} />
           ) : (
             <TrendingDown className={`w-4 h-4 ${isHighTotalDeviation ? 'text-rose-600' : 'text-emerald-600'}`} />
