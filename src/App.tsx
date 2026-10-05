@@ -24,7 +24,7 @@ import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
 
 import { SmartTableImportModal } from './components/modals/SmartTableImportModal';
-import { ImageOcrModal } from './components/modals/ImageOcrModal';
+import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -58,6 +58,8 @@ export function App() {
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
   const [smartImportDocType, setSmartImportDocType] = useState<'bidder' | 'estimated' | 'both'>('bidder');
   const [isOcrOpen, setIsOcrOpen] = useState(false);
+  // ملفات PDF/صور سلّمتها نافذة الاستيراد الموحّدة لنافذة القراءة بالذكاء الاصطناعي (مع الوجهة)
+  const [ocrHandoff, setOcrHandoff] = useState<OcrHandoff | null>(null);
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -92,8 +94,8 @@ export function App() {
   }, [projects]);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
-  const blockingWork = isOcrOpen ? 'استخراج من صورة / PDF'
-    : isSmartImportOpen ? 'استيراد جدول (Excel / Word)'
+  const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
+    : isSmartImportOpen ? 'استيراد جدول'
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isNewProjectOpen ? 'مناقصة جديدة'
     : null;
@@ -1086,7 +1088,6 @@ export function App() {
                 setSmartImportDocType('bidder');
                 setIsSmartImportOpen(true);
               }}
-              onOpenOcr={() => setIsOcrOpen(true)}
             />
           ) : activeTab === 'summary' ? (
             <ExecutiveSummaryView
@@ -1137,12 +1138,18 @@ export function App() {
         onApplyExtractedItems={handleApplyExtractedItems}
         currentBidderName={activeBidder.name}
         initialDocType={smartImportDocType}
+        onReadWithAi={(files, docType) => {
+          setIsSmartImportOpen(false);
+          setOcrHandoff({ id: Date.now(), files, destination: docType === 'estimated' ? 'estimated_only' : 'bidder_only' });
+          setIsOcrOpen(true);
+        }}
       />
 
       <ImageOcrModal
         isOpen={isOcrOpen}
         onClose={() => setIsOcrOpen(false)}
         onApplyExtractedItems={handleApplyExtractedItems}
+        handoff={ocrHandoff}
       />
 
       <MultiBidderMatrix

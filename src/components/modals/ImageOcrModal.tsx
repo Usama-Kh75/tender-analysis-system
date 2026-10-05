@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Upload,
@@ -15,20 +15,32 @@ import { BOQItem } from '../../types/tender';
 import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl } from '../../utils/ocrService';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 
+/**
+ * ملفات PDF أو صور سلّمتها نافذة الاستيراد الموحّدة مع وجهتها (جدول المجهز أو الكلفة التخمينية):
+ * تُحمَّل عند الفتح وتُضبط الوجهة، فلا يبحث المستخدم عن قائمة الوجهة بعد الرفع. id يميّز كل تسليم
+ */
+export interface OcrHandoff {
+  id: number;
+  files: File[];
+  destination: 'bidder_only' | 'estimated_only';
+}
+
 interface ImageOcrModalProps {
   isOpen: boolean;
   onClose: () => void;
   onApplyExtractedItems: (
-    items: Partial<BOQItem>[], 
-    mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean, 
+    items: Partial<BOQItem>[],
+    mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean,
     bidderName?: string
   ) => void;
+  handoff?: OcrHandoff | null;
 }
 
 export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   isOpen,
   onClose,
-  onApplyExtractedItems
+  onApplyExtractedItems,
+  handoff
 }) => {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
@@ -62,8 +74,6 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setApiKey(savedKey);
   }, []);
 
-  if (!isOpen) return null;
-
   const handleTestKey = async () => {
     if (!apiKey.trim()) return;
     setKeyTestStatus({ isTesting: true });
@@ -96,7 +106,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setImagePreviews(prev => [...prev, compressed]);
   };
 
-  const handleMultipleFiles = async (files: FileList) => {
+  const handleMultipleFiles = async (files: FileList | File[]) => {
     const accepted = Array.from(files).filter(f => f.type.startsWith('image/') || isPdfFile(f));
     if (accepted.length === 0) return;
     // نقرأ ونضغط كل الصفحات أولاً، ثم نضيفها دفعة واحدة بترتيب الرفع الأصلي
@@ -137,6 +147,23 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       setLowConfidencePages([]);
     }
   };
+
+  // تسليم من نافذة الاستيراد الموحّدة: بداية نظيفة بالوجهة المختارة ثم تحميل الملفات، مرة واحدة لكل تسليم
+  const lastHandoffId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isOpen || !handoff || handoff.id === lastHandoffId.current) return;
+    lastHandoffId.current = handoff.id;
+    setImagePreviews([]);
+    setExtractedItems([]);
+    setGeminiCheck(null);
+    setLowConfidencePages([]);
+    setReadAttempted(false);
+    setActiveImageIndex(0);
+    setDestinationMode(handoff.destination);
+    handleMultipleFiles(handoff.files);
+    // handleMultipleFiles تُعرَّف من جديد مع كل رسم؛ التسليم وحده هو ما يُطلق التحميل
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, handoff]);
 
   const handleRemoveImage = (index: number) => {
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
@@ -368,6 +395,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     onApplyExtractedItems(items, destinationMode, bidderName.trim() || undefined);
     onClose();
   };
+
+  // الخروج المبكر هنا لا في أول المكوّن: كل الخطافات (ومنها useEffect التسليم أعلاه) قبله
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">

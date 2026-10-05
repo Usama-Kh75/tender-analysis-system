@@ -16,6 +16,7 @@ import * as XLSX from 'xlsx';
 import { BOQItem } from '../../types/tender';
 import { parseArabicNumber } from '../../utils/calculations';
 import { auditBidderRows, BidderAuditReport, parseArabicTextToNumber } from '../../utils/bidderAuditEngine';
+import { isPdfFile } from '../../utils/pdfService';
 
 export type ImportDocType = 'bidder' | 'estimated' | 'both';
 export type ImportMode = 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace';
@@ -30,7 +31,12 @@ interface SmartTableImportModalProps {
   ) => void;
   currentBidderName: string;
   initialDocType?: ImportDocType;
+  // مدخل استيراد واحد لكل أنواع الملفات: PDF والصور تُسلَّم لنافذة القراءة بالذكاء الاصطناعي بنوع الجدول المختار
+  onReadWithAi?: (files: File[], docType: 'bidder' | 'estimated') => void;
 }
+
+// PDF أو صورة: تُقرأ بالذكاء الاصطناعي لا بمطابقة الأعمدة
+const isAiReadable = (f: File) => isPdfFile(f) || f.type.startsWith('image/');
 
 type ColumnRole = 'itemNo' | 'estimatedTotal' | 'unitPrice' | 'quantity' | 'bidderTotal' | 'writtenText' | 'description' | 'ignore';
 
@@ -39,7 +45,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   onClose,
   onApplyExtractedItems,
   currentBidderName,
-  initialDocType = 'bidder'
+  initialDocType = 'bidder',
+  onReadWithAi
 }) => {
   const [docType, setDocType] = useState<ImportDocType>(initialDocType);
   const [allRawData, setAllRawData] = useState<string[][]>([]);
@@ -233,11 +240,28 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     }
   };
 
-  // معالجة ملف Excel
-  const handleExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // توجيه الملفات بحسب نوعها: PDF والصور إلى القراءة بالذكاء الاصطناعي، وExcel وCSV إلى مطابقة الأعمدة هنا
+  const routeFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    const aiFiles = files.filter(isAiReadable);
+    if (aiFiles.length > 0) {
+      if (aiFiles.length !== files.length) {
+        alert('اختر نوعاً واحداً من الملفات في كل مرة: ملفات Excel، أو ملفات PDF وصور.');
+        return;
+      }
+      if (docType === 'both') {
+        // القراءة بالذكاء الاصطناعي تستخرج عمود مبالغ واحداً
+        alert('الجدول المتكامل (تخميني + مجهز) غير مدعوم لملفات PDF والصور. اختر «أسعار عرض المجهز» أو «جدول الكلفة التخمينية» ثم ارفع الملف.');
+        return;
+      }
+      onReadWithAi?.(aiFiles, docType);
+      return;
+    }
+    void handleExcelFile(files[0]);
+  };
 
+  // معالجة ملف Excel
+  const handleExcelFile = async (file: File) => {
     setIsProcessing(true);
     setSourceFileName(file.name);
 
@@ -502,21 +526,32 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* File Upload Box */}
-            <div 
+            <div
               onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); routeFiles(Array.from(e.dataTransfer.files || [])); }}
               className="border-2 border-dashed border-indigo-300 hover:border-indigo-600 bg-indigo-50/40 hover:bg-indigo-50/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-2xs"
             >
               <FileSpreadsheet className="w-10 h-10 text-indigo-600 group-hover:scale-110 transition mb-2" />
               <div className="text-sm font-black text-slate-900">
-                رفع ملف Excel ({docType === 'estimated' ? 'جدول الكلفة التخمينية' : 'جدول أسعار وعطاء المجهز'})
+                رفع ملف <bdi dir="ltr">Excel / PDF</bdi> أو صورة ({docType === 'estimated' ? 'جدول الكلفة التخمينية' : docType === 'both' ? 'جدول متكامل' : 'جدول أسعار وعطاء المجهز'})
               </div>
-              <div className="text-xs text-slate-500 mt-1">انقر لاختيار الملف من جهازك لتحليله وتدقيقه فوراً</div>
+              <div className="text-xs text-slate-500 mt-1">انقر للاختيار أو اسحب الملف وأفلته هنا</div>
+              <div className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                Excel يُقرأ بمطابقة الأعمدة، و<bdi dir="ltr">PDF</bdi> والصور بالذكاء الاصطناعي (يحتاج اتصالاً بالإنترنت)
+                {docType === 'both' && <span className="block text-amber-700 font-bold">الجدول المتكامل: ملفات Excel فقط</span>}
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.xls,.csv,.pdf,application/pdf,image/*"
+                multiple
                 className="hidden"
-                onChange={handleExcelFile}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  e.target.value = ''; // اختيار الملف نفسه مرة أخرى يُطلق التحميل من جديد
+                  routeFiles(files);
+                }}
               />
             </div>
 
@@ -530,6 +565,11 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                 <textarea
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
+                  onPaste={(e) => {
+                    // لقطة شاشة لجدول تُقرأ بالذكاء الاصطناعي بدل لصقها نصاً فارغاً
+                    const images = Array.from(e.clipboardData.files || []).filter(f => f.type.startsWith('image/'));
+                    if (images.length > 0) { e.preventDefault(); routeFiles(images); }
+                  }}
                   placeholder="انسخ أي جدول أو عمود مبالغ من Excel أو Word والصقه هنا..."
                   className="w-full h-20 bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />
