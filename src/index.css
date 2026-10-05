@@ -38,6 +38,17 @@
   background: #94a3b8;
 }
 
+/* حقول المبالغ: بلا أسهم الزيادة والنقصان (تغيّر السعر ديناراً واحداً فلا فائدة منها)، لأن Chrome
+   يحجز مكانها داخل الحقل حتى وهي مخفية فيُقص أول رقم من عشر خانات في العمود الضيق */
+@utility no-spinner {
+  appearance: textfield;
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 @media print {
   body {
     background: white !important;

@@ -706,15 +706,19 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                                 type="text"
                                 value={item.itemNo}
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'itemNo', e.target.value)}
-                                className="w-full text-center bg-transparent border-0 font-black"
+                                className="w-full min-w-[3rem] text-center bg-transparent border-0 font-black"
                               />
                             </td>
+                            {/* كما في جدول المناقصة: أول الوصف الإنجليزي ظاهر والنص كاملاً عند التمرير،
+                                وحقول المبالغ بحد أدنى للعرض كي لا يُقص أول الرقم فيبدو كأن القراءة خاطئة */}
                             <td className="p-1.5">
                               <input
                                 type="text"
+                                dir="auto"
+                                title={item.description}
                                 value={item.description}
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'description', e.target.value)}
-                                className="w-full bg-transparent border-0 font-bold text-slate-800"
+                                className="w-full bg-transparent border-0 font-bold text-slate-800 text-ellipsis"
                               />
                             </td>
                             <td className="p-1.5 text-center">
@@ -730,7 +734,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                                 type="number"
                                 value={item.enteredUnitPrice || ''}
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'enteredUnitPrice', parseFloat(e.target.value) || 0)}
-                                className="w-full text-center bg-white border border-indigo-200 rounded p-1 font-bold text-indigo-950"
+                                className="w-full min-w-[6rem] no-spinner text-center bg-white border border-indigo-200 rounded p-1 font-bold text-indigo-950"
                               />
                             </td>
                             <td className="p-1.5 text-center bg-indigo-50/40 font-mono font-black">
@@ -738,7 +742,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                                 type="number"
                                 value={item.bidderTotal || ''}
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'bidderTotal', parseFloat(e.target.value) || 0)}
-                                className="w-full text-center bg-white border border-indigo-300 rounded p-1 font-bold text-indigo-950"
+                                className="w-full min-w-[6rem] no-spinner text-center bg-white border border-indigo-300 rounded p-1 font-bold text-indigo-950"
                               />
                             </td>
                             <td className="p-1.5 text-[10px] text-slate-700">

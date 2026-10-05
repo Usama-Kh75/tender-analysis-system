@@ -287,23 +287,28 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       hasError ? 'bg-rose-50/50' : isDeviated ? 'bg-rose-50/20' : isSaving ? 'bg-emerald-50/15' : ''
                     }`}
                   >
-                    {/* Item No */}
+                    {/* Item No
+                        الحد الأدنى للعرض يمنع المتصفح من تضييق العمود: كان «1.15» يظهر «15» */}
                     <td className="p-2 text-center font-black text-slate-700 border-l border-slate-200 bg-slate-50/80">
                       <input
                         type="text"
                         value={item.itemNo}
                         onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
-                        className="w-full text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
+                        className="w-full min-w-[3.5rem] text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
                       />
                     </td>
 
-                    {/* Description */}
+                    {/* Description
+                        dir="auto": الوصف الإنجليزي في حقل عربي كان يُظهر نهاية النص فقط وينقل الرقم
+                        في أوله إلى آخره، فيبدو أن القراءة ناقصة. الآن يظهر أوله والنص الكامل عند التمرير فوقه */}
                     <td className="p-2 border-l border-slate-200">
                       <input
                         type="text"
+                        dir="auto"
+                        title={item.description}
                         value={item.description}
                         onChange={(e) => onUpdateItem(actualIndex, 'description', e.target.value)}
-                        className="w-full bg-transparent border-0 font-bold text-slate-900 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-1 text-xs"
+                        className="w-full bg-transparent border-0 font-bold text-slate-900 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-1 text-xs text-ellipsis"
                       />
                     </td>
 
@@ -323,7 +328,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       />
                     </td>
 
-                    {/* Bidder Unit Price (سعر المفرد) */}
+                    {/* Bidder Unit Price (سعر المفرد)
+                        حقول المبالغ الثلاثة بحد أدنى للعرض: بدونه يضيّق المتصفح أعمدتها حتى عرض كلمة العنوان،
+                        فيُقص أول الرقم (60000000 كان يظهر 0000) ويبدو كأن القراءة خاطئة */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/30">
                       <input
                         type="number"
@@ -334,7 +341,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           onUpdateItem(actualIndex, 'bidderTotal', newUnit * (item.quantity || 1));
                         }}
                         placeholder="0.00"
-                        className="w-full text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                        className="w-full min-w-[6rem] no-spinner text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
@@ -345,7 +352,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         value={item.bidderTotal === 0 ? '' : item.bidderTotal}
                         onChange={(e) => onUpdateItem(actualIndex, 'bidderTotal', parseFloat(e.target.value) || 0)}
                         placeholder="0.00"
-                        className="w-full text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                        className="w-full min-w-[6rem] no-spinner text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
@@ -356,7 +363,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         value={item.estimatedTotal === 0 ? '' : item.estimatedTotal}
                         onChange={(e) => onUpdateItem(actualIndex, 'estimatedTotal', parseFloat(e.target.value) || 0)}
                         placeholder="0.00"
-                        className="w-full text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
+                        className="w-full min-w-[6rem] no-spinner text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
                       />
                     </td>
 
@@ -427,8 +434,16 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           </div>
                         )}
 
-                        {/* 4. حالة السليم تماماً عند عدم وجود تفقيط أو أخطاء */}
-                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && (
+                        {/* 4. فقرة بلا مبلغ (لم تُسعَّر في العطاء «-» أو لم تُدخل بعد): ليست «سليمة» بل تُراجع مع الأصل */}
+                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal === 0 && (
+                          <div className="text-slate-500 font-bold flex items-center gap-1 text-[11px]">
+                            <AlertTriangle className="w-3.5 h-3.5 text-slate-400" />
+                            <span>لا مبلغ للمجهز — راجِع العطاء الأصلي</span>
+                          </div>
+                        )}
+
+                        {/* 5. حالة السليم تماماً عند عدم وجود تفقيط أو أخطاء */}
+                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal !== 0 && (
                           <div className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>سليم ومطابق حسابياً</span>
