@@ -257,6 +257,11 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       onReadWithAi?.(aiFiles, docType);
       return;
     }
+    // ملف جدول واحد في كل مرة (صفحات PDF والصور تُقبل معاً، أما Excel فكل ملف جدول مستقل)
+    if (files.length > 1) {
+      alert('اختر ملف Excel واحداً في كل مرة.');
+      return;
+    }
     void handleExcelFile(files[0]);
   };
 
