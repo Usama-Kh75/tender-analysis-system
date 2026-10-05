@@ -346,6 +346,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const unpricedCount = extractedItems.filter(i => i.unpriced).length;
   const missingAmountCount = extractedItems.filter(i => !i.unpriced && !((i.bidderTotal || 0) > 0)).length;
   const fmt = (n: number) => n.toLocaleString('en-US');
+  // اتجاه الفرق بالكلمات بدل إشارة سالبة تربك القراءة في السياق العربي
+  const diffWords = statedTotal === null ? ''
+    : `${extractedSum < statedTotal ? 'أقل' : 'أكثر'} منه بـ ${fmt(Math.abs(extractedSum - statedTotal))}`;
 
   const handleApply = () => {
     if (extractedItems.length === 0) return;
@@ -354,7 +357,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       'هل تريد إدراجها في جدول المناقصة رغم ذلك؟'
     )) return;
     if (totalMismatch && !window.confirm(
-      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) يختلف عن الإجمالي المكتوب في العطاء (${fmt(statedTotal!)}) بفرق (${fmt(extractedSum - statedTotal!)}).\n` +
+      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) يختلف عن الإجمالي المكتوب في العطاء (${fmt(statedTotal!)}): ${diffWords}.\n` +
       'قد تكون فقرة سقطت أو قُرئت خطأ.\n\nهل تريد إدراجها في جدول المناقصة رغم ذلك؟'
     )) return;
     // المبالغ المقروءة توضع في bidderTotal؛ عند «تعبئة الكلفة التخمينية» تُنقل إلى estimatedTotal
@@ -696,7 +699,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       {statedTotal === null
                         ? 'لم يُعثر على إجمالي مكتوب في العطاء لمقارنته بمجموع الفقرات — راجع الفقرات مع الأصل.'
                         : totalMismatch
-                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) يختلف عن الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>) بفرق (<bdi>{fmt(extractedSum - statedTotal)}</bdi>): قد تكون فقرة سقطت أو قُرئت خطأ، فراجعها مع الأصل قبل الإدراج.</>
+                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) يختلف عن الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>): {diffWords}. قد تكون فقرة سقطت أو قُرئت خطأ، فراجعها مع الأصل قبل الإدراج.</>
                         : <>✓ مجموع الفقرات المستخرجة يطابق الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>).</>}
                     </div>
                     {geminiCheck.statedText && <div className="mt-0.5">الإجمالي كتابةً في العطاء: {geminiCheck.statedText}</div>}

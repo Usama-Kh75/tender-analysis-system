@@ -429,12 +429,17 @@ export function App() {
             ? ext.description
             : (existing?.description || `فقرة ${itemNo}`);
 
+          // ...existing يحفظ حقول كل مجهز كاملة (سعر المفرد والتفقيط وعلامات الأخطاء وغير المسعّرة):
+          // كان الصف يُبنى من جديد بالإجمالي وحده فتُمحى بيانات التدقيق عند استيراد الكلفة التخمينية
           mergedItems.push({
+            ...(existing || {}),
             id: existing?.id || `item-${i + 1}-${Date.now()}`,
             itemNo,
             description: desc,
             quantity: ext?.quantity || existing?.quantity || 1,
             estimatedTotal: ext?.estimatedTotal !== undefined ? ext.estimatedTotal : (existing?.estimatedTotal || 0),
+            // تخميني جديد: يُصفَّر المفرد القديم ليُعاد حسابه منه (وإلا أعاد calculateBOQMetrics بناء القديم)
+            ...(ext?.estimatedTotal !== undefined ? { estimatedUnitPrice: 0 } : {}),
             bidderTotal: existing?.bidderTotal || 0 // الحفاظ التام على أسعار المجهز الحالي
           });
         }
@@ -469,6 +474,12 @@ export function App() {
       for (let i = 0; i < maxLen; i++) {
         const ext = extracted[i];
         const existing = activeBidder.items[i];
+
+        // صف قائم بعد آخر صف مستخرج يبقى كما هو كاملاً (كان يفقد سعر المفرد والتفقيط والعلامات)
+        if (!ext && existing) {
+          mergedItems.push({ ...existing });
+          continue;
+        }
 
         const itemNo = existing?.itemNo || ext?.itemNo || String(i + 1);
         const desc = existing?.description && !existing.description.startsWith('فقرة ')
