@@ -5,7 +5,7 @@ import {
   getActiveProjectId,
   setActiveProjectId,
   addAuditLog,
-  createDefaultProject,
+  createNewTenderProject,
   downloadProjectBackup,
   parseProjectBackupFile,
   downloadAllProjectsBackup,
@@ -710,23 +710,20 @@ export function App() {
   };
 
   // Create New Project
-  const handleCreateProject = ({ title, referenceNumber, contractType }: { title: string; referenceNumber: string; contractType: ContractType }) => {
+  // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
+  const handleCreateProject = ({ title, referenceNumber, contractType, bidderNames }: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => {
     const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
+    const blank = createNewTenderProject({ title, referenceNumber: refNo, contractType, bidderNames });
 
     const newProj: TenderProject = {
-      ...createDefaultProject(),
-      id: `project-${Date.now()}`,
-      title,
-      contractType,
-      referenceNumber: refNo,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      ...blank,
       auditLogs: [{
         id: `log-${Date.now()}`,
         timestamp: new Date().toISOString(),
         userName: 'المهندس أسامة خليل هاشم',
         action: 'إنشاء مناقصة جديدة',
         details: `تم إنشاء المناقصة (${title}) بنجاح — نوع العقد: ${CONTRACT_TYPES[contractType].label}`
+          + ` — الشركات: ${blank.bidders.map(b => b.name).join('، ')}`
       }]
     };
 

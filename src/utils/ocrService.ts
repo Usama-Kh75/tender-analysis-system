@@ -578,6 +578,22 @@ function buildRowsHeuristic(text: string): Partial<BOQItem>[] {
  * يعتمد على اكتشاف رأس الجدول (ت، اسم المادة، الوحدة، الكمية، سعر المفرد، المجموع)
  * وإعادة بناء الأعمدة هندسياً حسب موقع كل كلمة فعلياً في الصورة
  */
+/**
+ * في أول زيارة للتطبيق المنشور يُثبَّت عامل الخدمة (pwa/sw.js) ثم يستلم الصفحة (clients.claim).
+ * إن بدأ محرك Tesseract تحميل ملفاته قبل أن يستلمها، يتوقف المحرك عند «التهيئة» بلا خطأ ولا نهاية
+ * (ثبت بالتجربة: ينجح مع صفحة مستلمة مسبقاً، ويعلق إن بدأ في الثواني الأولى من أول زيارة).
+ * فننتظر الاستلام إن كان عامل الخدمة قيد التثبيت، بحد أقصى 10 ثوانٍ. لا أثر له في الملف المحمول (file://).
+ */
+async function waitForServiceWorkerControl(timeoutMs = 10000): Promise<void> {
+  if (!('serviceWorker' in navigator) || navigator.serviceWorker.controller) return;
+  const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+  if (!registration) return;
+  await Promise.race([
+    new Promise<void>(resolve => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true })),
+    new Promise<void>(resolve => setTimeout(resolve, timeoutMs)),
+  ]);
+}
+
 export async function extractBOQFromImage(
   imageSource: string | File,
   onProgress?: (progress: number, status: string) => void
@@ -592,6 +608,7 @@ export async function extractBOQFromImage(
   onProgress?.(10, 'جاري تهيئة محرك التعرف الضوئي الموضعي (OCR)...');
 
   try {
+    await waitForServiceWorkerControl();
     const worker = await createWorker(['ara', 'eng']);
 
     onProgress?.(35, 'جاري معالجة وقراءة النصوص المطبوعة من الصورة...');

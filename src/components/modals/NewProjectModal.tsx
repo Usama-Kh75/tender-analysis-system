@@ -6,7 +6,7 @@ import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER } from '../../utils/contractTypes';
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => void;
 }
 
 // نوع العقد يُختار قبل إدخال أي بيانات، لأن التوصية (معايير المفاضلة) تتبعه
@@ -14,6 +14,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const [title, setTitle] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [contractType, setContractType] = useState<ContractType | null>(null);
+  const [bidderNamesText, setBidderNamesText] = useState('');
 
   if (!isOpen) return null;
 
@@ -21,13 +22,14 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     setTitle('');
     setReferenceNumber('');
     setContractType(null);
+    setBidderNamesText('');
     onClose();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !contractType) return;
-    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), contractType });
+    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), contractType, bidderNames: bidderNamesText.split(/\r?\n/) });
     close();
   };
 
@@ -102,6 +104,21 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               onChange={(e) => setReferenceNumber(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
+          </div>
+
+          <div>
+            <label htmlFor="new-project-bidders" className="block text-xs font-bold text-slate-700 mb-1">أسماء الشركات المقدِّمة للعطاءات</label>
+            <textarea
+              id="new-project-bidders"
+              value={bidderNamesText}
+              onChange={(e) => setBidderNamesText(e.target.value)}
+              rows={4}
+              placeholder={'اسم كل شركة في سطر، مثال:\nشركة الرافدين للمقاولات\nشركة دجلة للتجهيزات'}
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-y"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              اختياري: تُنشأ لكل شركة صفحة جدول مصفّرة. ويمكن إضافة الشركات لاحقاً بزر «+ شركة جديدة».
+            </p>
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-2">

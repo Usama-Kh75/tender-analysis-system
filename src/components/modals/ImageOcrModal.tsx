@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
 import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl } from '../../utils/ocrService';
+import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 
 interface ImageOcrModalProps {
   isOpen: boolean;
@@ -82,13 +83,36 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   };
 
   const handleMultipleFiles = async (files: FileList) => {
-    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-    if (imageFiles.length === 0) return;
+    const accepted = Array.from(files).filter(f => f.type.startsWith('image/') || isPdfFile(f));
+    if (accepted.length === 0) return;
     // نقرأ ونضغط كل الصفحات أولاً، ثم نضيفها دفعة واحدة بترتيب الرفع الأصلي
     // (القراءة الفردية كانت تُدرج الصفحات بترتيب اكتمال القراءة لا ترتيب الاختيار، فيختل ترتيب الصفحات عند الدمج)
-    const dataUrls = await Promise.all(imageFiles.map((f) => readFileAsDataUrl(f)));
-    const compressed = await Promise.all(dataUrls.map((d) => compressImageDataUrl(d)));
-    setImagePreviews(prev => [...prev, ...compressed]);
+    // ملف PDF (رقمي أو ممسوح ضوئياً) يُحوَّل صفحةً صفحة إلى صور في مكانه من الترتيب
+    const pages: string[] = [];
+    setIsLoading(true);
+    try {
+      for (const file of accepted) {
+        if (isPdfFile(file)) {
+          setProgressStatus(`جاري تحويل صفحات ملف PDF (${file.name})...`);
+          setProgressPercent(0);
+          const rendered = await pdfToImages(file, (n, total) => {
+            setProgressStatus(`جاري تحويل صفحات ملف PDF: الصفحة (${n}) من (${total})...`);
+            setProgressPercent(Math.round((n / total) * 100));
+          });
+          pages.push(...await Promise.all(rendered.map(d => compressImageDataUrl(d))));
+        } else {
+          pages.push(await compressImageDataUrl(await readFileAsDataUrl(file)));
+        }
+      }
+    } catch (err) {
+      alert(`تعذّرت قراءة ملف PDF: ${err instanceof Error ? err.message : String(err)}
+تأكد أن الملف سليم وغير محمي بكلمة مرور.`);
+    } finally {
+      setIsLoading(false);
+      setProgressStatus('');
+      setProgressPercent(0);
+    }
+    if (pages.length > 0) setImagePreviews(prev => [...prev, ...pages]);
   };
 
   const handleRemoveImage = (index: number) => {
@@ -359,7 +383,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
               <input
                 id="ocr-file-input"
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf,.pdf"
                 multiple
                 className="hidden"
                 onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)}
@@ -371,10 +395,10 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
               <div>
                 <p className="text-sm sm:text-base font-black text-slate-800">
-                  اسحب وأفلت صورة أو عدة صور لجدول العطاء هنا، أو انقر للاختيار
+                  اسحب وأفلت صور جدول العطاء أو ملف PDF هنا، أو انقر للاختيار
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  يدعم صور الكاميرا، الممسوحة ضوئياً، المستندات الورقية، أو النسخ واللصق بـ <kbd className="bg-slate-100 px-1.5 py-0.5 border rounded font-bold">Ctrl+V</kbd>
+                  يدعم صور الكاميرا، وملفات PDF الرقمية والممسوحة ضوئياً (تُحوَّل كل صفحة إلى صورة)، أو النسخ واللصق بـ <kbd className="bg-slate-100 px-1.5 py-0.5 border rounded font-bold">Ctrl+V</kbd>
                 </p>
               </div>
 
@@ -402,7 +426,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       <Plus className="w-3 h-3" />
                       <span>إضافة صفحة</span>
                     </button>
-                    <input id="ocr-add-more" type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)} />
+                    <input id="ocr-add-more" type="file" accept="image/*,application/pdf,.pdf" multiple className="hidden" onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)} />
                     <button
                       onClick={handleRotateImage}
                       className="text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition"
