@@ -441,11 +441,15 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               <span>حدد نوع الجدول أو الملف الذي ترفعه الآن:</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <div role="radiogroup" aria-label="نوع الجدول" className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
               
               {/* Card 1: Bidder Quotation */}
               <div 
                 onClick={() => handleSelectDocType('bidder')}
+                role="radio"
+                aria-checked={docType === 'bidder'}
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDocType('bidder'); } }}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between relative ${
                   docType === 'bidder'
                     ? 'border-indigo-600 bg-indigo-50/70 shadow-md ring-2 ring-indigo-500/20'
@@ -473,6 +477,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               {/* Card 2: Estimated Cost */}
               <div 
                 onClick={() => handleSelectDocType('estimated')}
+                role="radio"
+                aria-checked={docType === 'estimated'}
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDocType('estimated'); } }}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between relative ${
                   docType === 'estimated'
                     ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-500/20'
@@ -500,6 +508,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               {/* Card 3: Complete Both */}
               <div 
                 onClick={() => handleSelectDocType('both')}
+                role="radio"
+                aria-checked={docType === 'both'}
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDocType('both'); } }}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between relative ${
                   docType === 'both'
                     ? 'border-slate-900 bg-slate-100 shadow-md ring-2 ring-slate-900/20'
@@ -533,6 +545,9 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
             {/* File Upload Box */}
             <div
               onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); routeFiles(Array.from(e.dataTransfer.files || [])); }}
               className="border-2 border-dashed border-indigo-300 hover:border-indigo-600 bg-indigo-50/40 hover:bg-indigo-50/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-2xs"
