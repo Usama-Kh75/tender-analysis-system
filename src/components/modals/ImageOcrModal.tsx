@@ -38,6 +38,16 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [extractedItems, setExtractedItems] = useState<Partial<BOQItem>[]>([]);
   // صفحات قرأها المحرك الموضعي بثقة منخفضة: تنبيه فوق النتائج وتأكيد صريح قبل الإدراج
   const [lowConfidencePages, setLowConfidencePages] = useState<{ page: number; confidence: number }[]>([]);
+  // جرت قراءة على الصفحات الحالية (لتمييز «لم تبدأ القراءة» عن «انتهت بلا أسطر»)
+  const [readAttempted, setReadAttempted] = useState(false);
+
+  // ملف كبير قد تكون أغلب صفحاته منخفضة الجودة: تُذكر أول خمس فقط
+  const summarizePages = (withConfidence: boolean) => {
+    const shown = lowConfidencePages.slice(0, 5)
+      .map(p => withConfidence ? `${p.page} — ثقة ${p.confidence}%` : String(p.page)).join('، ');
+    const rest = lowConfidencePages.length - 5;
+    return rest > 0 ? `${shown} و(${rest}) صفحة أخرى` : shown;
+  };
   const [bidderName, setBidderName] = useState<string>('');
   const [destinationMode, setDestinationMode] = useState<'bidder_only' | 'estimated_only' | 'new_bidder'>('bidder_only');
   const [engineMode, setEngineMode] = useState<'ai_vision' | 'local_ocr'>('ai_vision');
@@ -119,7 +129,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       setProgressStatus('');
       setProgressPercent(0);
     }
-    if (pages.length > 0) setImagePreviews(prev => [...prev, ...pages]);
+    if (pages.length > 0) {
+      setImagePreviews(prev => [...prev, ...pages]);
+      setReadAttempted(false);
+      setLowConfidencePages([]);
+    }
   };
 
   const handleRemoveImage = (index: number) => {
@@ -179,6 +193,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
     setExtractedItems([]); // تنظيف النتائج السابقة
     setLowConfidencePages([]);
+    setReadAttempted(true);
     setIsLoading(true);
     try {
       // استكشاف النماذج النشطة مرة واحدة فقط وإعادة استخدامها لكل الصفحات
@@ -287,21 +302,31 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   };
 
   // ملف ممسوح بالعرض تكون كل صفحاته مقلوبة عادةً: تدويرها كلها بضغطة بدل صفحة صفحة
+  // صفحة بعد صفحة لا كلها معاً: ملف كبير كان سيفتح عشرات اللوحات في الذاكرة في آن واحد
   const handleRotateAll = async () => {
     if (imagePreviews.length === 0) return;
     setIsLoading(true);
     try {
-      const rotated = await Promise.all(imagePreviews.map(rotateDataUrl));
+      const rotated: string[] = [];
+      for (let i = 0; i < imagePreviews.length; i++) {
+        setProgressStatus(`جاري تدوير الصفحات: (${i + 1}) من (${imagePreviews.length})...`);
+        setProgressPercent(Math.round(((i + 1) / imagePreviews.length) * 100));
+        rotated.push(await rotateDataUrl(imagePreviews[i]));
+      }
       setImagePreviews(rotated);
+      setReadAttempted(false);
+      setLowConfidencePages([]);
     } finally {
       setIsLoading(false);
+      setProgressStatus('');
+      setProgressPercent(0);
     }
   };
 
   const handleApply = () => {
     if (extractedItems.length === 0) return;
     if (lowConfidencePages.length > 0 && !window.confirm(
-      `جودة القراءة منخفضة في الصفحة (${lowConfidencePages.map(p => p.page).join('، ')})، وقد تكون الفقرات المستخرجة مشوّهة.\n\n` +
+      `جودة القراءة منخفضة في الصفحة (${summarizePages(false)})، وقد تكون الفقرات المستخرجة مشوّهة.\n\n` +
       'هل تريد إدراجها في جدول المناقصة رغم ذلك؟'
     )) return;
     onApplyExtractedItems(extractedItems, destinationMode, bidderName.trim() || undefined);
@@ -522,6 +547,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     <button
                       onClick={() => {
                         setImagePreviews([]);
+                        setReadAttempted(false);
+                        setLowConfidencePages([]);
                         setExtractedItems([]);
                         setActiveImageIndex(0);
                       }}
@@ -614,7 +641,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 {!isLoading && lowConfidencePages.length > 0 && (
                   <div role="alert" className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs leading-relaxed">
                     <div className="font-black mb-0.5">
-                      ⚠️ جودة القراءة منخفضة في الصفحة ({lowConfidencePages.map(p => `${p.page} — ثقة ${p.confidence}%`).join('، ')})
+                      ⚠️ جودة القراءة منخفضة في الصفحة ({summarizePages(true)})
                       {extractedItems.length === 0 && ' — لم يُستخرج أي سطر'}
                     </div>
                     <div>قد تكون الفقرات مشوّهة. الأسباب الشائعة: صفحة مقلوبة، أو خطوط الجدول، أو مسح غير واضح. دوّر الصفحات وأعد القراءة، أو استخدم محرك الذكاء الاصطناعي (Gemini)، وراجع الفقرات قبل الإدراج.</div>
@@ -638,12 +665,23 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
                       <Sparkles className="w-6 h-6" />
                     </div>
-                    <p className="text-sm font-black text-slate-800">
-                      تم تحميل الصورة بنجاح!
-                    </p>
-                    <p className="text-xs text-slate-500 max-w-sm">
-                      تأكد من تعديل اتجاه الصورة لتكون أفقية مستقيمة باستخدام زر <strong>(🔄 تدوير 90°)</strong>، ثم انقر على زر <strong>(🚀 بدء القراءة واستخراج الجدول)</strong> بالأسفل.
-                    </p>
+                    {readAttempted ? (
+                      <>
+                        <p className="text-sm font-black text-slate-800">لم يُستخرج أي سطر من الصفحات</p>
+                        <p className="text-xs text-slate-500 max-w-sm">
+                          تأكد أن النص أفقي (زر <strong>🔄 تدوير الكل</strong>)، أو استخدم محرك الذكاء الاصطناعي، ثم أعد القراءة.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-black text-slate-800">
+                          تم تحميل الصورة بنجاح!
+                        </p>
+                        <p className="text-xs text-slate-500 max-w-sm">
+                          تأكد من تعديل اتجاه الصورة لتكون أفقية مستقيمة باستخدام زر <strong>(🔄 تدوير 90°)</strong>، ثم انقر على زر <strong>(🚀 بدء القراءة واستخراج الجدول)</strong> بالأسفل.
+                        </p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <>
