@@ -122,57 +122,82 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
-  const processImage = async (dataUrl: string, cachedModels?: string[]): Promise<string[] | undefined> => {
-    // معالجة صورة واحدة
-    setIsLoading(true);
+  // نتيجة قراءة صفحة واحدة: نجاح (مع نماذج Gemini المكتشفة لإعادة استخدامها) أو خطأ يوقف المعالجة
+  type PageResult = { ok: true; models?: string[] } | { ok: false; error: string };
+
+  const processImage = async (dataUrl: string, activeKey: string, cachedModels?: string[]): Promise<PageResult> => {
     setProgressPercent(10);
     setProgressStatus('جاري تهيئة معالجة الصورة...');
-
     try {
       if (engineMode === 'ai_vision') {
-        const activeKey = apiKey.trim() || localStorage.getItem('gemini_ocr_api_key') || '';
-        if (!activeKey) {
-          setShowKeyInput(true);
-          setIsLoading(false);
-          alert('يرجى إدخال مفتاح Google Gemini API المجاني لتفعيل ميزة التعرف على خط اليد والصور المعقدة بالذكاء الاصطناعي.');
-          return undefined;
-        }
-
         const result = await extractBOQWithGeminiVision(dataUrl, activeKey, (p, status) => {
           setProgressPercent(p);
           setProgressStatus(status);
         }, cachedModels);
-
         setExtractedItems(prev => [...prev, ...result.items]);
-        return result.models;
-      } else {
-        const result = await extractBOQFromImage(dataUrl, (p, status) => {
-          setProgressPercent(p);
-          setProgressStatus(status);
-        });
-
-        setExtractedItems(prev => [...prev, ...result.items]);
-        return undefined;
+        return { ok: true, models: result.models };
       }
+      const result = await extractBOQFromImage(dataUrl, (p, status) => {
+        setProgressPercent(p);
+        setProgressStatus(status);
+      });
+      setExtractedItems(prev => [...prev, ...result.items]);
+      return { ok: true };
     } catch (err: any) {
-      alert('حدث خطأ أثناء معالجة الصورة: ' + (err.message || 'تأكد من صحة المفتاح أو الاتصال'));
-      return undefined;
-    } finally {
-      setIsLoading(false);
+      return { ok: false, error: err?.message || 'تأكد من صحة المفتاح أو الاتصال' };
     }
   };
 
   const processAllImages = async () => {
     if (imagePreviews.length === 0) return;
+
+    // المفتاح يُفحص مرة واحدة قبل البدء، لا عند كل صفحة: كان غيابه يُظهر رسالة منبثقة لكل صفحة
+    // على التوالي (7 صفحات = 7 رسائل)، فيبدو زر «OK» كأنه لا يستجيب
+    const activeKey = engineMode === 'ai_vision'
+      ? (apiKey.trim() || localStorage.getItem('gemini_ocr_api_key') || '')
+      : '';
+    if (engineMode === 'ai_vision' && !activeKey) {
+      setShowKeyInput(true);
+      setKeyTestStatus({
+        isTesting: false,
+        success: false,
+        message: 'لم يُحفظ مفتاح Gemini في هذه النسخة من النظام بعد. أدخله في الخانة أعلاه ثم اضغط «بدء القراءة»، أو اختر محرك «OCR موضعي».'
+      });
+      return;
+    }
+
     setExtractedItems([]); // تنظيف النتائج السابقة
-    // استكشاف النماذج النشطة مرة واحدة فقط وإعادة استخدامها لكل الصفحات
-    // بدل استعلام مكرر عن كل صفحة يستنزف حصة الطلبات المجانية بسرعة
-    let cachedModels: string[] | undefined;
-    for (let i = 0; i < imagePreviews.length; i++) {
-      setActiveImageIndex(i);
-      setProgressStatus(`جاري معالجة الصفحة (${i + 1}) من (${imagePreviews.length})...`);
-      const models = await processImage(imagePreviews[i], cachedModels);
-      if (models && models.length > 0) cachedModels = models;
+    setIsLoading(true);
+    try {
+      // استكشاف النماذج النشطة مرة واحدة فقط وإعادة استخدامها لكل الصفحات
+      // بدل استعلام مكرر عن كل صفحة يستنزف حصة الطلبات المجانية بسرعة
+      let cachedModels: string[] | undefined;
+      for (let i = 0; i < imagePreviews.length; i++) {
+        setActiveImageIndex(i);
+        setProgressStatus(`جاري معالجة الصفحة (${i + 1}) من (${imagePreviews.length})...`);
+        const result = await processImage(imagePreviews[i], activeKey, cachedModels);
+        if (!result.ok) {
+          // خطأ واحد يوقف المعالجة برسالة واحدة (لا رسالة لكل صفحة متبقية).
+          // أشهر خطأين من Gemini يُعرضان بالعربية بدل نص الخادم الخام (JSON بالإنجليزية)
+          const invalidKey = /API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(result.error);
+          const quota = /\(429\)|RESOURCE_EXHAUSTED|quota/i.test(result.error);
+          if (invalidKey) {
+            setShowKeyInput(true);
+            setKeyTestStatus({ isTesting: false, success: false, message: 'مفتاح Gemini المحفوظ غير صالح. تحقق منه أو أدخل مفتاحاً جديداً ثم أعد القراءة.' });
+          }
+          const reason = invalidKey ? 'مفتاح Gemini غير صالح.'
+            : quota ? 'نفدت حصة الطلبات المجانية في Gemini مؤقتاً. انتظر دقيقة أو دقيقتين ثم أعد القراءة.'
+            : result.error;
+          alert(
+            `تعذّرت قراءة الصفحة (${i + 1}) من (${imagePreviews.length}): ${reason}` +
+            (i > 0 ? '\nتوقفت المعالجة، وما استُخرج من الصفحات السابقة باقٍ في الجدول.' : '\nتوقفت المعالجة.')
+          );
+          break;
+        }
+        if (result.models && result.models.length > 0) cachedModels = result.models;
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
