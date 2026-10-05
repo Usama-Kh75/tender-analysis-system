@@ -89,9 +89,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     // (القراءة الفردية كانت تُدرج الصفحات بترتيب اكتمال القراءة لا ترتيب الاختيار، فيختل ترتيب الصفحات عند الدمج)
     // ملف PDF (رقمي أو ممسوح ضوئياً) يُحوَّل صفحةً صفحة إلى صور في مكانه من الترتيب
     const pages: string[] = [];
+    let currentFile: File | null = null;
     setIsLoading(true);
     try {
       for (const file of accepted) {
+        currentFile = file;
         if (isPdfFile(file)) {
           setProgressStatus(`جاري تحويل صفحات ملف PDF (${file.name})...`);
           setProgressPercent(0);
@@ -105,8 +107,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         }
       }
     } catch (err) {
-      alert(`تعذّرت قراءة ملف PDF: ${err instanceof Error ? err.message : String(err)}
-تأكد أن الملف سليم وغير محمي بكلمة مرور.`);
+      // الرسالة تخص نوع الملف الذي فشل فعلاً (كانت تقول «ملف PDF» حتى لو فشلت صورة)
+      const failedPdf = currentFile ? isPdfFile(currentFile) : false;
+      alert((failedPdf ? `تعذّرت قراءة ملف PDF (${currentFile?.name}): ` : `تعذّرت قراءة الملف${currentFile ? ` (${currentFile.name})` : ''}: `)
+        + (err instanceof Error ? err.message : String(err))
+        + (failedPdf ? ' — تأكد أن الملف سليم وغير محمي بكلمة مرور.' : ''));
     } finally {
       setIsLoading(false);
       setProgressStatus('');
@@ -403,7 +408,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
               className="border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-white rounded-3xl p-8 sm:p-12 text-center transition flex flex-col items-center justify-center gap-4 cursor-pointer group"
-              onClick={() => document.getElementById('ocr-file-input')?.click()}
+              onClick={() => { if (!isLoading) document.getElementById('ocr-file-input')?.click(); }}
             >
               <input
                 id="ocr-file-input"
@@ -414,6 +419,16 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)}
               />
               
+              {isLoading ? (
+                // تحويل ملف PDF قد يستغرق ثوانٍ: بلا مؤشر يبدو الرفع كأنه فشل
+                <div role="status" className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                  <p className="text-sm font-black text-slate-800">{progressStatus || 'جاري تحضير الملفات...'}</p>
+                  <div className="w-64 bg-slate-200 rounded-full h-2 overflow-hidden">
+                    <div className="bg-indigo-600 h-2 transition-all duration-300 rounded-full" style={{ width: `${progressPercent}%` }} />
+                  </div>
+                </div>
+              ) : (<>
               <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition shadow-xs">
                 <Upload className="w-8 h-8" />
               </div>
@@ -431,6 +446,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                 <span>يدعم قراءة خط اليد وتفكيك أسعار المفرد والتفقيط آلياً</span>
               </div>
+              </>)}
             </div>
           ) : (
             /* Split View: Image Preview on Right, Extracted Table on Left */
@@ -446,7 +462,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => document.getElementById('ocr-add-more')?.click()}
-                      className="text-xs text-emerald-700 hover:text-emerald-900 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition"
+                      disabled={isLoading}
+                      className="text-xs text-emerald-700 hover:text-emerald-900 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3 h-3" />
                       <span>إضافة صفحة</span>
@@ -454,7 +471,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     <input id="ocr-add-more" type="file" accept="image/*,application/pdf,.pdf" multiple className="hidden" onChange={(e) => e.target.files && handleMultipleFiles(e.target.files)} />
                     <button
                       onClick={handleRotateImage}
-                      className="text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition"
+                      disabled={isLoading}
+                      className="text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed"
                       title="تدوير الصورة النشطة 90 درجة"
                     >
                       <span>🔄 تدوير 90°</span>
@@ -465,7 +483,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                         setExtractedItems([]);
                         setActiveImageIndex(0);
                       }}
-                      className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                      disabled={isLoading}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       مسح الكل ↺
                     </button>
@@ -487,7 +506,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                         <span className="absolute bottom-0 left-0 right-0 bg-slate-900/70 text-white text-[9px] text-center font-bold">{idx + 1}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleRemoveImage(idx); }}
-                          className="absolute top-0 right-0 bg-rose-600 text-white rounded-bl-lg p-0.5 text-[8px] font-bold cursor-pointer hover:bg-rose-700"
+                          disabled={isLoading}
+                          aria-label={`حذف الصفحة ${idx + 1}`}
+                          className="absolute top-0 right-0 bg-rose-600 text-white rounded-bl-lg p-0.5 text-[8px] font-bold cursor-pointer hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         >✕</button>
                       </div>
                     ))}
