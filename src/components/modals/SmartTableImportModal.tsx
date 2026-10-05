@@ -441,13 +441,13 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               <span>حدد نوع الجدول أو الملف الذي ترفعه الآن:</span>
             </div>
 
-            <div role="radiogroup" aria-label="نوع الجدول" className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <div role="group" aria-label="نوع الجدول" className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
               
               {/* Card 1: Bidder Quotation */}
               <div 
                 onClick={() => handleSelectDocType('bidder')}
-                role="radio"
-                aria-checked={docType === 'bidder'}
+                role="button"
+                aria-pressed={docType === 'bidder'}
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDocType('bidder'); } }}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between relative ${
@@ -477,8 +477,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               {/* Card 2: Estimated Cost */}
               <div 
                 onClick={() => handleSelectDocType('estimated')}
-                role="radio"
-                aria-checked={docType === 'estimated'}
+                role="button"
+                aria-pressed={docType === 'estimated'}
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDocType('estimated'); } }}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between relative ${
@@ -508,8 +508,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
               {/* Card 3: Complete Both */}
               <div 
                 onClick={() => handleSelectDocType('both')}
-                role="radio"
-                aria-checked={docType === 'both'}
+                role="button"
+                aria-pressed={docType === 'both'}
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDocType('both'); } }}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between relative ${
