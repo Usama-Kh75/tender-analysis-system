@@ -140,7 +140,8 @@ export function App() {
     writtenText: undefined,
     hasMathError: undefined,
     hasTextDiscrepancy: undefined,
-    correctionRationale: undefined
+    correctionRationale: undefined,
+    unpriced: undefined
   });
 
   // Clear Bidder Prices Only
@@ -378,7 +379,8 @@ export function App() {
           writtenText: ext?.writtenText,
           hasMathError: ext?.hasMathError,
           hasTextDiscrepancy: ext?.hasTextDiscrepancy,
-          correctionRationale: ext?.correctionRationale
+          correctionRationale: ext?.correctionRationale,
+          unpriced: ext?.unpriced
         });
       }
 
@@ -485,7 +487,8 @@ export function App() {
           writtenText: ext?.writtenText,
           hasMathError: ext?.hasMathError,
           hasTextDiscrepancy: ext?.hasTextDiscrepancy,
-          correctionRationale: ext?.correctionRationale
+          correctionRationale: ext?.correctionRationale,
+          unpriced: ext?.unpriced
         });
       }
 

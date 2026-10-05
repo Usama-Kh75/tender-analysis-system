@@ -11,11 +11,12 @@ export interface ExtractedTableData {
 
 /**
  * تصغير وضغط الصورة قبل رفعها لتقليل حجم الطلب وتسريع الاستجابة
- * وتفادي فشل الاتصال بسبب حجم الصور الكبير القادمة من كاميرا الهاتف
+ * وتفادي فشل الاتصال بسبب حجم الصور الكبير القادمة من كاميرا الهاتف.
+ * 2000 بكسل (كان 1600): صفحات PDF تُرسم بهذا الحجم أصلاً، وتصغيرها كان يُضعف الأرقام الصغيرة في المسح الضوئي
  */
 export function compressImageDataUrl(
   dataUrl: string,
-  maxDimension: number = 1600,
+  maxDimension: number = 2000,
   quality: number = 0.85
 ): Promise<string> {
   return new Promise((resolve) => {
@@ -60,6 +61,21 @@ export function normalizeArabicNumbers(str: string): string {
 }
 
 /**
+ * ترتيب نماذج Gemini لقراءة جداول العطاءات: كان يُؤخذ أول نموذج فيه «flash» بترتيب قائمة الحساب،
+ * فقد يكون قديماً أو مخففاً أو نموذج صوت/صور. الآن: المستقر قبل التجريبي، ثم flash ثم pro ثم flash-lite،
+ * والأحدث إصداراً أولاً. تُستبعد نماذج الصوت وتوليد الصور والبث المباشر وغيرها مما لا يقرأ المستندات
+ */
+export function rankGeminiModels(names: string[]): string[] {
+  const notForDocuments = /(embedding|aqa|tts|image|live|transcribe|translate|robotics|veo|lyria|imagen|deep-research|antigravity|omni|computer-use|gemma|learnlm|audio)/i;
+  const version = (n: string) => parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/i)?.[1] || '0');
+  const family = (n: string) => /flash-lite/i.test(n) ? 2 : /flash/i.test(n) ? 0 : /pro/i.test(n) ? 1 : 3;
+  const unstable = (n: string) => /(preview|exp|latest)/i.test(n) ? 1 : 0;
+  return names
+    .filter(n => /^gemini-/i.test(n) && !notForDocuments.test(n))
+    .sort((a, b) => unstable(a) - unstable(b) || family(a) - family(b) || version(b) - version(a));
+}
+
+/**
  * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المتاحة بالضبط
  */
 export async function testGeminiApiKey(apiKey: string): Promise<{ success: boolean; message: string; models: string[] }> {
@@ -85,16 +101,10 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ success: boole
     }
 
     const data = await res.json();
-    // استخراج كافة النماذج التي تدعم generateContent وتدعم الرؤية
-    const modelsList: string[] = (data?.models || [])
-      .filter((m: any) => {
-        const name = (m.name || '').toLowerCase();
-        return name.includes('gemini') && 
-               !name.includes('embedding') && 
-               !name.includes('aqa') &&
-               m.supportedGenerationMethods?.includes('generateContent');
-      })
-      .map((m: any) => m.name.replace('models/', ''));
+    // النماذج التي تدعم generateContent، مرتبة بالأنسب لقراءة الجداول (rankGeminiModels)
+    const modelsList: string[] = rankGeminiModels((data?.models || [])
+      .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m: any) => String(m.name || '').replace('models/', '')));
 
     if (modelsList.length === 0) {
       return {
@@ -159,206 +169,353 @@ function extractJsonArray(text: string): any[] {
   }
 }
 
-/**
- * محرك استخراج الجداول عبر نماذج Gemini Vision المتخصصة بالرؤية الاصطناعية
- */
-export async function extractBOQWithGeminiVision(
-  imageBase64: string,
-  apiKey: string,
-  onProgress?: (progress: number, status: string) => void,
-  knownModels?: string[]
-): Promise<ExtractedTableData & { models: string[] }> {
-  const cleanKey = apiKey.trim();
+// الصفحات في طلب Gemini الواحد: يرى النموذج الجدول الممتد عبر الصفحات، ويُستهلك طلب واحد من الحصة
+// المجانية بدل طلب لكل صفحة (عرض من 7 صفحات كان 7 طلبات). تُقسم الدفعة أيضاً إن تجاوز حجم صورها
+// GEMINI_MAX_BATCH_CHARS، لتبقى دون حد حجم الطلب المضمَّن
+export const GEMINI_PAGES_PER_REQUEST = 8;
+const GEMINI_MAX_BATCH_CHARS = 14_000_000;
 
-  // إزالة الترويسة data:image/...;base64,
-  let cleanBase64 = imageBase64;
-  let mimeType = 'image/jpeg';
-  if (imageBase64.includes(';base64,')) {
-    const parts = imageBase64.split(';base64,');
-    mimeType = parts[0].replace('data:', '');
-    cleanBase64 = parts[1];
-  }
-
-  const systemPrompt = `أنت خبير تدقيق وتحليل جداول كميات ومناقصات وعطاءات حكومية.
-قم بتحليل صورة جدول العطاء المرفقة واستخرج كافة الصفوف بدقة متناهية.
-
-لكل صف، استخرج الحقول الآتية بصيغة JSON حصراً:
-- itemNo: رقم أو تسلسل الفقرة (مثلاً 1 أو 447)
-- description: اسم المادة أو وصف الفقرة بالعربية
-- unit: الوحدة (متر، كغم، ميسر، عدد، لفة...)
-- quantity: العدد أو الكمية كرقم (مثلاً 2400)
-- unitPrice: سعر المفرد المكتوب كرقم (مثلاً 2400 أو 3000)
-- writtenText: سعر المفرد أو مبلغ الفقرة المكتوب كتابةً بالتفقيط (مثلاً "ألفان وأربعمائة دينار")
-- total: مبلغ الفقرة الإجمالي المكتوب أو المحسوب كرقم (مثلاً 5760000)
-
-يجب أن تكون إجابتك عبارة عن مصفوفة JSON فقط كالتالي دون أي مقدمات أو شروحات:
-[
-  {
-    "itemNo": 1,
-    "description": "اسم المادة",
-    "unit": "عدد",
-    "quantity": 10,
-    "unitPrice": 18000,
-    "writtenText": "ثمانية عشر ألف دينار",
-    "total": 180000
-  }
-]`;
-
-  // 1. استخدام قائمة النماذج المخزنة مسبقاً (لتفادي استهلاك حصة الطلبات عند معالجة عدة صفحات)
-  //    أو الاستعلام المباشر عنها لمفتاح المستخدم بالضبط في حال عدم توفرها
-  let modelsToTry: string[] = knownModels && knownModels.length > 0 ? knownModels : [];
-
-  if (modelsToTry.length === 0) {
-    onProgress?.(10, 'جاري استكشاف النماذج النشطة في حساب Google الخاص بك...');
-    try {
-      const checkRes = await testGeminiApiKey(cleanKey);
-      if (checkRes.success && checkRes.models.length > 0) {
-        // ترتيب النماذج: flash أولاً ثم الباقي
-        modelsToTry = checkRes.models.sort((a, b) => {
-          if (a.includes('flash') && !b.includes('flash')) return -1;
-          if (!a.includes('flash') && b.includes('flash')) return 1;
-          return 0;
-        });
+// صيغة رد إلزامية (مخطط OpenAPI في responseSchema): بدونها كان النظام يبحث عن JSON داخل نص الرد.
+// إن رفضها نموذج (400) يُعاد الطلب نفسه بلا مخطط، والتعليمات تطلب الشكل نفسه
+const GEMINI_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    items: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          itemNo: { type: 'STRING', nullable: true },
+          description: { type: 'STRING' },
+          unit: { type: 'STRING', nullable: true },
+          quantity: { type: 'NUMBER', nullable: true },
+          unitPrice: { type: 'NUMBER', nullable: true },
+          total: { type: 'NUMBER', nullable: true },
+          writtenText: { type: 'STRING', nullable: true },
+          unpriced: { type: 'BOOLEAN' }
+        },
+        required: ['description', 'unpriced'],
+        propertyOrdering: ['itemNo', 'description', 'unit', 'quantity', 'unitPrice', 'total', 'writtenText', 'unpriced']
       }
-    } catch (_) {}
+    },
+    grandTotal: { type: 'NUMBER', nullable: true },
+    grandTotalText: { type: 'STRING', nullable: true }
+  },
+  required: ['items'],
+  propertyOrdering: ['items', 'grandTotal', 'grandTotalText']
+};
+
+const geminiPrompt = (pages: number) => `أنت مدقق جداول كميات في عطاءات حكومية. الصور المرفقة (${pages}) صفحات متتالية من عطاء واحد، بترتيبها.
+استخرج كل فقرات جدول الكميات من كل الصفحات بالترتيب، وأعد كائن JSON فقط بهذا الشكل دون أي شرح:
+{"items":[{"itemNo":"1.15","description":"Male Plug","unit":"NOS","quantity":6,"unitPrice":396000,"total":2376000,"writtenText":null,"unpriced":false}],"grandTotal":312000000,"grandTotalText":null}
+
+القواعد:
+1. description: وصف الفقرة كاملاً كما هو مكتوب بلغته الأصلية (عربي أو إنجليزي أو مختلط)، دون ترجمة ولا اختصار.
+2. إذا بدأت صفحة بصف بلا رقم فقرة ولا أسعار يكمل وصف فقرة من الصفحة السابقة، فأضف نصه إلى وصف تلك الفقرة ولا تنشئ له فقرة جديدة.
+3. لا تُدرج صفوف العناوين ولا صف المجموع أو «السعر الإجمالي» ضمن items. ضع الإجمالي الكلي المكتوب في العطاء في grandTotal رقماً، ونصه المكتوب كتابةً (التفقيط) إن وجد في grandTotalText، وإلا فـ null.
+4. إذا كانت خانة سعر الفقرة أو مبلغها شرطة «-» أو مكتوباً فيها ما يدل على عدم التسعير، فاجعل unitPrice وtotal قيمة null وunpriced=true.
+5. إذا تعذّرت قراءة رقم فاجعله null مع unpriced=false. لا تخمّن رقماً ولا تحسبه بنفسك: انقل المكتوب في العطاء كما هو حتى لو بدا خاطئاً حسابياً.
+6. الأرقام أرقام JSON بلا فواصل آلاف ولا عملة. quantity هي الرقم وحده من خانة الكمية (مثلاً "NOS 6" تعني 6، و"Set 1" تعني 1)، وunit هي الوحدة نصاً.
+7. itemNo رقم الفقرة نصاً كما هو مكتوب (مثل "1.15" أو "2.0")، وnull إن لم يوجد.
+8. writtenText: مبلغ الفقرة المكتوب كتابةً (التفقيط) إن وجد، وإلا null.`;
+
+interface GeminiRawResult {
+  rows: any[];
+  grandTotal: number | null;
+  grandTotalText?: string;
+  rawText: string;
+  modelUsed: string;
+  truncated: boolean;
+}
+
+/**
+ * يفكك رد Gemini: الشكل الجديد كائن {items, grandTotal, grandTotalText}، ويُقبل الشكل القديم
+ * (مصفوفة صفوف) من نموذج تجاهل التعليمات. صف «-» يُعلَّم غير مسعّر حتى لو أعاد النموذج الشرطة نصاً
+ */
+export function parseGeminiTable(text: string): { rows: any[]; grandTotal: number | null; grandTotalText?: string } {
+  const clean = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(clean);
+  } catch {
+    // نص إضافي حول JSON: الكائن أولاً ثم المصفوفة القديمة (extractJsonArray يرمي خطأً إن فشل)
+    const obj = clean.match(/\{[\s\S]*\}/);
+    try { parsed = obj ? JSON.parse(obj[0]) : undefined; } catch { parsed = undefined; }
+    if (!parsed || (!Array.isArray(parsed) && !parsed.items)) parsed = extractJsonArray(clean);
+  }
+  const rows: any[] = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.table || []);
+  const total = !Array.isArray(parsed) && parsed?.grandTotal !== null && parsed?.grandTotal !== undefined
+    ? parseArabicNumber(parsed.grandTotal) : 0;
+  const totalText = !Array.isArray(parsed) && typeof parsed?.grandTotalText === 'string' && parsed.grandTotalText.trim()
+    ? parsed.grandTotalText.trim() : undefined;
+  return { rows, grandTotal: total > 0 ? total : null, grandTotalText: totalText };
+}
+
+const isBlank = (v: unknown) => v === null || v === undefined || String(v).trim() === '';
+const isDash = (v: unknown) => typeof v === 'string' && /^\s*[-–—_]+\s*$/.test(v);
+
+/**
+ * صف بلا رقم فقرة ولا كمية ولا أسعار يكمل وصف الفقرة السابقة (وصف امتد إلى أعلى الصفحة التالية،
+ * أو إلى أول صفحة في الدفعة التالية حيث لا يرى النموذج الصفحة السابقة): يُضاف نصه إليها
+ */
+export function mergeContinuationRows(rows: any[]): any[] {
+  const merged: any[] = [];
+  for (const r of rows) {
+    const prev = merged[merged.length - 1];
+    const isContinuation = prev && isBlank(r?.itemNo) && !r?.unpriced
+      && [r?.quantity, r?.unitPrice, r?.total].every(v => isBlank(v))
+      && !isBlank(r?.description);
+    if (isContinuation) {
+      merged[merged.length - 1] = { ...prev, description: `${prev.description || ''} ${String(r.description).trim()}`.trim() };
+    } else {
+      merged.push(r);
+    }
+  }
+  return merged;
+}
+
+function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
+  const itemNo = isBlank(r?.itemNo) ? idx + 1 : String(r.itemNo).trim();
+  const description = isBlank(r?.description) ? `فقرة ${itemNo}` : String(r.description).trim();
+  const unit = isBlank(r?.unit) ? 'عدد' : String(r.unit).trim();
+  const unpriced = r?.unpriced === true || isDash(r?.unitPrice) || isDash(r?.total);
+  const quantity = parseArabicNumber(r?.quantity) || 1;
+  const unitPrice = unpriced ? 0 : (parseArabicNumber(r?.unitPrice) || 0);
+  const total = unpriced ? 0 : (parseArabicNumber(r?.total) || (unitPrice * quantity));
+  const writtenText = isBlank(r?.writtenText) ? undefined : String(r.writtenText).trim();
+
+  const mathTotal = unitPrice > 0 ? unitPrice * quantity : total;
+  const isMathError = unitPrice > 0 && quantity > 1 && Math.abs(mathTotal - total) > 0.01;
+
+  let isTextDiscrepancy = false;
+  if (writtenText && writtenText.length > 2) {
+    const textNum = parseArabicTextToNumber(writtenText);
+    if (textNum !== null && textNum > 0 && Math.abs(textNum - (unitPrice || total)) > 0.01 && Math.abs(textNum - total) > 0.01) {
+      isTextDiscrepancy = true;
+    }
   }
 
-  // إذا لم نتمكن من قائمة النماذج، نستخدم النماذج القياسية كحل احتياطي أخير
-  if (modelsToTry.length === 0) {
-    modelsToTry = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-flash-8b',
-      'gemini-1.5-pro'
-    ];
-  }
+  return {
+    itemNo,
+    description,
+    unit,
+    quantity,
+    estimatedTotal: 0,
+    bidderTotal: total,
+    enteredUnitPrice: unitPrice,
+    enteredBidderTotal: total,
+    writtenText,
+    hasMathError: isMathError,
+    hasTextDiscrepancy: isTextDiscrepancy,
+    unpriced: unpriced || undefined
+  };
+}
 
-  let rawContent = '';
-  let errorReports: string[] = [];
+// دفعات بالترتيب: حتى GEMINI_PAGES_PER_REQUEST صفحة، ودون GEMINI_MAX_BATCH_CHARS من بيانات الصور
+function batchPages(images: string[]): { start: number; images: string[] }[] {
+  const batches: { start: number; images: string[] }[] = [];
+  let current: string[] = [];
+  let size = 0;
+  let start = 0;
+  images.forEach((img, i) => {
+    if (current.length > 0 && (current.length >= GEMINI_PAGES_PER_REQUEST || size + img.length > GEMINI_MAX_BATCH_CHARS)) {
+      batches.push({ start, images: current });
+      current = [];
+      size = 0;
+      start = i;
+    }
+    current.push(img);
+    size += img.length;
+  });
+  if (current.length > 0) batches.push({ start, images: current });
+  return batches;
+}
+
+const toInlinePart = (dataUrl: string) => {
+  const [head, data] = dataUrl.includes(';base64,') ? dataUrl.split(';base64,') : ['data:image/jpeg', dataUrl];
+  return { inlineData: { mimeType: head.replace('data:', '') || 'image/jpeg', data } };
+};
+
+// نماذج رفضت صيغة الرد الإلزامية في هذه الجلسة: تُطلب بلا مخطط مباشرة بدل طلب مرفوض لكل دفعة
+const modelsWithoutSchema = new Set<string>();
+
+/** طلب واحد لدفعة صفحات، مع المرور على النماذج بالترتيب وإعادة المحاولة عند 429 */
+async function requestGeminiRows(
+  images: string[],
+  apiKey: string,
+  models: string[],
+  onStatus: (status: string) => void
+): Promise<GeminiRawResult> {
+  const errorReports: string[] = [];
   let hadRateLimitError = false;
 
-  for (const model of modelsToTry) {
-    // محاولتان لكل نموذج: الثانية بعد انتظار قصير في حال تجاوز حد الطلبات (429)
-    for (let attempt = 1; attempt <= 2; attempt++) {
+  for (const model of models) {
+    let structured = !modelsWithoutSchema.has(model);
+    let rateRetried = false;
+    for (;;) {
+      onStatus(`جاري القراءة بالنموذج (${model})${rateRetried ? ' - إعادة محاولة...' : ''}`);
       try {
-        onProgress?.(35, `جاري الاستخراج بالنموذج النشط (${model})${attempt > 1 ? ' - إعادة محاولة...' : ''}`);
-
-        const requestBody = {
-          contents: [
-            {
-              parts: [
-                { text: systemPrompt },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: cleanBase64
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.1
-          }
-        };
-
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': cleanKey
-          },
-          body: JSON.stringify(requestBody)
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: geminiPrompt(images.length) }, ...images.map(toInlinePart)] }],
+            generationConfig: {
+              temperature: 0.1,
+              ...(structured ? { responseMimeType: 'application/json', responseSchema: GEMINI_RESPONSE_SCHEMA } : {})
+            }
+          })
         });
 
         if (response.ok) {
           const data = await response.json();
-          rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (rawContent && rawContent.length > 5) {
-            break; // نجاح كامل!
+          const candidate = data?.candidates?.[0];
+          const rawText = (candidate?.content?.parts || []).map((p: any) => p?.text || '').join('');
+          const truncated = candidate?.finishReason === 'MAX_TOKENS';
+          if (rawText.trim().length > 1) {
+            let parsed: ReturnType<typeof parseGeminiTable> | null = null;
+            try { parsed = parseGeminiTable(rawText); } catch { parsed = null; }
+            if (parsed) return { ...parsed, rawText, modelUsed: model, truncated };
+            // رد مقطوع لا يُفكك: تُقسم الدفعة؛ وغير المقطوع يُجرَّب بالنموذج التالي
+            if (truncated) return { rows: [], grandTotal: null, rawText, modelUsed: model, truncated: true };
+            errorReports.push(`${model}: تعذّر تفكيك الرد (${rawText.substring(0, 80)}...)`);
+            break;
           }
-        } else if (response.status === 429) {
+          if (truncated) {
+            return { rows: [], grandTotal: null, rawText: '', modelUsed: model, truncated: true };
+          }
+          errorReports.push(`${model}: رد فارغ${data?.promptFeedback?.blockReason ? ` (${data.promptFeedback.blockReason})` : ''}`);
+          break;
+        }
+        if (response.status === 400 && structured) {
+          // نموذج لا يقبل صيغة الرد الإلزامية: الطلب نفسه بلا مخطط
+          structured = false;
+          modelsWithoutSchema.add(model);
+          continue;
+        }
+        if (response.status === 429) {
           hadRateLimitError = true;
           errorReports.push(`${model}: تجاوزت الحد المسموح من الطلبات في الدقيقة (429)`);
-          if (attempt === 1) {
+          if (!rateRetried) {
+            rateRetried = true;
             await new Promise((r) => setTimeout(r, 3000));
-            continue; // إعادة محاولة نفس النموذج بعد الانتظار
+            continue;
           }
-        } else if (response.status === 404) {
-          errorReports.push(`${model}: هذا النموذج غير متاح لمفتاحك الحالي (404)`);
-        } else {
-          const errText = await response.text();
-          errorReports.push(`${model}: (${response.status}) ${errText.substring(0, 100)}`);
+          break;
         }
+        if (response.status === 404) {
+          errorReports.push(`${model}: هذا النموذج غير متاح لمفتاحك الحالي (404)`);
+          break;
+        }
+        const errText = await response.text();
+        errorReports.push(`${model}: (${response.status}) ${errText.substring(0, 100)}`);
+        break;
       } catch (err: any) {
         errorReports.push(`${model}: تعذر الاتصال بالإنترنت - ${err.message}`);
+        break;
       }
-      break; // لا نعيد المحاولة إلا في حالة 429 المعالجة أعلاه
     }
-    if (rawContent) break;
   }
 
-  if (!rawContent) {
-    if (hadRateLimitError) {
-      throw new Error('تم تجاوز الحد المسموح من الطلبات لهذه الدقيقة (حصة مجانية محدودة من Google). يرجى الانتظار دقيقة واحدة ثم إعادة المحاولة، أو معالجة الصفحات بشكل منفصل بدل الدفعة الواحدة.');
+  if (hadRateLimitError) {
+    throw new Error('تم تجاوز الحد المسموح من الطلبات لهذه الدقيقة (حصة مجانية محدودة من Google) (429). يرجى الانتظار دقيقة واحدة ثم إعادة المحاولة.');
+  }
+  throw new Error(`تعذر الاتصال بالنماذج: ${errorReports.join(' | ')}`);
+}
+
+export interface GeminiExtraction extends ExtractedTableData {
+  models: string[];
+  modelUsed: string;
+  /** الإجمالي الكلي المكتوب في العطاء (للمقارنة بمجموع الفقرات)، أو null إن لم يُعثر عليه */
+  grandTotal: number | null;
+  grandTotalText?: string;
+  /** توقفت القراءة قبل آخر صفحة: رقم أول صفحة لم تُقرأ وسبب التوقف، وما قبلها مقروء في items */
+  stoppedAtPage?: number;
+  error?: string;
+}
+
+/**
+ * محرك استخراج الجداول عبر Gemini: كل الصفحات في دفعات (لا صفحة صفحة)، بصيغة رد إلزامية،
+ * ثم دمج الأوصاف الممتدة عبر الصفحات وتعليم الفقرات غير المسعّرة وقراءة الإجمالي المكتوب
+ */
+export async function extractBOQWithGeminiVision(
+  images: string[],
+  apiKey: string,
+  onProgress?: (progress: number, status: string) => void,
+  knownModels?: string[]
+): Promise<GeminiExtraction> {
+  const cleanKey = apiKey.trim();
+
+  // قائمة النماذج تُستكشف مرة واحدة لكل قراءة (لا لكل دفعة) حفاظاً على الحصة المجانية
+  let models = knownModels && knownModels.length > 0 ? knownModels : [];
+  if (models.length === 0) {
+    onProgress?.(5, 'جاري استكشاف النماذج النشطة في حساب Google الخاص بك...');
+    try {
+      const checkRes = await testGeminiApiKey(cleanKey);
+      if (checkRes.success) models = checkRes.models;
+    } catch (_) {}
+  }
+  if (models.length === 0) models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+
+  // دفعة قُطع ردها لطوله تُقسم نصفين وتُقرأ من جديد
+  let percent = 10;
+  const readBatch = async (imgs: string[], label: string): Promise<GeminiRawResult> => {
+    const r = await requestGeminiRows(imgs, cleanKey, models, s => onProgress?.(percent, `${label}: ${s}`));
+    if (!r.truncated) return r;
+    if (imgs.length === 1) {
+      throw new Error('رد النموذج على هذه الصفحة طويل جداً فقُطع قبل اكتماله.');
     }
-    throw new Error(`تعذر الاتصال بالنماذج: ${errorReports.join(' | ')}`);
+    const mid = Math.ceil(imgs.length / 2);
+    const a = await readBatch(imgs.slice(0, mid), label);
+    const b = await readBatch(imgs.slice(mid), label);
+    return { rows: [...a.rows, ...b.rows], grandTotal: b.grandTotal ?? a.grandTotal, grandTotalText: b.grandTotalText ?? a.grandTotalText,
+      rawText: `${a.rawText}\n${b.rawText}`, modelUsed: b.modelUsed, truncated: false };
+  };
+
+  const batches = batchPages(images);
+  const rows: any[] = [];
+  const rawTexts: string[] = [];
+  let grandTotal: number | null = null;
+  let grandTotalText: string | undefined;
+  let modelUsed = '';
+  let stoppedAtPage: number | undefined;
+  let error: string | undefined;
+
+  for (let b = 0; b < batches.length; b++) {
+    const { start, images: imgs } = batches[b];
+    const label = images.length === 1 ? 'الصفحة (1)'
+      : `الصفحات (${start + 1}–${start + imgs.length}) من (${images.length})`;
+    percent = Math.round(10 + (80 * b) / batches.length);
+    onProgress?.(percent, `${label}: جاري الإرسال...`);
+    try {
+      const r = await readBatch(imgs, label);
+      rows.push(...r.rows);
+      rawTexts.push(r.rawText);
+      if (r.grandTotal !== null) { grandTotal = r.grandTotal; grandTotalText = r.grandTotalText; }
+      modelUsed = r.modelUsed;
+    } catch (err: any) {
+      // دفعة أولى فاشلة = فشل القراءة كلها؛ بعدها يُحتفظ بما قُرئ ويُبلَّغ عن موضع التوقف
+      if (b === 0) throw err;
+      stoppedAtPage = start + 1;
+      error = err?.message || String(err);
+      break;
+    }
   }
 
-  try {
-    onProgress?.(80, 'جاري تفكيك وهيكلة البيانات وتدقيق الحسابات...');
+  const items = mergeContinuationRows(rows).map(mapGeminiRow);
+  onProgress?.(100, `تم استخراج (${items.length}) فقرة عبر الذكاء الاصطناعي${modelUsed ? ` (${modelUsed})` : ''}`);
 
-    const parsedRows = extractJsonArray(rawContent);
-
-    const items: Partial<BOQItem>[] = parsedRows.map((r: any, idx: number) => {
-      const itemNo = r.itemNo || idx + 1;
-      const description = r.description || `فقرة ${itemNo}`;
-      const unit = r.unit || 'عدد';
-      const quantity = parseArabicNumber(r.quantity) || 1;
-      const unitPrice = parseArabicNumber(r.unitPrice) || 0;
-      const total = parseArabicNumber(r.total) || (unitPrice * quantity);
-      const writtenText = r.writtenText ? String(r.writtenText).trim() : undefined;
-
-      const mathTotal = unitPrice > 0 ? unitPrice * quantity : total;
-      const isMathError = unitPrice > 0 && quantity > 1 && Math.abs(mathTotal - total) > 0.01;
-
-      let isTextDiscrepancy = false;
-      if (writtenText && writtenText.length > 2) {
-        const textNum = parseArabicTextToNumber(writtenText);
-        if (textNum !== null && textNum > 0 && Math.abs(textNum - (unitPrice || total)) > 0.01 && Math.abs(textNum - total) > 0.01) {
-          isTextDiscrepancy = true;
-        }
-      }
-
-      return {
-        itemNo,
-        description,
-        unit,
-        quantity,
-        estimatedTotal: 0,
-        bidderTotal: total,
-        enteredUnitPrice: unitPrice,
-        enteredBidderTotal: total,
-        writtenText,
-        hasMathError: isMathError,
-        hasTextDiscrepancy: isTextDiscrepancy
-      };
-    });
-
-    onProgress?.(100, `تم استخراج (${items.length}) فقرة بنجاح عبر الذكاء الاصطناعي!`);
-
-    return {
-      items,
-      rawText: rawContent,
-      confidence: 98,
-      models: modelsToTry
-    };
-
-  } catch (error: any) {
-    console.error('Gemini JSON parsing error:', error);
-    throw new Error('فشل تفكيك استجابة الذكاء الاصطناعي: ' + error.message);
-  }
+  return {
+    items,
+    rawText: rawTexts.join('\n'),
+    confidence: 98,
+    models,
+    modelUsed,
+    grandTotal,
+    grandTotalText,
+    stoppedAtPage,
+    error
+  };
 }
 
 interface OcrWord {

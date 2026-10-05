@@ -500,7 +500,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal === 0 && (
                           <div className="text-slate-500 font-bold flex items-center gap-1 text-[11px]">
                             <AlertTriangle className="w-3.5 h-3.5 text-slate-400" />
-                            <span>لا مبلغ للمجهز — راجِع العطاء الأصلي</span>
+                            {/* unpriced: قرأ الاستخراج «-» في خانة السعر، أي أن العطاء نفسه لم يسعّرها */}
+                            <span>{item.unpriced ? 'غير مسعّرة في العطاء («-») — راجِع الأصل' : 'لا مبلغ للمجهز — راجِع العطاء الأصلي'}</span>
                           </div>
                         )}
 

@@ -22,6 +22,7 @@ export interface BOQItem {
   hasMathError?: boolean;          // خطأ ضرب حسابي
   hasTextDiscrepancy?: boolean;    // تعارض تفقيط مع الرقم
   correctionRationale?: string;    // السند القانوني للتصحيح
+  unpriced?: boolean;              // الفقرة غير مسعّرة في العطاء نفسه («-» في خانة السعر)، كما قرأها الاستخراج
 }
 
 export interface TenderTotals {

@@ -40,6 +40,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [lowConfidencePages, setLowConfidencePages] = useState<{ page: number; confidence: number }[]>([]);
   // جرت قراءة على الصفحات الحالية (لتمييز «لم تبدأ القراءة» عن «انتهت بلا أسطر»)
   const [readAttempted, setReadAttempted] = useState(false);
+  // نتيجة قراءة Gemini الأخيرة: الإجمالي المكتوب في العطاء (للمقارنة بمجموع الفقرات) والنموذج المستخدم
+  const [geminiCheck, setGeminiCheck] = useState<{ statedTotal: number | null; statedText?: string; modelUsed: string } | null>(null);
 
   // ملف كبير قد تكون أغلب صفحاته منخفضة الجودة: تُذكر أول خمس فقط
   const summarizePages = (withConfidence: boolean) => {
@@ -147,21 +149,13 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // ومقلوب 90° 41%، وصفحة ممسوحة 51% (كلها مشوّهة)، وجدول بلا خطوط 82% (صحيح)
   const LOW_CONFIDENCE = 65;
 
-  // نتيجة قراءة صفحة واحدة: نجاح (مع نماذج Gemini المكتشفة لإعادة استخدامها) أو خطأ يوقف المعالجة
-  type PageResult = { ok: true; models?: string[]; confidence?: number } | { ok: false; error: string };
+  // نتيجة قراءة صفحة واحدة بالمحرك الموضعي: نجاح بنسبة الثقة، أو خطأ يوقف المعالجة
+  type PageResult = { ok: true; confidence: number } | { ok: false; error: string };
 
-  const processImage = async (dataUrl: string, activeKey: string, cachedModels?: string[]): Promise<PageResult> => {
+  const processImage = async (dataUrl: string): Promise<PageResult> => {
     setProgressPercent(10);
     setProgressStatus('جاري تهيئة معالجة الصورة...');
     try {
-      if (engineMode === 'ai_vision') {
-        const result = await extractBOQWithGeminiVision(dataUrl, activeKey, (p, status) => {
-          setProgressPercent(p);
-          setProgressStatus(status);
-        }, cachedModels);
-        setExtractedItems(prev => [...prev, ...result.items]);
-        return { ok: true, models: result.models };
-      }
       const result = await extractBOQFromImage(dataUrl, (p, status) => {
         setProgressPercent(p);
         setProgressStatus(status);
@@ -170,6 +164,36 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       return { ok: true, confidence: result.confidence };
     } catch (err: any) {
       return { ok: false, error: err?.message || 'تأكد من صحة المفتاح أو الاتصال' };
+    }
+  };
+
+  // أشهر خطأين من Gemini يُعرضان بالعربية بدل نص الخادم الخام (JSON بالإنجليزية)
+  const explainGeminiError = (message: string) => {
+    const invalidKey = /API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(message);
+    const quota = /\(429\)|RESOURCE_EXHAUSTED|quota/i.test(message);
+    if (invalidKey) {
+      setShowKeyInput(true);
+      setKeyTestStatus({ isTesting: false, success: false, message: 'مفتاح Gemini المحفوظ غير صالح. تحقق منه أو أدخل مفتاحاً جديداً ثم أعد القراءة.' });
+      return 'مفتاح Gemini غير صالح.';
+    }
+    return quota ? 'نفدت حصة الطلبات المجانية في Gemini مؤقتاً. انتظر دقيقة أو دقيقتين ثم أعد القراءة.' : message;
+  };
+
+  // Gemini: كل الصفحات في استدعاء واحد يقسمها دفعات (GEMINI_PAGES_PER_REQUEST) بدل طلب لكل صفحة،
+  // فيرى النموذج الجدول الممتد عبر الصفحات ويُستهلك من الحصة طلب واحد لعرض من 7 صفحات
+  const processWithGemini = async (activeKey: string) => {
+    try {
+      const result = await extractBOQWithGeminiVision(imagePreviews, activeKey, (p, status) => {
+        setProgressPercent(p);
+        setProgressStatus(status);
+      });
+      setExtractedItems(result.items);
+      setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed });
+      if (result.stoppedAtPage) {
+        alert(`توقفت القراءة عند الصفحة (${result.stoppedAtPage}) من (${imagePreviews.length}): ${explainGeminiError(result.error || '')}\nما استُخرج من الصفحات السابقة باقٍ في الجدول.`);
+      }
+    } catch (err: any) {
+      alert(`تعذّرت قراءة الصفحات: ${explainGeminiError(err?.message || 'تأكد من صحة المفتاح أو الاتصال')}\nتوقفت المعالجة.`);
     }
   };
 
@@ -193,36 +217,27 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
     setExtractedItems([]); // تنظيف النتائج السابقة
     setLowConfidencePages([]);
+    setGeminiCheck(null);
     setReadAttempted(true);
     setIsLoading(true);
     try {
-      // استكشاف النماذج النشطة مرة واحدة فقط وإعادة استخدامها لكل الصفحات
-      // بدل استعلام مكرر عن كل صفحة يستنزف حصة الطلبات المجانية بسرعة
-      let cachedModels: string[] | undefined;
+      if (engineMode === 'ai_vision') {
+        await processWithGemini(activeKey);
+        return;
+      }
       for (let i = 0; i < imagePreviews.length; i++) {
         setActiveImageIndex(i);
         setProgressStatus(`جاري معالجة الصفحة (${i + 1}) من (${imagePreviews.length})...`);
-        const result = await processImage(imagePreviews[i], activeKey, cachedModels);
+        const result = await processImage(imagePreviews[i]);
         if (!result.ok) {
-          // خطأ واحد يوقف المعالجة برسالة واحدة (لا رسالة لكل صفحة متبقية).
-          // أشهر خطأين من Gemini يُعرضان بالعربية بدل نص الخادم الخام (JSON بالإنجليزية)
-          const invalidKey = /API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(result.error);
-          const quota = /\(429\)|RESOURCE_EXHAUSTED|quota/i.test(result.error);
-          if (invalidKey) {
-            setShowKeyInput(true);
-            setKeyTestStatus({ isTesting: false, success: false, message: 'مفتاح Gemini المحفوظ غير صالح. تحقق منه أو أدخل مفتاحاً جديداً ثم أعد القراءة.' });
-          }
-          const reason = invalidKey ? 'مفتاح Gemini غير صالح.'
-            : quota ? 'نفدت حصة الطلبات المجانية في Gemini مؤقتاً. انتظر دقيقة أو دقيقتين ثم أعد القراءة.'
-            : result.error;
+          // خطأ واحد يوقف المعالجة برسالة واحدة (لا رسالة لكل صفحة متبقية)
           alert(
-            `تعذّرت قراءة الصفحة (${i + 1}) من (${imagePreviews.length}): ${reason}` +
+            `تعذّرت قراءة الصفحة (${i + 1}) من (${imagePreviews.length}): ${result.error}` +
             (i > 0 ? '\nتوقفت المعالجة، وما استُخرج من الصفحات السابقة باقٍ في الجدول.' : '\nتوقفت المعالجة.')
           );
           break;
         }
-        if (result.models && result.models.length > 0) cachedModels = result.models;
-        if (typeof result.confidence === 'number' && result.confidence < LOW_CONFIDENCE) {
+        if (result.confidence < LOW_CONFIDENCE) {
           const confidence = result.confidence;
           setLowConfidencePages(prev => [...prev, { page: i + 1, confidence }]);
         }
@@ -323,13 +338,31 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
+  // فحص الاكتمال: مجموع الفقرات المستخرجة مقابل الإجمالي المكتوب في العطاء. فرق بينهما يعني فقرة سقطت
+  // أو قُرئت خطأ، فيظهر تنبيه ويُطلب تأكيد قبل الإدراج
+  const extractedSum = extractedItems.reduce((s, i) => s + (i.bidderTotal || 0), 0);
+  const statedTotal = geminiCheck?.statedTotal ?? null;
+  const totalMismatch = statedTotal !== null && Math.abs(extractedSum - statedTotal) >= 1;
+  const unpricedCount = extractedItems.filter(i => i.unpriced).length;
+  const missingAmountCount = extractedItems.filter(i => !i.unpriced && !((i.bidderTotal || 0) > 0)).length;
+  const fmt = (n: number) => n.toLocaleString('en-US');
+
   const handleApply = () => {
     if (extractedItems.length === 0) return;
     if (lowConfidencePages.length > 0 && !window.confirm(
       `جودة القراءة منخفضة في الصفحة (${summarizePages(false)})، وقد تكون الفقرات المستخرجة مشوّهة.\n\n` +
       'هل تريد إدراجها في جدول المناقصة رغم ذلك؟'
     )) return;
-    onApplyExtractedItems(extractedItems, destinationMode, bidderName.trim() || undefined);
+    if (totalMismatch && !window.confirm(
+      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) يختلف عن الإجمالي المكتوب في العطاء (${fmt(statedTotal!)}) بفرق (${fmt(extractedSum - statedTotal!)}).\n` +
+      'قد تكون فقرة سقطت أو قُرئت خطأ.\n\nهل تريد إدراجها في جدول المناقصة رغم ذلك؟'
+    )) return;
+    // المبالغ المقروءة توضع في bidderTotal؛ عند «تعبئة الكلفة التخمينية» تُنقل إلى estimatedTotal
+    // (كانت تصل صفراً فتُمسح الكلفة التخمينية في الجدول). مبلغ غير مقروء لا يمس التخميني القائم
+    const items = destinationMode === 'estimated_only'
+      ? extractedItems.map(i => ({ ...i, estimatedTotal: (i.bidderTotal || 0) > 0 ? i.bidderTotal : undefined }))
+      : extractedItems;
+    onApplyExtractedItems(items, destinationMode, bidderName.trim() || undefined);
     onClose();
   };
 
@@ -550,6 +583,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                         setReadAttempted(false);
                         setLowConfidencePages([]);
                         setExtractedItems([]);
+                        setGeminiCheck(null);
                         setActiveImageIndex(0);
                       }}
                       disabled={isLoading}
@@ -648,6 +682,34 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   </div>
                 )}
 
+                {/* فحص الاكتمال بعد قراءة Gemini: مجموع الفقرات مقابل الإجمالي المكتوب في العطاء */}
+                {!isLoading && geminiCheck && extractedItems.length > 0 && (
+                  <div
+                    role={totalMismatch ? 'alert' : 'status'}
+                    className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                      statedTotal === null ? 'bg-slate-50 border-slate-200 text-slate-700'
+                        : totalMismatch ? 'bg-amber-50 border-amber-300 text-amber-950'
+                        : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                    }`}
+                  >
+                    <div className="font-black">
+                      {statedTotal === null
+                        ? 'لم يُعثر على إجمالي مكتوب في العطاء لمقارنته بمجموع الفقرات — راجع الفقرات مع الأصل.'
+                        : totalMismatch
+                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) يختلف عن الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>) بفرق (<bdi>{fmt(extractedSum - statedTotal)}</bdi>): قد تكون فقرة سقطت أو قُرئت خطأ، فراجعها مع الأصل قبل الإدراج.</>
+                        : <>✓ مجموع الفقرات المستخرجة يطابق الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>).</>}
+                    </div>
+                    {geminiCheck.statedText && <div className="mt-0.5">الإجمالي كتابةً في العطاء: {geminiCheck.statedText}</div>}
+                    {(unpricedCount > 0 || missingAmountCount > 0) && (
+                      <div className="mt-0.5">
+                        {unpricedCount > 0 && <>({unpricedCount}) فقرة غير مسعّرة في العطاء («-»). </>}
+                        {missingAmountCount > 0 && <>({missingAmountCount}) فقرة تعذّرت قراءة مبلغها — أدخله من الأصل. </>}
+                      </div>
+                    )}
+                    {geminiCheck.modelUsed && <div className="mt-0.5 text-[11px] opacity-75">قُرئت بالنموذج: <bdi dir="ltr">{geminiCheck.modelUsed}</bdi></div>}
+                  </div>
+                )}
+
                 {/* Progress / Loading State */}
                 {isLoading ? (
                   <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
@@ -699,8 +761,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 font-medium bg-white">
-                        {extractedItems.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-indigo-50/40">
+                        {extractedItems.map((item, idx) => {
+                          // «-» في العطاء، أو مبلغ تعذّرت قراءته: يُميَّز الصف ليُراجع مع الأصل
+                          const missingAmount = !item.unpriced && !((item.bidderTotal || 0) > 0);
+                          return (
+                          <tr key={idx} className={item.unpriced ? 'bg-slate-50' : missingAmount ? 'bg-rose-50/60' : 'hover:bg-indigo-50/40'}>
                             <td className="p-1.5 text-center font-bold bg-slate-50">
                               <input
                                 type="text"
@@ -720,6 +785,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'description', e.target.value)}
                                 className="w-full bg-transparent border-0 font-bold text-slate-800 text-ellipsis"
                               />
+                              {item.unpriced && (
+                                <span className="inline-block mt-0.5 text-[10px] font-bold text-slate-600 bg-slate-200 px-1.5 rounded">غير مسعّرة في العطاء («-»)</span>
+                              )}
+                              {missingAmount && (
+                                <span className="inline-block mt-0.5 text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 rounded">تعذّرت قراءة المبلغ — أدخله من الأصل</span>
+                              )}
                             </td>
                             <td className="p-1.5 text-center">
                               <input
@@ -763,7 +834,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

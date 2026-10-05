@@ -189,7 +189,8 @@ export function calculateBOQMetrics(
       writtenText: writtenTxt,
       hasMathError: isMathError,
       hasTextDiscrepancy: isTextDiscrepancy,
-      correctionRationale: isMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد' : undefined
+      correctionRationale: isMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد' : undefined,
+      unpriced: item.unpriced
     };
   });
 
