@@ -427,6 +427,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // اتجاه الفرق بالكلمات بدل إشارة سالبة تربك القراءة في السياق العربي
   const diffWords = statedTotal === null ? ''
     : `${extractedSum < statedTotal ? 'أقل' : 'أكثر'} منه بـ ${fmt(Math.abs(extractedSum - statedTotal))}`;
+  // الفحص نفسه يجري على جدول الكلفة التخمينية: كان نصه يذكر «العطاء» و«المجهز» دائماً، فيظن المستخدم
+  // أن إجمالي التخميني المقروء هو مبلغ عطاء المجهز. وعلامات أخطاء الضرب لا تُنقل إلى الكلفة التخمينية
+  const toEstimateDoc = destinationMode === 'estimated_only';
+  const docName = toEstimateDoc ? 'جدول الكلفة التخمينية' : 'العطاء';
+  const sumErrorCause = toEstimateDoc ? 'أو جُمع الإجمالي في الجدول نفسه خطأً' : 'أو أخطأ المجهز في جمع الإجمالي';
 
   const handleApply = () => {
     if (extractedItems.length === 0) return;
@@ -435,10 +440,13 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       'هل تريد إدراجها في جدول المناقصة رغم ذلك؟'
     )) return;
     if (unexplainedMismatch && !window.confirm(
-      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) لا يساوي الإجمالي المكتوب في العطاء (${fmt(statedTotal!)}): ${diffWords}، ` +
+      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) لا يساوي الإجمالي المكتوب في ${docName} (${fmt(statedTotal!)}): ${diffWords}، ` +
       `ولا تفسر أخطاء الضرب في الفقرات هذا الفرق.\n` +
-      'قد تكون فقرة سقطت أو قُرئت خطأً، أو أخطأ المجهز في جمع الإجمالي. بعد الإدراج يؤشر النظام أخطاء الضرب والتفقيط، ' +
-      'لكنه لا يكتشف فقرة سقطت عند القراءة.\n\nهل طابقت عدد الفقرات ومبالغها مع الأصل وتريد إدراجها؟'
+      `قد تكون فقرة سقطت أو قُرئت خطأً، ${sumErrorCause}. ` +
+      (toEstimateDoc
+        ? 'تُدرج الكلفة التخمينية بمبالغ الفقرات لا بالإجمالي المكتوب، ولا يُحفظ هذا الإجمالي، والنظام '
+        : 'بعد الإدراج يؤشر النظام أخطاء الضرب والتفقيط، لكنه ') +
+      'لا يكتشف فقرة سقطت عند القراءة.\n\nهل طابقت عدد الفقرات ومبالغها مع الأصل وتريد إدراجها؟'
     )) return;
     // المبالغ المقروءة توضع في bidderTotal؛ عند «تعبئة الكلفة التخمينية» تُنقل إلى estimatedTotal
     // (كانت تصل صفراً فتُمسح الكلفة التخمينية في الجدول). مبلغ غير مقروء لا يمس التخميني القائم
@@ -809,26 +817,28 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   >
                     <div className="font-black">
                       {statedTotal === null
-                        ? 'لم يُعثر على إجمالي مكتوب في العطاء لمقارنته بمجموع الفقرات — راجع الفقرات مع الأصل.'
+                        ? `لم يُعثر على إجمالي مكتوب في ${docName} لمقارنته بمجموع الفقرات — راجع الفقرات مع الأصل.`
                         : unexplainedMismatch
-                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) لا يساوي الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>): {diffWords}، ولا تفسر أخطاء الضرب{mathErrorCount > 0 ? ` في (${mathErrorCount}) فقرة` : ''} هذا الفرق. قد تكون فقرة سقطت أو قُرئت خطأً، أو أخطأ المجهز في جمع الإجمالي: طابق عدد الفقرات ومبالغها مع الأصل قبل الإدراج.</>
+                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) لا يساوي الإجمالي المكتوب في {docName} (<bdi>{fmt(statedTotal)}</bdi>): {diffWords}، ولا تفسر أخطاء الضرب{mathErrorCount > 0 ? ` في (${mathErrorCount}) فقرة` : ''} هذا الفرق. قد تكون فقرة سقطت أو قُرئت خطأً، {sumErrorCause}: طابق عدد الفقرات ومبالغها مع الأصل قبل الإدراج.</>
                         : explainedByMath
-                        ? <>مجموع المبالغ كما كتبها المجهز (<bdi>{fmt(extractedSum)}</bdi>) لا يساوي الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>)، لكن الإجمالي يساوي مجموع «العدد × المفرد»: الفرق سببه أخطاء ضرب في ({mathErrorCount}) فقرة مؤشرة في الجدول.</>
-                        : <>✓ مجموع الفقرات المستخرجة يطابق الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>).</>}
+                        ? <>مجموع المبالغ كما {toEstimateDoc ? 'كُتبت في الجدول' : 'كتبها المجهز'} (<bdi>{fmt(extractedSum)}</bdi>) لا يساوي الإجمالي المكتوب في {docName} (<bdi>{fmt(statedTotal)}</bdi>)، لكن الإجمالي يساوي مجموع «العدد × المفرد»: الفرق سببه أخطاء ضرب في ({mathErrorCount}) فقرة مؤشرة في الجدول.</>
+                        : <>✓ مجموع الفقرات المستخرجة يطابق الإجمالي المكتوب في {docName} (<bdi>{fmt(statedTotal)}</bdi>).</>}
                     </div>
                     {mathErrorCount > 0 && !unexplainedMismatch && (
                       <div className="mt-0.5">
                         {!explainedByMath && <>في ({mathErrorCount}) فقرة لا يساوي «العدد × المفرد» المبلغ المكتوب (مؤشرة في الجدول). </>}
-                        تُدرج كما كتبها المجهز، ويؤشرها النظام لتقرر اللجنة تصحيحها. طابقها مع الصورة أولاً، وما قُرئ خطأً صححه هنا.
+                        {toEstimateDoc
+                          ? 'تُدرج الكلفة التخمينية بالمبلغ المكتوب في كل فقرة، ولا تُؤشَّر بعد الإدراج: طابقها مع الصورة وصحح هنا ما يلزم قبل الإدراج.'
+                          : 'تُدرج كما كتبها المجهز، ويؤشرها النظام لتقرر اللجنة تصحيحها. طابقها مع الصورة أولاً، وما قُرئ خطأً صححه هنا.'}
                       </div>
                     )}
-                    {geminiCheck.statedText && <div className="mt-0.5">الإجمالي كتابةً في العطاء: {geminiCheck.statedText}</div>}
+                    {geminiCheck.statedText && <div className="mt-0.5">الإجمالي كتابةً في {docName}: {geminiCheck.statedText}</div>}
                     {statedTotal !== null && destinationMode !== 'estimated_only' && (
                       <div className="mt-0.5">يُحفظ هذا الإجمالي مع العطاء، فيظهر المبلغ قبل التصحيح الحسابي وبعده في الشاشة والمحضر.</div>
                     )}
                     {(unpricedCount > 0 || missingAmountCount > 0) && (
                       <div className="mt-0.5">
-                        {unpricedCount > 0 && <>({unpricedCount}) فقرة غير مسعّرة في العطاء («-»). </>}
+                        {unpricedCount > 0 && <>({unpricedCount}) فقرة غير مسعّرة في {docName} («-»). </>}
                         {missingAmountCount > 0 && <>({missingAmountCount}) فقرة تعذّرت قراءة مبلغها — أدخله من الأصل. </>}
                       </div>
                     )}
