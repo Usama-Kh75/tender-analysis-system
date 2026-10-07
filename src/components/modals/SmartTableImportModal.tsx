@@ -15,7 +15,7 @@ import {
 import * as XLSX from 'xlsx';
 import { BOQItem } from '../../types/tender';
 import { parseArabicNumber } from '../../utils/calculations';
-import { auditBidderRows, BidderAuditReport, parseArabicTextToNumber } from '../../utils/bidderAuditEngine';
+import { auditBidderRows, auditRowAmounts, BidderAuditReport } from '../../utils/bidderAuditEngine';
 import { isPdfFile } from '../../utils/pdfService';
 
 export type ImportDocType = 'bidder' | 'estimated' | 'both';
@@ -352,16 +352,9 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
       const writtenVal = writtenIdx !== -1 && row[writtenIdx] ? String(row[writtenIdx]).trim() : undefined;
 
-      const mathTotal = unitPriceVal > 0 ? (unitPriceVal * (qtyVal || 1)) : enteredBidVal;
-      const isMathErr = unitPriceVal > 0 && Math.abs(mathTotal - enteredBidVal) > 0.01;
-
-      let isTextDisc = false;
-      if (writtenVal && writtenVal.length > 2) {
-        const textNum = parseArabicTextToNumber(writtenVal);
-        if (textNum !== null && textNum > 0 && Math.abs(textNum - enteredBidVal) > 0.01) {
-          isTextDisc = true;
-        }
-      }
+      // العلامتان كما في تقرير المعاينة والقراءة بالذكاء الاصطناعي: التفقيط للمفرد أو للمبلغ، والضرب لكمية أكبر من 1
+      const { hasMathError: isMathErr, hasTextDiscrepancy: isTextDisc } =
+        auditRowAmounts(qtyVal || 1, unitPriceVal, enteredBidVal, writtenVal);
 
       // الحفاظ على مبلغ المجهز الأصلي كما دونه في العطاء تماماً
       const finalBidderVal = enteredBidVal;
@@ -782,7 +775,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                               <option value="unitPrice">🏷️ سعر المفرد (د.ع)</option>
                               <option value="quantity">🔢 العدد / الكمية</option>
                               <option value="bidderTotal">🏢 مبلغ الفقرة رقماً</option>
-                              <option value="writtenText">📝 مبلغ الفقرة كتابةً</option>
+                              <option value="writtenText">📝 التفقيط (المفرد أو المبلغ كتابةً)</option>
                               <option value="description">📋 اسم المادة / الوصف</option>
                               <option value="itemNo">🔢 رقم الفقرة (ت)</option>
                               <option value="estimatedTotal">💰 المبلغ التخميني</option>

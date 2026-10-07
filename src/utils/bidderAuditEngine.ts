@@ -219,22 +219,13 @@ export const auditBidderRows = (
 
     // 1. تدقيق الخطأ الحسابي في حاصل الضرب (سعر المفرد * العدد - يطبق فقط عند وجود كمية أكبر من 1)
     const calculatedMathTotal = unitPrice > 0 && quantity > 1 ? (unitPrice * quantity) : enteredNumberTotal;
-    const hasMathError = unitPrice > 0 && quantity > 1 && Math.abs(calculatedMathTotal - enteredNumberTotal) > 0.01;
     const mathDifference = calculatedMathTotal - enteredNumberTotal;
 
-    // 2. تدقيق التناقض بين المكتوب رقماً والمكتوب كتابةً (التفقيط)
-    let hasTextDiscrepancy = false;
-    let textParsedTotal: number | undefined = undefined;
-
-    if (writtenText && writtenText.length > 2) {
-      const parsed = parseArabicTextToNumber(writtenText);
-      if (parsed !== null && parsed > 0) {
-        textParsedTotal = parsed;
-        if (Math.abs(parsed - enteredNumberTotal) > 0.01) {
-          hasTextDiscrepancy = true;
-        }
-      }
-    }
+    // 2. العلامتان من auditRowAmounts كالقراءة بالذكاء الاصطناعي: التفقيط يُقبل إن ساوى المفرد أو المبلغ
+    // (كان يُقارن بالمبلغ وحده فيُعلَّم كل صف تفقيطه لسعر المفرد)
+    const { hasMathError, hasTextDiscrepancy } = auditRowAmounts(quantity, unitPrice, enteredNumberTotal, writtenText);
+    const parsedText = writtenText && writtenText.length > 2 ? parseArabicTextToNumber(writtenText) : null;
+    const textParsedTotal = parsedText !== null && parsedText > 0 ? parsedText : undefined;
 
     // 3. تحديد الإجراء والتصحيح القانوني
     const legalCorrectionApplied = calculatedMathTotal;
@@ -250,7 +241,7 @@ export const auditBidderRows = (
     if (hasTextDiscrepancy) {
       textDiscrepanciesCount++;
       auditNotes.push(
-        `تعارض تفقيط: المكتوب كتابةً (${writtenText}) يختلف عن الرقم المدون (${enteredNumberTotal.toLocaleString()} د.ع)`
+        `تعارض تفقيط: المكتوب كتابةً (${writtenText}) لا يساوي سعر المفرد (${unitPrice.toLocaleString()} د.ع) ولا مبلغ الفقرة (${enteredNumberTotal.toLocaleString()} د.ع)`
       );
     }
 
