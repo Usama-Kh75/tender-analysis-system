@@ -75,14 +75,17 @@ const WrittenTextInput: React.FC<{ value: string; onCommit: (v: string) => void;
   );
 };
 
-const EditTextButton: React.FC<{ rowId: string; itemNo: number | string; onClick: () => void }> = ({ rowId, itemNo, onClick }) => (
+// adding: فقرة بلا تفقيط (أغفلته القراءة، أو مُسح لأنها اختلقته)، فيُضاف كما في العطاء
+const EditTextButton: React.FC<{ rowId: string; itemNo: number | string; onClick: () => void; adding?: boolean }> = ({ rowId, itemNo, onClick, adding }) => (
   <button
     type="button"
     onClick={onClick}
     data-edit-text={rowId}
     className="shrink-0 p-0.5 rounded text-slate-500 hover:text-indigo-700 hover:bg-white transition cursor-pointer"
-    title="تصحيح قراءة التفقيط إن خالف نص العطاء، فيُعاد فحص الفقرة"
-    aria-label={`تصحيح قراءة التفقيط للفقرة ${itemNo}`}
+    title={adding
+      ? 'إضافة المبلغ كتابةً كما في العطاء إن أغفلته القراءة، فيُعاد فحص الفقرة'
+      : 'تصحيح قراءة التفقيط إن خالف نص العطاء، فيُعاد فحص الفقرة'}
+    aria-label={`${adding ? 'إضافة التفقيط' : 'تصحيح قراءة التفقيط'} للفقرة ${itemNo}`}
   >
     <Pencil className="w-3 h-3" />
   </button>
@@ -599,19 +602,29 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         )}
 
                         {/* 4. فقرة بلا مبلغ (لم تُسعَّر في العطاء «-» أو لم تُدخل بعد): ليست «سليمة» بل تُراجع مع الأصل */}
-                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal === 0 && (
+                        {/* في هذا السطر وفي الحالتين 4 و5 لا تفقيط للفقرة: يُتاح إضافته بالقلم، وإلا تعذّر استدراك تفقيط
+                            أغفلته القراءة أو مُسح خطأً */}
+                        {!item.writtenText && item.hasMathError && editingTextId !== item.id && (
+                          <div className="text-slate-500 font-bold flex items-center gap-1 text-[11px]">
+                            <span className="flex-1">لا تفقيط مقروء للفقرة</span>
+                            <EditTextButton rowId={item.id} itemNo={item.itemNo} adding onClick={() => setEditingTextId(item.id)} />
+                          </div>
+                        )}
+                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal === 0 && editingTextId !== item.id && (
                           <div className="text-slate-500 font-bold flex items-center gap-1 text-[11px]">
                             <AlertTriangle className="w-3.5 h-3.5 text-slate-400" />
                             {/* unpriced: قرأ الاستخراج «-» في خانة السعر، أي أن العطاء نفسه لم يسعّرها */}
-                            <span>{item.unpriced ? 'غير مسعّرة في العطاء («-») — راجِع الأصل' : 'لا مبلغ للمجهز — راجِع العطاء الأصلي'}</span>
+                            <span className="flex-1">{item.unpriced ? 'غير مسعّرة في العطاء («-») — راجِع الأصل' : 'لا مبلغ للمجهز — راجِع العطاء الأصلي'}</span>
+                            <EditTextButton rowId={item.id} itemNo={item.itemNo} adding onClick={() => setEditingTextId(item.id)} />
                           </div>
                         )}
 
                         {/* 5. حالة السليم تماماً عند عدم وجود تفقيط أو أخطاء */}
-                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal !== 0 && (
+                        {!item.hasMathError && !item.hasTextDiscrepancy && !item.writtenText && item.bidderTotal !== 0 && editingTextId !== item.id && (
                           <div className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>سليم ومطابق حسابياً</span>
+                            <span className="flex-1">سليم ومطابق حسابياً</span>
+                            <EditTextButton rowId={item.id} itemNo={item.itemNo} adding onClick={() => setEditingTextId(item.id)} />
                           </div>
                         )}
 
