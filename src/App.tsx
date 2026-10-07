@@ -159,7 +159,8 @@ export function App() {
     const updatedBidder: Bidder = {
       ...activeBidder,
       items: recalc.items,
-      totals: recalc.totals
+      totals: recalc.totals,
+      statedTotal: undefined // المبلغ المدون يخص العطاء الذي صُفّرت مبالغه
     };
 
     const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
@@ -256,6 +257,25 @@ export function App() {
   const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) =>
     handleUpdateItemFields(index, { [field]: val } as Partial<BOQItem>);
 
+  // المبلغ الإجمالي المدون في العطاء (قبل التصحيح الحسابي): تملؤه قراءة Gemini، أو يدخله العضو من الأصل
+  const handleUpdateStatedTotal = (value: number) => {
+    const old = activeBidder.statedTotal;
+    const next = value > 0 ? value : undefined;
+    if (old === next) return;
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: currentProject.bidders.map(b => b.id === activeBidder.id ? { ...b, statedTotal: next } : b),
+      updatedAt: new Date().toISOString()
+    };
+    updatedProj = addAuditLog(
+      updatedProj,
+      'تسجيل المبلغ المدون في العطاء',
+      `المبلغ الإجمالي المدون في عطاء (${activeBidder.name}) من (${old?.toLocaleString('en-US') ?? '—'}) إلى (${next?.toLocaleString('en-US') ?? '—'})`,
+      { oldValue: old, newValue: next }
+    );
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
+
   // Add Item — يُضاف سطر فارغ لكافة المجهزين معاً، لأن الفقرة (الوصف/الوحدة/الكمية/الكلفة التخمينية) واحدة للمشروع
   const handleAddItem = () => {
     const nextNo = activeBidder.items.length + 1;
@@ -339,13 +359,17 @@ export function App() {
 
   // Apply OCR or Imported Items with Foolproof Row-by-Row Column Merging
   const handleApplyExtractedItems = (
-    extracted: Partial<BOQItem>[], 
-    mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean, 
-    bidderName?: string
+    extracted: Partial<BOQItem>[],
+    mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean,
+    bidderName?: string,
+    statedTotal?: number // الإجمالي المكتوب في العطاء كما قرأه الاستخراج (قبل التصحيح الحسابي)
   ) => {
     const isNew = mode === 'new_bidder' || mode === true;
     const isEstimatedOnly = mode === 'estimated_only';
     const isBidderOnly = mode === 'bidder_only';
+    const stated = statedTotal && statedTotal > 0 ? { statedTotal } : {};
+    const statedNote = statedTotal && statedTotal > 0
+      ? ` — المبلغ الإجمالي المدون في العطاء (${statedTotal.toLocaleString('en-US')})` : '';
 
     if (isNew) {
       // 1. إنشاء مجهز / شركة جديدة
@@ -394,6 +418,7 @@ export function App() {
         submissionDate: new Date().toISOString().split('T')[0],
         items: recalc.items,
         totals: recalc.totals,
+        ...stated,
         status: 'pending'
       };
 
@@ -410,7 +435,7 @@ export function App() {
       updatedProj = addAuditLog(
         updatedProj,
         'استيراد عطاء شركة جديدة',
-        `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة`
+        `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة${statedNote}`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
@@ -507,10 +532,12 @@ export function App() {
 
       const recalc = calculateBOQMetrics(mergedItems, currentProject.deviationThreshold);
 
+      // استيراد بلا إجمالي مقروء (Excel مثلاً) لا يمس المبلغ المدون المسجل سابقاً
       const updatedBidder: Bidder = {
         ...activeBidder,
         items: recalc.items,
-        totals: recalc.totals
+        totals: recalc.totals,
+        ...stated
       };
 
       // توحيد أي صفوف جديدة أضافها الاستيراد (هوية الفقرة وكلفتها التخمينية) مع بقية المجهزين أيضاً
@@ -525,7 +552,7 @@ export function App() {
       updatedProj = addAuditLog(
         updatedProj,
         'تحديث أسعار مجهز',
-        `تم تحديث وتعبئة أسعار المجهز (${activeBidder.name}) لـ (${extracted.length}) فقرة`
+        `تم تحديث وتعبئة أسعار المجهز (${activeBidder.name}) لـ (${extracted.length}) فقرة${statedNote}`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
@@ -1067,6 +1094,9 @@ export function App() {
           totals={activeBidder.totals}
           currency={currentProject.currency}
           deviationThreshold={currentProject.deviationThreshold}
+          statedTotal={activeBidder.statedTotal}
+          pendingAuditCount={activeBidder.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length}
+          onChangeStatedTotal={handleUpdateStatedTotal}
         />
 
         {/* Content based on Tab */}

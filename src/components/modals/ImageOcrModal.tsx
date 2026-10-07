@@ -12,7 +12,8 @@ import {
   Eye
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl, ReadingPages } from '../../utils/ocrService';
+import { auditRowAmounts } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 
 /**
@@ -31,7 +32,8 @@ interface ImageOcrModalProps {
   onApplyExtractedItems: (
     items: Partial<BOQItem>[],
     mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean,
-    bidderName?: string
+    bidderName?: string,
+    statedTotal?: number
   ) => void;
   handoff?: OcrHandoff | null;
 }
@@ -54,6 +56,26 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [readAttempted, setReadAttempted] = useState(false);
   // نتيجة قراءة Gemini الأخيرة: الإجمالي المكتوب في العطاء (للمقارنة بمجموع الفقرات) والنموذج المستخدم
   const [geminiCheck, setGeminiCheck] = useState<{ statedTotal: number | null; statedText?: string; modelUsed: string } | null>(null);
+  // الصفحات التي تُقرأ الآن: تنتقل إليها المعاينة وتُعلَّم في شريط الصفحات، وما قبلها مقروء
+  const [readingRange, setReadingRange] = useState<ReadingPages | null>(null);
+  const lastReading = useRef('');
+  const thumbRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // دفعة جديدة تنقل المعاينة إلى أول صفحاتها مرة واحدة (لا مع كل رسالة تقدم)، فيبقى للمستخدم أن يفتح
+  // غيرها أثناء الانتظار. Gemini يقرأ صفحات الدفعة معاً، فالمتابعة بالدفعة لا بالصفحة
+  const followReading = (reading?: ReadingPages) => {
+    if (!reading) return;
+    const key = `${reading.start}:${reading.count}`;
+    if (key === lastReading.current) return;
+    lastReading.current = key;
+    setReadingRange(reading);
+    setActiveImageIndex(reading.start);
+  };
+
+  // الصفحة المعروضة تبقى ظاهرة في الشريط أثناء القراءة (ملف من 19 صفحة لا يتسع له الشريط)
+  useEffect(() => {
+    if (readingRange) thumbRefs.current[activeImageIndex]?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [activeImageIndex, readingRange]);
 
   // ملف كبير قد تكون أغلب صفحاته منخفضة الجودة: تُذكر أول خمس فقط
   const summarizePages = (withConfidence: boolean) => {
@@ -218,9 +240,10 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // فيرى النموذج الجدول الممتد عبر الصفحات ويُستهلك من الحصة طلب واحد لعرض من 7 صفحات
   const processWithGemini = async (activeKey: string) => {
     try {
-      const result = await extractBOQWithGeminiVision(imagePreviews, activeKey, (p, status) => {
+      const result = await extractBOQWithGeminiVision(imagePreviews, activeKey, (p, status, reading) => {
         setProgressPercent(p);
         setProgressStatus(status);
+        followReading(reading);
       });
       setExtractedItems(result.items);
       setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed });
@@ -254,6 +277,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setLowConfidencePages([]);
     setGeminiCheck(null);
     setReadAttempted(true);
+    lastReading.current = '';
     setIsLoading(true);
     try {
       if (engineMode === 'ai_vision') {
@@ -261,7 +285,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         return;
       }
       for (let i = 0; i < imagePreviews.length; i++) {
-        setActiveImageIndex(i);
+        followReading({ start: i, count: 1 });
         setProgressStatus(`جاري معالجة الصفحة (${i + 1}) من (${imagePreviews.length})...`);
         const result = await processImage(imagePreviews[i]);
         if (!result.ok) {
@@ -279,6 +303,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       }
     } finally {
       setIsLoading(false);
+      setReadingRange(null);
     }
   };
 
@@ -299,9 +324,19 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
+  // تصحيح رقم قُرئ خطأً: الرقم المصحح هو ما كتبه المجهز، فيُحدَّث المبلغ المدون معه وتُعاد علامتا التدقيق
+  // (كانتا تبقيان على القراءة الأولى، فيعرض الجدول بعد الإدراج «المدون في العطاء» بالرقم المقروء خطأً،
+  // أو خطأ ضرب لم يرتكبه المجهز)
   const handleUpdateExtractedItem = (index: number, field: keyof BOQItem, val: any) => {
     const updated = [...extractedItems];
-    updated[index] = { ...updated[index], [field]: val };
+    const item: Partial<BOQItem> = { ...updated[index], [field]: val };
+    if (field === 'bidderTotal') item.enteredBidderTotal = val;
+    // مبلغ أُدخل لفقرة عُدّت غير مسعّرة: لم تكن «-» في الأصل
+    if ((field === 'bidderTotal' || field === 'enteredUnitPrice') && val > 0) item.unpriced = undefined;
+    if (field === 'quantity' || field === 'enteredUnitPrice' || field === 'bidderTotal' || field === 'writtenText') {
+      Object.assign(item, auditRowAmounts(item.quantity || 1, item.enteredUnitPrice || 0, item.bidderTotal || 0, item.writtenText));
+    }
+    updated[index] = item;
     setExtractedItems(updated);
   };
 
@@ -373,11 +408,19 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
-  // فحص الاكتمال: مجموع الفقرات المستخرجة مقابل الإجمالي المكتوب في العطاء. فرق بينهما يعني فقرة سقطت
-  // أو قُرئت خطأ، فيظهر تنبيه ويُطلب تأكيد قبل الإدراج
+  // فحص الاكتمال: الإجمالي المكتوب في العطاء مقابل مجموع المبالغ كما كتبها المجهز، ومقابل مجموع
+  // «العدد × المفرد». فرق تفسره أخطاء الضرب خطأ من المجهز يُدرج كما هو، ويؤشره النظام لتقرر اللجنة
+  // تصحيحه. أما فرق لا تفسره فقد يكون فقرة سقطت عند القراءة، وهذه لا يكتشفها النظام بعد الإدراج،
+  // فيُطلب تأكيد بمطابقة الأصل
+  const rowMath = extractedItems.map(i => auditRowAmounts(i.quantity || 1, i.enteredUnitPrice || 0, i.bidderTotal || 0).hasMathError);
+  const mathErrorCount = rowMath.filter(Boolean).length;
   const extractedSum = extractedItems.reduce((s, i) => s + (i.bidderTotal || 0), 0);
+  const productsSum = extractedItems.reduce(
+    (s, i, idx) => s + (rowMath[idx] ? (i.enteredUnitPrice || 0) * (i.quantity || 1) : (i.bidderTotal || 0)), 0);
   const statedTotal = geminiCheck?.statedTotal ?? null;
   const totalMismatch = statedTotal !== null && Math.abs(extractedSum - statedTotal) >= 1;
+  const explainedByMath = totalMismatch && mathErrorCount > 0 && Math.abs(productsSum - statedTotal!) < 1;
+  const unexplainedMismatch = totalMismatch && !explainedByMath;
   const unpricedCount = extractedItems.filter(i => i.unpriced).length;
   const missingAmountCount = extractedItems.filter(i => !i.unpriced && !((i.bidderTotal || 0) > 0)).length;
   const fmt = (n: number) => n.toLocaleString('en-US');
@@ -391,16 +434,21 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       `جودة القراءة منخفضة في الصفحة (${summarizePages(false)})، وقد تكون الفقرات المستخرجة مشوّهة.\n\n` +
       'هل تريد إدراجها في جدول المناقصة رغم ذلك؟'
     )) return;
-    if (totalMismatch && !window.confirm(
-      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) يختلف عن الإجمالي المكتوب في العطاء (${fmt(statedTotal!)}): ${diffWords}.\n` +
-      'قد تكون فقرة سقطت أو قُرئت خطأ.\n\nهل تريد إدراجها في جدول المناقصة رغم ذلك؟'
+    if (unexplainedMismatch && !window.confirm(
+      `مجموع الفقرات المستخرجة (${fmt(extractedSum)}) لا يساوي الإجمالي المكتوب في العطاء (${fmt(statedTotal!)}): ${diffWords}، ` +
+      `ولا تفسر أخطاء الضرب في الفقرات هذا الفرق.\n` +
+      'قد تكون فقرة سقطت أو قُرئت خطأً، أو أخطأ المجهز في جمع الإجمالي. بعد الإدراج يؤشر النظام أخطاء الضرب والتفقيط، ' +
+      'لكنه لا يكتشف فقرة سقطت عند القراءة.\n\nهل طابقت عدد الفقرات ومبالغها مع الأصل وتريد إدراجها؟'
     )) return;
     // المبالغ المقروءة توضع في bidderTotal؛ عند «تعبئة الكلفة التخمينية» تُنقل إلى estimatedTotal
     // (كانت تصل صفراً فتُمسح الكلفة التخمينية في الجدول). مبلغ غير مقروء لا يمس التخميني القائم
-    const items = destinationMode === 'estimated_only'
+    const toEstimate = destinationMode === 'estimated_only';
+    const items = toEstimate
       ? extractedItems.map(i => ({ ...i, estimatedTotal: (i.bidderTotal || 0) > 0 ? i.bidderTotal : undefined }))
       : extractedItems;
-    onApplyExtractedItems(items, destinationMode, bidderName.trim() || undefined);
+    // الإجمالي المكتوب يُحفظ مع عطاء المجهز ليظهر المبلغ قبل التصحيح الحسابي وبعده
+    onApplyExtractedItems(items, destinationMode, bidderName.trim() || undefined,
+      toEstimate ? undefined : statedTotal ?? undefined);
     onClose();
   };
 
@@ -638,16 +686,31 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 {/* Thumbnail Strip for multiple pages */}
                 {imagePreviews.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-1">
-                    {imagePreviews.map((img, idx) => (
+                    {imagePreviews.map((img, idx) => {
+                      // أثناء القراءة: ما قبل الدفعة الحالية مقروء، وصفحاتها قيد القراءة، وما بعدها ينتظر
+                      const pageState = !readingRange ? null
+                        : idx < readingRange.start ? 'done'
+                        : idx < readingRange.start + readingRange.count ? 'reading' : null;
+                      return (
                       <div
                         key={idx}
+                        ref={el => { thumbRefs.current[idx] = el; }}
                         onClick={() => setActiveImageIndex(idx)}
+                        title={pageState === 'reading' ? 'تُقرأ الآن' : pageState === 'done' ? 'قُرئت' : undefined}
                         className={`relative shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden cursor-pointer transition ${
-                          idx === activeImageIndex ? 'border-indigo-600 ring-2 ring-indigo-300' : 'border-slate-200 hover:border-indigo-300'
+                          idx === activeImageIndex ? 'border-indigo-600 ring-2 ring-indigo-300'
+                            : pageState === 'reading' ? 'border-amber-400 ring-2 ring-amber-200'
+                            : 'border-slate-200 hover:border-indigo-300'
                         }`}
                       >
                         <img src={img} alt={`صفحة ${idx + 1}`} className="w-full h-full object-cover" />
-                        <span className="absolute bottom-0 left-0 right-0 bg-slate-900/70 text-white text-[9px] text-center font-bold">{idx + 1}</span>
+                        <span className={`absolute bottom-0 left-0 right-0 text-white text-[9px] text-center font-bold ${
+                          pageState === 'reading' ? 'bg-amber-500 animate-pulse'
+                            : pageState === 'done' ? 'bg-emerald-600/90'
+                            : 'bg-slate-900/70'
+                        }`}>
+                          {idx + 1}{pageState === 'reading' ? ' ⏳' : pageState === 'done' ? ' ✓' : ''}
+                        </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleRemoveImage(idx); }}
                           disabled={isLoading}
@@ -655,7 +718,17 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                           className="absolute top-0 right-0 bg-rose-600 text-white rounded-bl-lg p-0.5 text-[8px] font-bold cursor-pointer hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         >✕</button>
                       </div>
-                    ))}
+                      );
+                    })}
+                  </div>
+                )}
+
+                {readingRange && (
+                  <div role="status" className="text-[11px] font-bold text-amber-950 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1">
+                    ⏳ {readingRange.count > 1
+                      ? `يقرأ النموذج الآن الصفحات (${readingRange.start + 1}–${readingRange.start + readingRange.count}) من (${imagePreviews.length}) معاً`
+                      : `تُقرأ الآن الصفحة (${readingRange.start + 1}) من (${imagePreviews.length})`}
+                    {' · '}المعروضة: الصفحة ({activeImageIndex + 1})
                   </div>
                 )}
 
@@ -726,21 +799,33 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 {/* فحص الاكتمال بعد قراءة Gemini: مجموع الفقرات مقابل الإجمالي المكتوب في العطاء */}
                 {!isLoading && geminiCheck && extractedItems.length > 0 && (
                   <div
-                    role={totalMismatch ? 'alert' : 'status'}
+                    role={unexplainedMismatch ? 'alert' : 'status'}
                     className={`p-3 rounded-xl border text-xs leading-relaxed ${
                       statedTotal === null ? 'bg-slate-50 border-slate-200 text-slate-700'
-                        : totalMismatch ? 'bg-amber-50 border-amber-300 text-amber-950'
+                        : unexplainedMismatch ? 'bg-amber-50 border-amber-300 text-amber-950'
+                        : explainedByMath ? 'bg-sky-50 border-sky-300 text-sky-950'
                         : 'bg-emerald-50 border-emerald-300 text-emerald-950'
                     }`}
                   >
                     <div className="font-black">
                       {statedTotal === null
                         ? 'لم يُعثر على إجمالي مكتوب في العطاء لمقارنته بمجموع الفقرات — راجع الفقرات مع الأصل.'
-                        : totalMismatch
-                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) يختلف عن الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>): {diffWords}. قد تكون فقرة سقطت أو قُرئت خطأ، فراجعها مع الأصل قبل الإدراج.</>
+                        : unexplainedMismatch
+                        ? <>⚠️ مجموع الفقرات المستخرجة (<bdi>{fmt(extractedSum)}</bdi>) لا يساوي الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>): {diffWords}، ولا تفسر أخطاء الضرب{mathErrorCount > 0 ? ` في (${mathErrorCount}) فقرة` : ''} هذا الفرق. قد تكون فقرة سقطت أو قُرئت خطأً، أو أخطأ المجهز في جمع الإجمالي: طابق عدد الفقرات ومبالغها مع الأصل قبل الإدراج.</>
+                        : explainedByMath
+                        ? <>مجموع المبالغ كما كتبها المجهز (<bdi>{fmt(extractedSum)}</bdi>) لا يساوي الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>)، لكن الإجمالي يساوي مجموع «العدد × المفرد»: الفرق سببه أخطاء ضرب في ({mathErrorCount}) فقرة مؤشرة في الجدول.</>
                         : <>✓ مجموع الفقرات المستخرجة يطابق الإجمالي المكتوب في العطاء (<bdi>{fmt(statedTotal)}</bdi>).</>}
                     </div>
+                    {mathErrorCount > 0 && !unexplainedMismatch && (
+                      <div className="mt-0.5">
+                        {!explainedByMath && <>في ({mathErrorCount}) فقرة لا يساوي «العدد × المفرد» المبلغ المكتوب (مؤشرة في الجدول). </>}
+                        تُدرج كما كتبها المجهز، ويؤشرها النظام لتقرر اللجنة تصحيحها. طابقها مع الصورة أولاً، وما قُرئ خطأً صححه هنا.
+                      </div>
+                    )}
                     {geminiCheck.statedText && <div className="mt-0.5">الإجمالي كتابةً في العطاء: {geminiCheck.statedText}</div>}
+                    {statedTotal !== null && destinationMode !== 'estimated_only' && (
+                      <div className="mt-0.5">يُحفظ هذا الإجمالي مع العطاء، فيظهر المبلغ قبل التصحيح الحسابي وبعده في الشاشة والمحضر.</div>
+                    )}
                     {(unpricedCount > 0 || missingAmountCount > 0) && (
                       <div className="mt-0.5">
                         {unpricedCount > 0 && <>({unpricedCount}) فقرة غير مسعّرة في العطاء («-»). </>}
@@ -806,7 +891,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                           // «-» في العطاء، أو مبلغ تعذّرت قراءته: يُميَّز الصف ليُراجع مع الأصل
                           const missingAmount = !item.unpriced && !((item.bidderTotal || 0) > 0);
                           return (
-                          <tr key={idx} className={item.unpriced ? 'bg-slate-50' : missingAmount ? 'bg-rose-50/60' : 'hover:bg-indigo-50/40'}>
+                          <tr key={idx} className={item.unpriced ? 'bg-slate-50' : missingAmount ? 'bg-rose-50/60' : rowMath[idx] ? 'bg-amber-50/70' : 'hover:bg-indigo-50/40'}>
                             <td className="p-1.5 text-center font-bold bg-slate-50">
                               <input
                                 type="text"
@@ -831,6 +916,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                               )}
                               {missingAmount && (
                                 <span className="inline-block mt-0.5 text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 rounded">تعذّرت قراءة المبلغ — أدخله من الأصل</span>
+                              )}
+                              {rowMath[idx] && (
+                                <span className="inline-block mt-0.5 text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 rounded">
+                                  العدد × المفرد = <bdi>{fmt((item.enteredUnitPrice || 0) * (item.quantity || 1))}</bdi> ≠ المبلغ — طابقه مع الصورة
+                                </span>
                               )}
                             </td>
                             <td className="p-1.5 text-center">

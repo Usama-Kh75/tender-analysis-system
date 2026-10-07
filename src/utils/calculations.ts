@@ -1,4 +1,4 @@
-import { parseArabicTextToNumber } from './bidderAuditEngine';
+import { auditRowAmounts } from './bidderAuditEngine';
 import { BOQItem, TenderTotals } from '../types/tender';
 
 /**
@@ -158,13 +158,10 @@ export function calculateBOQMetrics(
       ? item.hasMathError 
       : (enteredUnit > 0 && quantity > 1 && Math.abs(mathCalcTotal - enteredTotal) > 0.01);
 
-    let isTextDiscrepancy = item.hasTextDiscrepancy !== undefined ? item.hasTextDiscrepancy : false;
-    if (writtenTxt && writtenTxt.length > 2 && item.hasTextDiscrepancy === undefined) {
-      const parsedFromText = parseArabicTextToNumber(writtenTxt);
-      if (parsedFromText !== null && parsedFromText > 0 && Math.abs(parsedFromText - enteredTotal) > 0.01) {
-        isTextDiscrepancy = true;
-      }
-    }
+    // التفقيط قد يكون لسعر المفرد أو لمبلغ الفقرة: تعارض إن لم يساوِ أياً منهما (كان يُقارن بالمبلغ وحده)
+    const isTextDiscrepancy = item.hasTextDiscrepancy !== undefined
+      ? item.hasTextDiscrepancy
+      : auditRowAmounts(quantity, enteredUnit, enteredTotal, writtenTxt).hasTextDiscrepancy;
 
     return {
       id: item.id || `item-${index + 1}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,

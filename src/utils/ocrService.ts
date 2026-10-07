@@ -1,7 +1,7 @@
 import { createWorker } from 'tesseract.js';
 import { BOQItem } from '../types/tender';
 import { parseArabicNumber } from './calculations';
-import { parseArabicTextToNumber } from './bidderAuditEngine';
+import { auditRowAmounts } from './bidderAuditEngine';
 
 export interface ExtractedTableData {
   items: Partial<BOQItem>[];
@@ -291,17 +291,8 @@ function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
   const unitPrice = unpriced ? 0 : (parseArabicNumber(r?.unitPrice) || 0);
   const total = unpriced ? 0 : (parseArabicNumber(r?.total) || (unitPrice * quantity));
   const writtenText = isBlank(r?.writtenText) ? undefined : String(r.writtenText).trim();
-
-  const mathTotal = unitPrice > 0 ? unitPrice * quantity : total;
-  const isMathError = unitPrice > 0 && quantity > 1 && Math.abs(mathTotal - total) > 0.01;
-
-  let isTextDiscrepancy = false;
-  if (writtenText && writtenText.length > 2) {
-    const textNum = parseArabicTextToNumber(writtenText);
-    if (textNum !== null && textNum > 0 && Math.abs(textNum - (unitPrice || total)) > 0.01 && Math.abs(textNum - total) > 0.01) {
-      isTextDiscrepancy = true;
-    }
-  }
+  const { hasMathError: isMathError, hasTextDiscrepancy: isTextDiscrepancy } =
+    auditRowAmounts(quantity, unitPrice, total, writtenText);
 
   return {
     itemNo,
@@ -442,6 +433,12 @@ export interface GeminiExtraction extends ExtractedTableData {
   error?: string;
 }
 
+/** الصفحات التي تُقرأ الآن (بترتيبها من الصفر)، لتتابعها المعاينة */
+export interface ReadingPages {
+  start: number;
+  count: number;
+}
+
 /**
  * محرك استخراج الجداول عبر Gemini: كل الصفحات في دفعات (لا صفحة صفحة)، بصيغة رد إلزامية،
  * ثم دمج الأوصاف الممتدة عبر الصفحات وتعليم الفقرات غير المسعّرة وقراءة الإجمالي المكتوب
@@ -449,7 +446,7 @@ export interface GeminiExtraction extends ExtractedTableData {
 export async function extractBOQWithGeminiVision(
   images: string[],
   apiKey: string,
-  onProgress?: (progress: number, status: string) => void,
+  onProgress?: (progress: number, status: string, reading?: ReadingPages) => void,
   knownModels?: string[]
 ): Promise<GeminiExtraction> {
   const cleanKey = apiKey.trim();
@@ -465,17 +462,18 @@ export async function extractBOQWithGeminiVision(
   }
   if (models.length === 0) models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
 
-  // دفعة قُطع ردها لطوله تُقسم نصفين وتُقرأ من جديد
+  // دفعة قُطع ردها لطوله تُقسم نصفين وتُقرأ من جديد. start موضع أول صفحاتها في الملف
   let percent = 10;
-  const readBatch = async (imgs: string[], label: string): Promise<GeminiRawResult> => {
-    const r = await requestGeminiRows(imgs, cleanKey, models, s => onProgress?.(percent, `${label}: ${s}`));
+  const readBatch = async (imgs: string[], label: string, start: number): Promise<GeminiRawResult> => {
+    const reading = { start, count: imgs.length };
+    const r = await requestGeminiRows(imgs, cleanKey, models, s => onProgress?.(percent, `${label}: ${s}`, reading));
     if (!r.truncated) return r;
     if (imgs.length === 1) {
       throw new Error('رد النموذج على هذه الصفحة طويل جداً فقُطع قبل اكتماله.');
     }
     const mid = Math.ceil(imgs.length / 2);
-    const a = await readBatch(imgs.slice(0, mid), label);
-    const b = await readBatch(imgs.slice(mid), label);
+    const a = await readBatch(imgs.slice(0, mid), label, start);
+    const b = await readBatch(imgs.slice(mid), label, start + mid);
     return { rows: [...a.rows, ...b.rows], grandTotal: b.grandTotal ?? a.grandTotal, grandTotalText: b.grandTotalText ?? a.grandTotalText,
       rawText: `${a.rawText}\n${b.rawText}`, modelUsed: b.modelUsed, truncated: false };
   };
@@ -494,9 +492,9 @@ export async function extractBOQWithGeminiVision(
     const label = images.length === 1 ? 'الصفحة (1)'
       : `الصفحات (${start + 1}–${start + imgs.length}) من (${images.length})`;
     percent = Math.round(10 + (80 * b) / batches.length);
-    onProgress?.(percent, `${label}: جاري الإرسال...`);
+    onProgress?.(percent, `${label}: جاري الإرسال...`, { start, count: imgs.length });
     try {
-      const r = await readBatch(imgs, label);
+      const r = await readBatch(imgs, label, start);
       rows.push(...r.rows);
       rawTexts.push(r.rawText);
       if (r.grandTotal !== null) { grandTotal = r.grandTotal; grandTotalText = r.grandTotalText; }

@@ -31,6 +31,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const threshold = project.deviationThreshold;
   const pref = preferenceReference(project.contractType);
   const money = (b: Bidder) => formatCurrency(b.totals.totalBidderAmount, project.currency);
+  // المبلغ قبل التصحيح الحسابي وبعده: عمودان متى سُجّل المبلغ المدون لأي عطاء. الترتيب والتوصية على
+  // المبلغ بعد التصحيح (ضوابط رقم (4) خامساً/ب/6)
+  const showStated = project.bidders.filter(hasBidAmounts).some(b => (b.statedTotal ?? 0) > 0);
   const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
   const subjectLabel = {
     award: 'للعطاء الموصى به',
@@ -113,7 +116,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <tr>
                   <th className="border border-slate-300 p-2 text-center w-8">ت</th>
                   <th className="border border-slate-300 p-2">اسم الشركة / المجهز</th>
-                  <th className="border border-slate-300 p-2 text-center">مبلغ العطاء المقدم</th>
+                  {showStated ? (<>
+                    <th className="border border-slate-300 p-2 text-center">المبلغ المدون في العطاء</th>
+                    <th className="border border-slate-300 p-2 text-center">المبلغ بعد التدقيق الحسابي</th>
+                  </>) : (
+                    <th className="border border-slate-300 p-2 text-center">مبلغ العطاء المقدم</th>
+                  )}
                   <th className="border border-slate-300 p-2 text-center">الانحراف الكلي %</th>
                   <th className="border border-slate-300 p-2 text-center">الانحراف الجزئي %</th>
                   <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>
@@ -134,6 +142,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                     <tr key={b.id} className={isRec || isClose ? 'bg-emerald-50 font-bold' : isExcluded || isRejected ? 'bg-rose-50' : ''}>
                       <td className="border border-slate-300 p-2 text-center">{idx + 1}</td>
                       <td className="border border-slate-300 p-2 font-bold">{b.name}</td>
+                      {showStated && (
+                        <td className="border border-slate-300 p-2 text-center">{b.statedTotal ? formatNumber(b.statedTotal) : '—'}</td>
+                      )}
                       <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(b.totals.totalBidderAmount)}</td>
                       {/* قبل الكلفة التخمينية: «—» بدل أصفار توحي بالمطابقة */}
                       {rec.kind === 'no-estimate' ? (

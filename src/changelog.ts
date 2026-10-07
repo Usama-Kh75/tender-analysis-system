@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.11.0',
+    date: '2026-10-07',
+    notes: [
+      'يمكنك تسجيل المبلغ الإجمالي المدون في العطاء (تملؤه قراءة الذكاء الاصطناعي تلقائياً)، فيظهر مبلغ كل عطاء قبل التصحيح الحسابي وبعده في الشاشة وفي المحضر.'
+    ]
+  },
+  {
     version: '1.10.0',
     date: '2026-10-05',
     notes: [

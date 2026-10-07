@@ -44,6 +44,8 @@ export interface Bidder {
   submissionDate: string;
   items: BOQItem[];
   totals: TenderTotals;
+  // المبلغ الإجمالي كما كتبه المجهز في عطائه، قبل التصحيح الحسابي (totals بعده — ضوابط رقم (4) خامساً/ب/6)
+  statedTotal?: number;
   status: 'pending' | 'qualified' | 'disqualified' | 'recommended' | 'awarded';
   notes?: string;
 }

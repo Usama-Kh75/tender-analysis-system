@@ -172,6 +172,30 @@ export const parseArabicTextToNumber = (text: string): number | null => {
   return total > 0 ? total : null;
 };
 
+/**
+ * التفقيط في العطاء يُكتب لسعر المفرد أحياناً (جداول «سعر الفقرة: رقماً / كتابةً») ولمبلغ الفقرة أحياناً:
+ * يُنسب إلى الأقرب منهما بالنسبة لا بالفرق (260 أقرب إلى مفرد 250 منه إلى مبلغ 15,062,500)
+ */
+export const writtenAmountTarget = (written: number, unitPrice: number, total: number): 'unit' | 'total' => {
+  if (!(written > 0) || !(unitPrice > 0) || !(total > 0)) return 'total';
+  return Math.abs(Math.log(written / unitPrice)) < Math.abs(Math.log(written / total)) ? 'unit' : 'total';
+};
+
+/**
+ * علامتا التدقيق لفقرة كما كتبها المجهز: خطأ ضرب (المفرد × الكمية ≠ المبلغ، بشرط الكمية نفسه في
+ * calculateBOQMetrics)، وتعارض تفقيط (المكتوب كتابةً لا يساوي المفرد ولا المبلغ)
+ */
+export const auditRowAmounts = (quantity: number, unitPrice: number, total: number, writtenText?: string) => {
+  const hasMathError = unitPrice > 0 && quantity > 1 && Math.abs(unitPrice * quantity - total) > 0.01;
+  let hasTextDiscrepancy = false;
+  if (writtenText && writtenText.length > 2) {
+    const textNum = parseArabicTextToNumber(writtenText);
+    hasTextDiscrepancy = textNum !== null && textNum > 0
+      && Math.abs(textNum - (unitPrice || total)) > 0.01 && Math.abs(textNum - total) > 0.01;
+  }
+  return { hasMathError, hasTextDiscrepancy };
+};
+
 // تشغيل الفحص والتدقيق الحسابي والقانوني الشامل
 export const auditBidderRows = (
   rawRows: any[],
