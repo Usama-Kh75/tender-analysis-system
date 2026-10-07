@@ -327,7 +327,9 @@ export function App() {
       const base: BOQItem = isCommitteeCorrected(item) ? { ...item, bidderTotal: item.enteredBidderTotal || 0 } : item;
       let patch: Partial<BOQItem>;
       if (field === 'quantity') {
-        patch = { quantity: value as number };
+        // المفرد التخميني يُصفَّر فيُشتق من المبلغ التخميني والكمية الجديدة، كما عند تعديل المبلغ التخميني:
+        // كان يبقى مفرد الكمية القديمة (753.26 بدل 750 للفقرة 420) في تصدير Excel
+        patch = { quantity: value as number, estimatedUnitPrice: 0 };
       } else if (field === 'unitPrice') {
         const unit = value as number;
         patch = { enteredUnitPrice: unit, bidderUnitPrice: unit, bidderTotal: base.bidderTotal || unit * (base.quantity || 1) };

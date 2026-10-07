@@ -375,9 +375,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         setNewBidderName(cleanFileName);
       }
     } catch (err: any) {
-      alert(`حدث خطأ أثناء قراءة الملف: ${err.message}`);
+      // خطأ قراءة قديمة لا يظهر بعد إغلاق النافذة أو بدء قراءة أحدث
+      if (gen === readGenRef.current) alert(`حدث خطأ أثناء قراءة الملف: ${err.message}`);
     } finally {
-      setIsProcessing(false);
+      if (gen === readGenRef.current) setIsProcessing(false);
     }
   };
 
