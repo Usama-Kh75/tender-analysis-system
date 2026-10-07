@@ -69,6 +69,14 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 
 **Multi-bidder / multi-page merge logic** (in `App.tsx`'s `handleApplyExtractedItems` and `ImageOcrModal`'s `processAllImages`) is intentionally conservative: imports merge row-by-row by array index, preserving whichever side (existing table vs. newly extracted) already has real data rather than blindly overwriting — e.g. importing bidder prices never touches `estimatedTotal`, and vice versa. Preserve this merge discipline when touching import/OCR code; it's what prevents an OCR misread from silently clobbering already-verified figures.
 
+**Quantity is shared, and a bidder import keeps the table's quantity** (user decision, v1.11.10):
+- Both `bidder_only` and `new_bidder` keep the table's quantity. They clear the extracted flags so `calculateBOQMetrics` rechecks the row with that quantity.
+- Both previews list rows whose quantity differs (`quantityMismatches` + `QuantityMismatchNotice`), so the committee can fix the table quantity by hand if it is the wrong one.
+- A blank placeholder row («فقرة N», quantity 1, no estimate, no bidder amount; `isBlankRow`) is not a reference, so the file's quantity applies there.
+- An estimate import sets the quantity. Bidder rows whose quantity changed are rechecked, except committee-corrected rows.
+- A file without a quantity column leaves quantities unchanged; `mapImportRows` returns `undefined`, not 1.
+- `SmartTableImportModal.mapImportRows` is the single row mapping for both the preview audit and the insert. Keep them on it.
+
 **Legal/audit framing matters for UI behavior**: arithmetic correction is the committee's act, notified to and signed by the bidder (ضوابط رقم (4) خامساً/ب/3), so the system never silently auto-corrects a bidder's submitted numbers — math-error and text-discrepancy detection only *flags* rows (`hasMathError`, `hasTextDiscrepancy` in `BOQItem`); correction is an explicit, logged committee action (see `correctionRationale`, `AuditLogEntry`). Keep this "detect and flag, never silently rewrite" pattern when adding audit features.
 
 **A plain edit in the main table is a reading correction, not an arithmetic one** (since v1.11.7). Editing the quantity, unit price, item amount or tafqeet goes through `handleCorrectReading` in `App.tsx`, not `handleUpdateItemFields`:

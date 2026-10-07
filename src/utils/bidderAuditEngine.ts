@@ -198,6 +198,22 @@ export const auditRowAmounts = (quantity: number, unitPrice: number, total: numb
   return { hasMathError, hasTextDiscrepancy };
 };
 
+/**
+ * فقرات مستوردة لعطاء مجهز تختلف كميتها عن كمية الجدول في الموضع نفسه (الدمج بالترتيب). الكمية مشتركة بين
+ * الكلفة التخمينية والمجهزين، فتبقى كمية الجدول ويُفحص بها الضرب (handleApplyExtractedItems)، وتُعرض هذه
+ * الفقرات قبل الإدراج لتصحّح اللجنة كمية الجدول إن كانت هي الخاطئة
+ */
+export const quantityMismatches = (
+  items: { quantity?: number }[],
+  tableRows: { itemNo: number | string; quantity: number }[]
+) => items.flatMap((item, i) => {
+  const table = tableRows[i]?.quantity || 0;
+  const file = item.quantity || 0;
+  return table > 0 && file > 0 && Math.abs(file - table) > 1e-9
+    ? [{ itemNo: tableRows[i].itemNo, file, table }]
+    : [];
+});
+
 // تشغيل الفحص والتدقيق الحسابي والقانوني الشامل
 export const auditBidderRows = (
   rawRows: any[],

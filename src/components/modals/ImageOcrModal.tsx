@@ -13,8 +13,9 @@ import {
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
 import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl, ReadingPages } from '../../utils/ocrService';
-import { auditRowAmounts } from '../../utils/bidderAuditEngine';
+import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
+import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
 
 /**
  * ملفات PDF أو صور سلّمتها نافذة الاستيراد الموحّدة مع وجهتها (جدول المجهز أو الكلفة التخمينية):
@@ -36,13 +37,16 @@ interface ImageOcrModalProps {
     statedTotal?: number
   ) => void;
   handoff?: OcrHandoff | null;
+  // فقرات الجدول الحالية: إدراج عطاء مجهز يُبقي كميتها ويُفحص بها، فتُقارن بها الكمية المقروءة قبل الإدراج
+  tableRows?: Pick<BOQItem, 'itemNo' | 'quantity'>[];
 }
 
 export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   isOpen,
   onClose,
   onApplyExtractedItems,
-  handoff
+  handoff,
+  tableRows = []
 }) => {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
@@ -432,6 +436,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const toEstimateDoc = destinationMode === 'estimated_only';
   const docName = toEstimateDoc ? 'جدول الكلفة التخمينية' : 'العطاء';
   const sumErrorCause = toEstimateDoc ? 'أو جُمع الإجمالي في الجدول نفسه خطأً' : 'أو أخطأ المجهز في جمع الإجمالي';
+  // عطاء مجهز (الحالي أو جديد): تبقى كمية الجدول ويُفحص بها الضرب بعد الإدراج، فتُعرض الفقرات المخالفة.
+  // جدول الكلفة التخمينية يضع كميته فلا يُقارن
+  const qtyMismatchList = toEstimateDoc ? [] : quantityMismatches(extractedItems, tableRows);
 
   const handleApply = () => {
     if (extractedItems.length === 0) return;
@@ -846,6 +853,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   </div>
                 )}
 
+                {!isLoading && <QuantityMismatchNotice mismatches={qtyMismatchList} source="العطاء المقروء" />}
+
                 {/* Progress / Loading State */}
                 {isLoading ? (
                   <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
@@ -933,12 +942,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                                 </span>
                               )}
                             </td>
+                            {/* عرض يتسع لكمية من خمسة أرقام مع أسهم الحقل: بعرض w-12 ظهرت 11550 «550» */}
                             <td className="p-1.5 text-center">
                               <input
                                 type="number"
                                 value={item.quantity || 1}
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'quantity', parseFloat(e.target.value) || 1)}
-                                className="w-12 text-center bg-slate-50 border border-slate-200 rounded p-1 font-bold"
+                                aria-label={`كمية الفقرة ${item.itemNo ?? idx + 1}`}
+                                className="w-20 text-center bg-slate-50 border border-slate-200 rounded p-1 font-bold"
                               />
                             </td>
                             <td className="p-1.5 text-center bg-indigo-50/20">

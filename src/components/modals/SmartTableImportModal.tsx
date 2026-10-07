@@ -15,8 +15,9 @@ import {
 import * as XLSX from 'xlsx';
 import { BOQItem } from '../../types/tender';
 import { parseArabicNumber } from '../../utils/calculations';
-import { auditBidderRows, auditRowAmounts, BidderAuditReport } from '../../utils/bidderAuditEngine';
+import { auditBidderRows, auditRowAmounts, BidderAuditReport, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile } from '../../utils/pdfService';
+import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
 
 export type ImportDocType = 'bidder' | 'estimated' | 'both';
 export type ImportMode = 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace';
@@ -33,6 +34,8 @@ interface SmartTableImportModalProps {
   initialDocType?: ImportDocType;
   // مدخل استيراد واحد لكل أنواع الملفات: PDF والصور تُسلَّم لنافذة القراءة بالذكاء الاصطناعي بنوع الجدول المختار
   onReadWithAi?: (files: File[], docType: 'bidder' | 'estimated') => void;
+  // فقرات الجدول الحالية: استيراد عطاء المجهز يُبقي كميتها ويُفحص بها، فتُقارن بها كمية الملف في المعاينة
+  tableRows?: Pick<BOQItem, 'itemNo' | 'quantity'>[];
 }
 
 // PDF أو صورة: تُقرأ بالذكاء الاصطناعي لا بمطابقة الأعمدة
@@ -46,7 +49,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   onApplyExtractedItems,
   currentBidderName,
   initialDocType = 'bidder',
-  onReadWithAi
+  onReadWithAi,
+  tableRows = []
 }) => {
   const [docType, setDocType] = useState<ImportDocType>(initialDocType);
   const [allRawData, setAllRawData] = useState<string[][]>([]);
@@ -68,10 +72,14 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     setDocType(type);
   };
 
+  // رقم آخر قراءة ملف: الفتح والإغلاق وكل قراءة أحدث تُبطل ما قبلها، فلا تملأ قراءةٌ بطيئة لملف سابق نافذةً أُعيد فتحها
+  const readGenRef = useRef(0);
+
   // النافذة تبقى مركّبة بين الفتحات، فكل فتح يبدأ بلا ملف: كان الملف السابق وتقريره يبقيان بنوع الجدول
   // الافتراضي، فيمكن استيراده ثانية بغير نوعه
   useEffect(() => {
     chooseDocType(initialDocType);
+    readGenRef.current++;
     if (!isOpen) return;
     setAllRawData([]);
     setRawHeaders([]);
@@ -198,6 +206,59 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     return bestIdx;
   };
 
+  // صفوف الملف كما تُدرج (handleConfirmImport) وكما تُدقَّق في المعاينة، فيتطابقان. kept يُسقط صفوف «المجموع»
+  // الخالية من المبالغ، وtableQty كمية الجدول في موضع الفقرة بعد الإسقاط (الدمج بالترتيب). استيراد عطاء المجهز
+  // يُبقي كمية الجدول (handleApplyExtractedItems)، فيُفحص الضرب بها، وبلا عمود للمبلغ يُحسب المبلغ بها
+  const mapImportRows = (rows: string[][], roles: ColumnRole[], selectedDoc: ImportDocType) => {
+    const itemNoIdx = roles.indexOf('itemNo');
+    const estIdx = roles.indexOf('estimatedTotal');
+    const unitPriceIdx = roles.indexOf('unitPrice');
+    const qtyIdx = roles.indexOf('quantity');
+    const bidIdx = roles.indexOf('bidderTotal');
+    const descIdx = roles.indexOf('description');
+    const writtenIdx = roles.indexOf('writtenText');
+    let keptCount = 0;
+
+    return rows.map((row, idx) => {
+      const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? row[itemNoIdx] : String(idx + 1);
+      const estVal = estIdx !== -1 ? parseArabicNumber(row[estIdx]) : 0;
+      const unitPriceVal = unitPriceIdx !== -1 ? parseArabicNumber(row[unitPriceIdx]) : 0;
+      const fileQty = qtyIdx !== -1 ? parseArabicNumber(row[qtyIdx]) : 0; // 0: لا كمية في الملف
+      const writtenBid = bidIdx !== -1 ? parseArabicNumber(row[bidIdx]) : null;
+      const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
+      const writtenVal = writtenIdx !== -1 && row[writtenIdx] ? String(row[writtenIdx]).trim() : undefined;
+
+      const hasBidAmount = selectedDoc !== 'estimated' && (writtenBid !== null ? writtenBid > 0 : unitPriceVal > 0);
+      const kept = estVal > 0 || hasBidAmount || !descVal.includes('مجموع');
+      const tableQty = kept && selectedDoc === 'bidder' ? (tableRows[keptCount]?.quantity || 0) : 0;
+      if (kept) keptCount++;
+      const checkQty = tableQty > 0 ? tableQty : (fileQty || 1);
+
+      // الحفاظ على مبلغ المجهز الأصلي كما دونه في العطاء تماماً؛ بلا عمود للمبلغ يُحسب المفرد × الكمية
+      const enteredBidVal = writtenBid !== null ? writtenBid : unitPriceVal * checkQty;
+      // العلامتان كما في القراءة بالذكاء الاصطناعي: التفقيط للمفرد أو للمبلغ، والضرب لكمية أكبر من 1
+      const { hasMathError: isMathErr, hasTextDiscrepancy: isTextDisc } =
+        auditRowAmounts(checkQty, unitPriceVal, enteredBidVal, writtenVal);
+
+      const item: Partial<BOQItem> = {
+        itemNo: itemNoVal,
+        description: descVal,
+        // بلا كمية في الملف (عمود مبالغ ملصوق مثلاً) تبقى كمية الجدول: كانت 1 تحل محلها في كل الفقرات.
+        // الجدول المتكامل يستبدل الجدول كله فيبقى 1 فيه
+        quantity: fileQty > 0 ? fileQty : (selectedDoc === 'both' ? 1 : undefined),
+        estimatedTotal: estVal,
+        bidderTotal: selectedDoc === 'estimated' ? 0 : enteredBidVal,
+        enteredUnitPrice: unitPriceVal,
+        enteredBidderTotal: enteredBidVal,
+        writtenText: writtenVal,
+        hasMathError: isMathErr,
+        hasTextDiscrepancy: isTextDisc,
+        correctionRationale: isMathErr ? 'مؤشر خطأ ضرب في عطاء المجهز' : undefined
+      };
+      return { item, kept, fileQty, tableQty, checkQty };
+    });
+  };
+
   // تشغيل الفحص التدقيقي عند تجهيز الصفوف — تدقيق لعطاء المجهز وحده: جدول الكلفة التخمينية لا يُدرج منه
   // سعر مجهز ولا علامات (handleApplyExtractedItems يأخذ منه الكمية والتخميني فقط)، فكان تقريره يُنسب
   // «لعطاء المجهز» ويؤشّر خطأ ضرب في كل فقرة كميتها أكبر من 1
@@ -206,22 +267,13 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       setAuditReport(null);
       return;
     }
-    const itemNoIdx = roles.indexOf('itemNo');
-    const descIdx = roles.indexOf('description');
-    const unitPriceIdx = roles.indexOf('unitPrice');
-    const qtyIdx = roles.indexOf('quantity');
-    const totalIdx = roles.indexOf('bidderTotal');
-    const writtenIdx = roles.indexOf('writtenText');
-
-    const formattedRows = rows.map((r, i) => ({
-      itemNo: itemNoIdx !== -1 && r[itemNoIdx] ? r[itemNoIdx] : String(i + 1),
-      description: descIdx !== -1 && r[descIdx] ? r[descIdx] : `فقرة ${i + 1}`,
-      unitPrice: unitPriceIdx !== -1 ? r[unitPriceIdx] : 0,
-      quantity: qtyIdx !== -1 ? r[qtyIdx] : 1,
-      // بلا عمود للمبلغ يُحسب المفرد × الكمية كما في الإدراج (handleConfirmImport)، لا المفرد وحده
-      enteredTotal: totalIdx !== -1 ? r[totalIdx]
-        : unitPriceIdx !== -1 ? parseArabicNumber(r[unitPriceIdx]) * (qtyIdx !== -1 ? parseArabicNumber(r[qtyIdx]) || 1 : 1) : 0,
-      writtenText: writtenIdx !== -1 ? r[writtenIdx] : undefined
+    const formattedRows = mapImportRows(rows, roles, selectedDoc).map(({ item, checkQty }) => ({
+      itemNo: item.itemNo,
+      description: item.description,
+      unitPrice: item.enteredUnitPrice,
+      quantity: checkQty,
+      enteredTotal: item.enteredBidderTotal,
+      writtenText: item.writtenText
     }));
 
     const report = auditBidderRows(formattedRows, sourceFileName || currentBidderName);
@@ -292,11 +344,13 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
   // معالجة ملف Excel
   const handleExcelFile = async (file: File) => {
+    const gen = ++readGenRef.current;
     setIsProcessing(true);
     setSourceFileName(file.name);
 
     try {
       const data = await file.arrayBuffer();
+      if (gen !== readGenRef.current) return; // أُغلقت النافذة أو بدأت قراءة أحدث
       const workbook = XLSX.read(data, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[firstSheetName];
@@ -358,48 +412,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       return;
     }
 
-    const itemNoIdx = columnMappings.indexOf('itemNo');
-    const estIdx = columnMappings.indexOf('estimatedTotal');
-    const unitPriceIdx = columnMappings.indexOf('unitPrice');
-    const qtyIdx = columnMappings.indexOf('quantity');
-    const bidIdx = columnMappings.indexOf('bidderTotal');
-    const descIdx = columnMappings.indexOf('description');
-    const writtenIdx = columnMappings.indexOf('writtenText');
-
-    const extractedItems: Partial<BOQItem>[] = rawRows.map((row, idx) => {
-      const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? row[itemNoIdx] : String(idx + 1);
-      const estVal = estIdx !== -1 ? parseArabicNumber(row[estIdx]) : 0;
-      const unitPriceVal = unitPriceIdx !== -1 ? parseArabicNumber(row[unitPriceIdx]) : 0;
-      const qtyVal = qtyIdx !== -1 ? parseArabicNumber(row[qtyIdx]) : 1;
-      const enteredBidVal = bidIdx !== -1 ? parseArabicNumber(row[bidIdx]) : (unitPriceVal * (qtyVal || 1));
-      const descVal = descIdx !== -1 && row[descIdx] ? row[descIdx] : `فقرة ${itemNoVal}`;
-      const writtenVal = writtenIdx !== -1 && row[writtenIdx] ? String(row[writtenIdx]).trim() : undefined;
-
-      // العلامتان كما في تقرير المعاينة والقراءة بالذكاء الاصطناعي: التفقيط للمفرد أو للمبلغ، والضرب لكمية أكبر من 1
-      const { hasMathError: isMathErr, hasTextDiscrepancy: isTextDisc } =
-        auditRowAmounts(qtyVal || 1, unitPriceVal, enteredBidVal, writtenVal);
-
-      // الحفاظ على مبلغ المجهز الأصلي كما دونه في العطاء تماماً
-      const finalBidderVal = enteredBidVal;
-
-      return {
-        itemNo: itemNoVal,
-        description: descVal,
-        quantity: qtyVal || 1,
-        estimatedTotal: estVal,
-        bidderTotal: docType === 'estimated' ? 0 : finalBidderVal,
-        enteredUnitPrice: unitPriceVal,
-        enteredBidderTotal: enteredBidVal,
-        writtenText: writtenVal,
-        hasMathError: isMathErr,
-        hasTextDiscrepancy: isTextDisc,
-        correctionRationale: isMathErr ? 'مؤشر خطأ ضرب في عطاء المجهز' : undefined
-      };
-    }).filter(item => 
-      (item.estimatedTotal || 0) > 0 || 
-      (item.bidderTotal || 0) > 0 || 
-      (item.description && item.description.length > 0 && !item.description.includes('مجموع'))
-    );
+    const extractedItems = mapImportRows(rawRows, columnMappings, docType).filter(r => r.kept).map(r => r.item);
 
     if (extractedItems.length === 0) {
       alert('لم يتم العثور على قيم صالحة في الأعمدة المحددة.');
@@ -418,6 +431,13 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
     onClose();
   };
+
+  // فقرات كميتها في الملف تختلف عن كمية الجدول. لعطاء المجهز وحده: جدول الكلفة التخمينية يضع كميته،
+  // والجدول المتكامل يستبدل الجدول كله
+  const mappedRows = rawRows.length > 0 ? mapImportRows(rawRows, columnMappings, docType) : [];
+  const qtyMismatchList = docType === 'bidder'
+    ? quantityMismatches(mappedRows.filter(r => r.kept).map(r => ({ quantity: r.fileQty })), tableRows)
+    : [];
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -622,6 +642,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
           </div>
 
+          <QuantityMismatchNotice mismatches={qtyMismatchList} source="الملف" />
+
           {/* Step 2: Audit Results Dashboard (When Errors are Detected) */}
           {auditReport && auditReport.itemsWithErrorsCount > 0 && (
             <div className="bg-gradient-to-br from-rose-50 via-amber-50 to-white rounded-3xl border-2 border-rose-300 shadow-md p-5 space-y-4">
@@ -803,6 +825,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {rawRows.slice(0, 15).map((row, rowIdx) => {
                       const auditRow = auditReport?.rows[rowIdx];
+                      // كمية الملف تخالف كمية الجدول في موضع هذه الفقرة (تبقى كمية الجدول)
+                      const mapped = docType === 'bidder' ? mappedRows[rowIdx] : undefined;
+                      const qtyDiffers = !!mapped && mapped.fileQty > 0 && mapped.tableQty > 0
+                        && Math.abs(mapped.fileQty - mapped.tableQty) > 1e-9;
                       return (
                         <tr 
                           key={rowIdx} 
@@ -815,14 +841,18 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                             const val = row[colIdx] || '-';
                             const isIgnored = role === 'ignore';
 
+                            const qtyCellDiffers = role === 'quantity' && qtyDiffers;
                             return (
-                              <td 
-                                key={colIdx} 
+                              <td
+                                key={colIdx}
+                                title={qtyCellDiffers ? `كمية الجدول: ${mapped!.tableQty.toLocaleString('en-US')} — تبقى، ويُفحص الضرب بها` : undefined}
                                 className={`p-2.5 border-l border-slate-200 font-mono text-xs ${
-                                  isIgnored 
-                                    ? 'text-slate-400 bg-slate-50/50 line-through' 
+                                  isIgnored
+                                    ? 'text-slate-400 bg-slate-50/50 line-through'
                                     : role === 'unitPrice'
                                     ? 'text-indigo-950 bg-indigo-50/40 font-black'
+                                    : qtyCellDiffers
+                                    ? 'text-amber-950 bg-amber-100 font-black text-center'
                                     : role === 'quantity'
                                     ? 'text-purple-950 bg-purple-50/40 font-bold text-center'
                                     : role === 'bidderTotal' && auditRow?.hasMathError

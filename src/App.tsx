@@ -179,6 +179,21 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
+  // فقرة فارغة لم تُملأ بعد (الأولى في مناقصة جديدة، أو «+ إضافة فقرة»): وصفها الافتراضي «فقرة N» وكميتها 1
+  // بلا كلفة تخمينية ولا مبلغ لأي مجهز، فكميتها ليست مرجعاً يُبقى عند الاستيراد. كانت تحل محل كمية الملف في
+  // الفقرة الأولى. فقرة سعّرها مجهز ولو بلا وصف صارت كميتها مرجعاً
+  const isBlankRow = (index: number) => {
+    const item = activeBidder.items[index];
+    return !!item && (item.description || '').startsWith('فقرة ') && (item.quantity || 1) === 1
+      && !((item.estimatedTotal || 0) > 0)
+      && currentProject.bidders.every(b => !((b.items[index]?.bidderTotal || 0) > 0));
+  };
+  // كمية الجدول في الموضع index التي يُبقيها استيراد عطاء مجهز (undefined: لا مرجع، فتُعتمد كمية الملف)
+  const referenceQuantity = (index: number) =>
+    activeBidder.items[index] && !isBlankRow(index) ? activeBidder.items[index].quantity : undefined;
+  // فقرات الجدول كما تُعرض لنافذتي الاستيراد لمقارنة الكمية: الفارغة بلا كمية مرجعية
+  const referenceRows = activeBidder.items.map((item, i) => ({ itemNo: item.itemNo, quantity: referenceQuantity(i) || 0 }));
+
   // حقول هوية الفقرة والكلفة التخمينية مشتركة لكل المجهزين (الكلفة التخمينية واحدة للمشروع)
   // بينما حقول السعر والتدقيق (bidderTotal, enteredUnitPrice, writtenText...) خاصة بكل مجهز على حدة
   const SHARED_ESTIMATE_FIELDS: (keyof BOQItem)[] = ['itemNo', 'description', 'unit', 'quantity', 'estimatedUnitPrice', 'estimatedTotal'];
@@ -497,17 +512,19 @@ export function App() {
           ? ext.description
           : (existing?.description || `فقرة ${itemNo}`);
 
+        // الكمية مشتركة: تبقى كمية الجدول القائمة (كانت كمية الملف تحل محلها لدى كل المجهزين)، وتُمسح علامتا
+        // الاستخراج ليعيد calculateBOQMetrics فحص الفقرة بها، كما في «تعبئة أسعار المجهز الحالي»
         mergedItems.push({
           itemNo,
           description: desc,
-          quantity: ext?.quantity || existing?.quantity || 1,
+          quantity: referenceQuantity(i) || ext?.quantity || existing?.quantity || 1,
           estimatedTotal: estVal,
           bidderTotal: bidVal,
           enteredUnitPrice: ext?.enteredUnitPrice,
           enteredBidderTotal: ext?.enteredBidderTotal,
           writtenText: ext?.writtenText,
-          hasMathError: ext?.hasMathError,
-          hasTextDiscrepancy: ext?.hasTextDiscrepancy,
+          hasMathError: undefined,
+          hasTextDiscrepancy: undefined,
           correctionRationale: ext?.correctionRationale,
           unpriced: ext?.unpriced
         });
@@ -559,14 +576,20 @@ export function App() {
             ? ext.description
             : (existing?.description || `فقرة ${itemNo}`);
 
+          // الكلفة التخمينية تضع كمية الجدول. إن غيّرتها يُعاد فحص سعر المجهز في الفقرة بالكمية الجديدة (كانت
+          // العلامتان تبقيان محسوبتين بالقديمة)، إلا فقرة صحّحتها اللجنة فتبقى كما هي وتصحيحها مسجل
+          const quantity = ext?.quantity || existing?.quantity || 1;
+          const recheck = !!existing && quantity !== existing.quantity && !isCommitteeCorrected(existing);
+
           // ...existing يحفظ حقول كل مجهز كاملة (سعر المفرد والتفقيط وعلامات الأخطاء وغير المسعّرة):
           // كان الصف يُبنى من جديد بالإجمالي وحده فتُمحى بيانات التدقيق عند استيراد الكلفة التخمينية
           mergedItems.push({
             ...(existing || {}),
+            ...(recheck ? { hasMathError: undefined, hasTextDiscrepancy: undefined } : {}),
             id: existing?.id || `item-${i + 1}-${Date.now()}`,
             itemNo,
             description: desc,
-            quantity: ext?.quantity || existing?.quantity || 1,
+            quantity,
             estimatedTotal: ext?.estimatedTotal !== undefined ? ext.estimatedTotal : (existing?.estimatedTotal || 0),
             // تخميني جديد: يُصفَّر المفرد القديم ليُعاد حسابه منه (وإلا أعاد calculateBOQMetrics بناء القديم)
             ...(ext?.estimatedTotal !== undefined ? { estimatedUnitPrice: 0 } : {}),
@@ -616,18 +639,21 @@ export function App() {
           ? existing.description
           : (ext?.description || `فقرة ${itemNo}`);
 
+        // تبقى كمية الجدول القائمة (مشتركة مع الكلفة التخمينية وبقية المجهزين)، فتُمسح علامتا الاستخراج ليعيد
+        // calculateBOQMetrics فحص الفقرة بها: كانت العلامتان محسوبتين بكمية الملف والصف مخزناً بكمية الجدول.
+        // نافذتا الاستيراد تعرضان الفقرات المختلفة الكمية قبل الإدراج (QuantityMismatchNotice)
         mergedItems.push({
           id: existing?.id || `item-${i + 1}-${Date.now()}`,
           itemNo,
           description: desc,
-          quantity: existing?.quantity || ext?.quantity || 1,
+          quantity: referenceQuantity(i) || ext?.quantity || existing?.quantity || 1,
           estimatedTotal: existing?.estimatedTotal || 0, // الحفاظ التام على الكلفة التخمينية
           bidderTotal: ext?.bidderTotal !== undefined ? ext.bidderTotal : (existing?.bidderTotal || 0),
           enteredUnitPrice: ext?.enteredUnitPrice,
           enteredBidderTotal: ext?.enteredBidderTotal,
           writtenText: ext?.writtenText,
-          hasMathError: ext?.hasMathError,
-          hasTextDiscrepancy: ext?.hasTextDiscrepancy,
+          hasMathError: undefined,
+          hasTextDiscrepancy: undefined,
           correctionRationale: ext?.correctionRationale,
           unpriced: ext?.unpriced
         });
@@ -1272,6 +1298,7 @@ export function App() {
         onApplyExtractedItems={handleApplyExtractedItems}
         currentBidderName={activeBidder.name}
         initialDocType={smartImportDocType}
+        tableRows={referenceRows}
         onReadWithAi={(files, docType) => {
           setIsSmartImportOpen(false);
           setOcrHandoff({ id: Date.now(), files, destination: docType === 'estimated' ? 'estimated_only' : 'bidder_only' });
@@ -1284,6 +1311,7 @@ export function App() {
         onClose={() => setIsOcrOpen(false)}
         onApplyExtractedItems={handleApplyExtractedItems}
         handoff={ocrHandoff}
+        tableRows={referenceRows}
       />
 
       <MultiBidderMatrix
