@@ -109,6 +109,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const handleMultipleFiles = async (files: FileList | File[]) => {
     const accepted = Array.from(files).filter(f => f.type.startsWith('image/') || isPdfFile(f));
     if (accepted.length === 0) return;
+    // ملف بحجم 0 بايت (حفظ أو نقل لم يكتمل) لا يُقرأ؛ نوقف قبل pdf.js لأن رسالته إنجليزية وتوحي بأن الملف محمي
+    const empty = accepted.filter(f => f.size === 0);
+    if (empty.length > 0) {
+      alert(empty.length === 1
+        ? `الملف (${empty[0].name}) فارغ: حجمه 0 بايت، أي أن حفظه أو نقله لم يكتمل وليس فيه ما يُقرأ. أعد تصديره من تطبيق المسح الضوئي أو انسخه من مصدره من جديد، ثم ارفعه.`
+        : `هذه الملفات فارغة (حجمها 0 بايت)، أي أن حفظها أو نقلها لم يكتمل: ${empty.map(f => `(${f.name})`).join('، ')}. أعد تصديرها أو نسخها من مصدرها، ثم ارفعها من جديد.`);
+      return;
+    }
     // نقرأ ونضغط كل الصفحات أولاً، ثم نضيفها دفعة واحدة بترتيب الرفع الأصلي
     // (القراءة الفردية كانت تُدرج الصفحات بترتيب اكتمال القراءة لا ترتيب الاختيار، فيختل ترتيب الصفحات عند الدمج)
     // ملف PDF (رقمي أو ممسوح ضوئياً) يُحوَّل صفحةً صفحة إلى صور في مكانه من الترتيب
