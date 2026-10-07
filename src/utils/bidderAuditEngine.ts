@@ -49,7 +49,7 @@ const rawNumberMap: { [key: string]: number } = {
   'ثمانون': 80, 'ثمانين': 80,
   'تسعون': 90, 'تسعين': 90,
   'مئة': 100, 'مئه': 100, 'مائة': 100, 'مائه': 100, 
-  'مئتان': 200, 'مائتان': 200, 'مئتين': 200, 'مائتين': 200,
+  'مئتان': 200, 'مائتان': 200, 'مئتين': 200, 'مائتين': 200, 'مئتا': 200, 'مائتا': 200,
   'ثلاثمئة': 300, 'ثلاثمائه': 300, 'ثلاثمائة': 300, 'ثلاثمئه': 300,
   'اربعمئة': 400, 'أربعمائة': 400, 'أربعمئة': 400, 'اربعمائة': 400,
   'خمسمئة': 500, 'خمسمائة': 500, 'خمسمئه': 500, 'خمسمائه': 500,
@@ -81,6 +81,7 @@ const normalizeArabicWord = (w: string): string => {
   if (!w) return '';
   return w
     .trim()
+    .replace(/[ً-ْـ]/g, '') // التشكيل والتطويل: «ألفاً» تصير «الفا»
     .replace(/[إأآا]/g, 'ا')
     .replace(/[ىي]/g, 'ي')
     .replace(/[ة]/g, 'ه');
@@ -147,15 +148,16 @@ export const parseArabicTextToNumber = (text: string): number | null => {
       cleanNorm = cleanNorm.substring(1);
     }
 
-    if (cleanNorm === 'الف' || cleanNorm === 'الاف' || cleanNorm === 'الافا') {
+    // صيغة النصب («تسعة وثلاثون ألفاً») كانت تُهمل فتُقرأ 39,500 على أنها 539
+    if (cleanNorm === 'الف' || cleanNorm === 'الفا' || cleanNorm === 'الاف' || cleanNorm === 'الافا') {
       if (current === 0) current = 1;
       total += current * 1000;
       current = 0;
-    } else if (cleanNorm === 'مليون' || cleanNorm === 'ملايين') {
+    } else if (cleanNorm === 'مليون' || cleanNorm === 'مليونا' || cleanNorm === 'ملايين') {
       if (current === 0) current = 1;
       total += current * 1000000;
       current = 0;
-    } else if (cleanNorm === 'مليار' || cleanNorm === 'مليارات') {
+    } else if (cleanNorm === 'مليار' || cleanNorm === 'مليارا' || cleanNorm === 'مليارات') {
       if (current === 0) current = 1;
       total += current * 1000000000;
       current = 0;
