@@ -407,11 +407,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       />
                     </td>
 
-                    {/* Estimated Total (المبلغ التخميني) */}
+                    {/* Estimated Total (المبلغ التخميني) — يُصفَّر المفرد التخميني معه فيعيد calculateBOQMetrics اشتقاقه
+                        من المبلغ والكمية: كان يبقى مفرد المبلغ القديم في تصدير Excel، ومسح المبلغ يُعيده المفرد × الكمية */}
                     <td className="p-2 text-center border-l border-slate-200 bg-blue-50/40">
                       <AmountInput
                         value={item.estimatedTotal}
-                        onChange={(v) => onUpdateItem(actualIndex, 'estimatedTotal', v)}
+                        onChange={(v) => onUpdateFields(actualIndex, { estimatedTotal: v, estimatedUnitPrice: 0 })}
                         className="w-full min-w-[7rem] text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
                       />
                     </td>
