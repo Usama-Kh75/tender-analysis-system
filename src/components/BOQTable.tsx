@@ -460,15 +460,19 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           // كمية 1: المفرد هو المبلغ فلا فرق بين الاعتمادين
                           const ambiguous = written !== null && unit > 0 && qty !== 1;
                           const likelyUnit = ambiguous && writtenAmountTarget(written, unit, enteredTotal) === 'unit';
-                          const adoptAsUnit = () => written && onUpdateFields(actualIndex, {
+                          const adoptAsUnit = (logAction = 'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة') => written && onUpdateFields(actualIndex, {
                             enteredUnitPrice: written,
                             bidderUnitPrice: written,
                             bidderTotal: written * qty,
                             hasTextDiscrepancy: false,
                             hasMathError: false
-                          }, 'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة');
-                          const adoptAsTotal = () => written && onUpdateFields(actualIndex, { bidderTotal: written, hasTextDiscrepancy: false },
-                            'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة');
+                          }, logAction);
+                          // بلا مفرد مدون يُعتمد المبلغ وحده. ومع مفرد مدون وكمية 1 يُحدَّث المفرد مع المبلغ،
+                          // وإلا بقي المفرد القديم فتعيد الكمية بناء المبلغ منه عند تعديلها
+                          const adoptAsTotal = () => written && (unit > 0 && qty === 1
+                            ? adoptAsUnit('اعتماد المبلغ المكتوب كتابةً بقرار اللجنة')
+                            : onUpdateFields(actualIndex, { bidderTotal: written, hasTextDiscrepancy: false },
+                              'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة'));
                           const solid = 'bg-amber-700 hover:bg-amber-800 text-white';
                           const outline = 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-500';
                           return (
@@ -485,7 +489,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                             <div className="flex flex-wrap items-center gap-1.5 mt-1 mr-5">
                               {ambiguous ? (<>
                                 <button
-                                  onClick={adoptAsUnit}
+                                  onClick={() => adoptAsUnit()}
                                   className={`${likelyUnit ? solid : outline} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
                                   title="التفقيط لسعر المفرد: يُعتمد مفرداً ويُضرب بالكمية، بقرار اللجنة"
                                 >
