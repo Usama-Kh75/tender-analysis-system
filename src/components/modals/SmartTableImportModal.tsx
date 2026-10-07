@@ -59,11 +59,28 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   const [sourceFileName, setSourceFileName] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [auditReport, setAuditReport] = useState<BidderAuditReport | null>(null);
-  const [useCorrectedPrices, setUseCorrectedPrices] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // نوع الجدول الحالي لقراءة ملف Excel غير المتزامنة: إن غيّره المستخدم أثناء القراءة لا تُبنى الأعمدة بالنوع القديم.
+  // يُحدَّث مع كل تغيير للنوع عبر chooseDocType
+  const docTypeRef = useRef(initialDocType);
+  const chooseDocType = (type: ImportDocType) => {
+    docTypeRef.current = type;
+    setDocType(type);
+  };
 
+  // النافذة تبقى مركّبة بين الفتحات، فكل فتح يبدأ بلا ملف: كان الملف السابق وتقريره يبقيان بنوع الجدول
+  // الافتراضي، فيمكن استيراده ثانية بغير نوعه
   useEffect(() => {
-    setDocType(initialDocType);
+    chooseDocType(initialDocType);
+    if (!isOpen) return;
+    setAllRawData([]);
+    setRawHeaders([]);
+    setRawRows([]);
+    setColumnMappings([]);
+    setAuditReport(null);
+    setPastedText('');
+    setSourceFileName('');
+    setNewBidderName('');
   }, [initialDocType, isOpen]);
 
   if (!isOpen) return null;
@@ -181,8 +198,14 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     return bestIdx;
   };
 
-  // تشغيل الفحص التدقيقي عند تجهيز الصفوف
-  const runForensicAudit = (headers: string[], rows: string[][], roles: ColumnRole[]) => {
+  // تشغيل الفحص التدقيقي عند تجهيز الصفوف — تدقيق لعطاء المجهز وحده: جدول الكلفة التخمينية لا يُدرج منه
+  // سعر مجهز ولا علامات (handleApplyExtractedItems يأخذ منه الكمية والتخميني فقط)، فكان تقريره يُنسب
+  // «لعطاء المجهز» ويؤشّر خطأ ضرب في كل فقرة كميتها أكبر من 1
+  const runForensicAudit = (headers: string[], rows: string[][], roles: ColumnRole[], selectedDoc: ImportDocType = docType) => {
+    if (selectedDoc === 'estimated') {
+      setAuditReport(null);
+      return;
+    }
     const itemNoIdx = roles.indexOf('itemNo');
     const descIdx = roles.indexOf('description');
     const unitPriceIdx = roles.indexOf('unitPrice');
@@ -195,7 +218,9 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       description: descIdx !== -1 && r[descIdx] ? r[descIdx] : `فقرة ${i + 1}`,
       unitPrice: unitPriceIdx !== -1 ? r[unitPriceIdx] : 0,
       quantity: qtyIdx !== -1 ? r[qtyIdx] : 1,
-      enteredTotal: totalIdx !== -1 ? r[totalIdx] : (unitPriceIdx !== -1 ? r[unitPriceIdx] : 0),
+      // بلا عمود للمبلغ يُحسب المفرد × الكمية كما في الإدراج (handleConfirmImport)، لا المفرد وحده
+      enteredTotal: totalIdx !== -1 ? r[totalIdx]
+        : unitPriceIdx !== -1 ? parseArabicNumber(r[unitPriceIdx]) * (qtyIdx !== -1 ? parseArabicNumber(r[qtyIdx]) || 1 : 1) : 0,
       writtenText: writtenIdx !== -1 ? r[writtenIdx] : undefined
     }));
 
@@ -227,16 +252,16 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
     const roles = autoDetectRoles(headers, selectedDoc);
     setColumnMappings(roles);
-    runForensicAudit(headers, rows, roles);
+    runForensicAudit(headers, rows, roles, selectedDoc);
   };
 
   // اختيار نوع المستند
   const handleSelectDocType = (type: ImportDocType) => {
-    setDocType(type);
+    chooseDocType(type);
     if (rawHeaders.length > 0) {
       const roles = autoDetectRoles(rawHeaders, type);
       setColumnMappings(roles);
-      runForensicAudit(rawHeaders, rawRows, roles);
+      runForensicAudit(rawHeaders, rawRows, roles, type);
     }
   };
 
@@ -289,7 +314,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
       setAllRawData(stringData);
       const bestHeaderIdx = findBestHeaderRowIndex(stringData);
-      applyHeaderRow(stringData, bestHeaderIdx, docType);
+      applyHeaderRow(stringData, bestHeaderIdx, docTypeRef.current);
 
       const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/جدول|عطاء|مناقصة|تحليل|BOQ|أسعار|مواد|سيناريو|اختبار/gi, '').trim();
       if (cleanFileName) {
@@ -318,14 +343,12 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     setSourceFileName('جدول منسوخ من الحافظة (Word / Excel)');
   };
 
-  // تغيير دور العمود يدوياً
+  // تغيير دور العمود يدوياً — الفحص خارج دالة التحديث، لأن دالة setState يجب ألا تُحدِّث حالة أخرى
   const handleMapColumn = (colIndex: number, role: ColumnRole) => {
-    setColumnMappings(prev => {
-      const updated = [...prev];
-      updated[colIndex] = role;
-      runForensicAudit(rawHeaders, rawRows, updated);
-      return updated;
-    });
+    const updated = [...columnMappings];
+    updated[colIndex] = role;
+    setColumnMappings(updated);
+    runForensicAudit(rawHeaders, rawRows, updated);
   };
 
   // تأكيد الاستيراد
@@ -615,23 +638,12 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                         تم اكتشاف {auditReport.itemsWithErrorsCount} أخطاء
                       </span>
                     </h3>
+                    {/* كان هنا خيار «اعتماد التصحيح الحسابي بسعر المفرد لهذا الاستيراد» لا يقرؤه الإدراج: المبالغ
+                        تُدرج كما دوّنها المجهز دائماً، والتصحيح قرار صريح للجنة لكل فقرة في الجدول بعد الإدراج */}
                     <p className="text-xs text-rose-800 font-medium">
-                      ضابط رقابي داخلي: سعر المفرد المدون هو أساس التصحيح الحسابي عند وجود خطأ ضرب، ويُطبَّق فقط باختياركم الصريح أدناه.
+                      تُدرج أرقام العطاء كما دوّنها المجهز وتُؤشَّر هذه الأخطاء في الجدول، واعتماد تصحيح كل فقرة قرار صريح تتخذه اللجنة بعد الإدراج.
                     </p>
                   </div>
-                </div>
-
-                {/* Legal Correction Toggle Button */}
-                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
-                  <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useCorrectedPrices}
-                      onChange={(e) => setUseCorrectedPrices(e.target.checked)}
-                      className="w-4 h-4 text-emerald-600 rounded"
-                    />
-                    <span>اعتماد التصحيح الحسابي بسعر المفرد لهذا الاستيراد</span>
-                  </label>
                 </div>
               </div>
 
@@ -716,7 +728,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
 
                 {/* Header Row Selector Dropdown */}
                 {allRawData.length > 1 && (
-                  <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
+                  <label className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
                     <span className="font-bold text-slate-700">صف عناوين الجدول:</span>
                     <select
                       value={selectedHeaderRowIdx}
@@ -732,7 +744,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                         );
                       })}
                     </select>
-                  </div>
+                  </label>
                 )}
               </div>
 
@@ -751,8 +763,9 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
                               {header}
                             </div>
                             
-                            {/* Role Dropdown */}
+                            {/* Role Dropdown — اسمه لقارئ الشاشة يذكر العمود الذي يُحدَّد دوره */}
                             <select
+                              aria-label={`دور العمود: ${header}`}
                               value={currentRole}
                               onChange={(e) => handleMapColumn(colIdx, e.target.value as ColumnRole)}
                               className={`w-full text-xs font-black p-1.5 rounded-lg border focus:outline-none cursor-pointer ${
