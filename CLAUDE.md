@@ -71,4 +71,12 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 
 **Legal/audit framing matters for UI behavior**: arithmetic correction is the committee's act, notified to and signed by the bidder (ضوابط رقم (4) خامساً/ب/3), so the system never silently auto-corrects a bidder's submitted numbers — math-error and text-discrepancy detection only *flags* rows (`hasMathError`, `hasTextDiscrepancy` in `BOQItem`); correction is an explicit, logged committee action (see `correctionRationale`, `AuditLogEntry`). Keep this "detect and flag, never silently rewrite" pattern when adding audit features.
 
+**A plain edit in the main table is a reading correction, not an arithmetic one** (since v1.11.7). Editing the quantity, unit price, item amount or tafqeet goes through `handleCorrectReading` in `App.tsx`, not `handleUpdateItemFields`:
+- The new value becomes the bidder's recorded value (`enteredUnitPrice`/`enteredBidderTotal`).
+- Both flags are cleared so `calculateBOQMetrics` recomputes them. Stored flags are otherwise sticky.
+- No other number changes. A unit-price edit fills the amount only when it is empty, so a real multiplication error is never hidden.
+- A quantity edit rechecks that row for every bidder.
+- A committee-corrected row (`bidderTotal` ≠ a non-zero `enteredBidderTotal`) asks for confirmation first, then cancels the correction openly, with a log entry.
+- `AmountInput` commits on blur or Enter, and Escape cancels; it no longer commits per keystroke.
+
 **Verify every legal citation against the official text before adding it** — a wrong article number was shipped once ("13/ثانياً" for the tafqeet rule; that clause is actually about hiring outside expertise). The user's structured copy of the 2025 instructions is at `E:/Claude Projects/تعليمات 2025/contract-instructions-2025-offline/src/units/*.json` (one file per article/annex; each clause has `clause`, `title`, `officialText`, `printedPage`).

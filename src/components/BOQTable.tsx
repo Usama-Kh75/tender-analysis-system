@@ -9,29 +9,84 @@ import {
   RotateCcw,
   Building2,
   FileSpreadsheet,
-  Search
+  Search,
+  Pencil
 } from 'lucide-react';
-import { BOQItem, TenderTotals } from '../types/tender';
+import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber } from '../utils/calculations';
 
 // حقل مبلغ يعرض فواصل الآلاف (60,000,000) خارج التعديل والرقم المجرد أثناء الكتابة: بلا فواصل كان
-// 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber
-const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string }> = ({ value, onChange, className }) => {
+// 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber.
+// يُعتمد الرقم عند مغادرة الحقل أو Enter (وEscape يلغي)، لا مع كل حرف: كل اعتماد يُعيد فحص الفقرة
+// ويُسجَّل، وقد يطلب تأكيداً، وكان كل حرف يُسجَّل تعديلاً مستقلاً
+const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string }> = ({ value, onChange, className, label, placeholder = '0.00' }) => {
   const [draft, setDraft] = useState<string | null>(null);
+  const cancelled = useRef(false);
   return (
     <input
       type="text"
       inputMode="decimal"
       dir="ltr"
+      aria-label={label}
       value={draft ?? (value ? formatNumber(value, Number.isInteger(value) ? 0 : 2) : '')}
-      onFocus={() => setDraft(value ? String(value) : '')}
-      onChange={(e) => { setDraft(e.target.value); onChange(parseArabicNumber(e.target.value)); }}
-      onBlur={() => setDraft(null)}
-      placeholder="0.00"
+      onFocus={() => { cancelled.current = false; setDraft(value ? String(value) : ''); }}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { cancelled.current = true; e.currentTarget.blur(); }
+      }}
+      onBlur={() => {
+        const next = draft === null ? value : parseArabicNumber(draft);
+        setDraft(null);
+        if (!cancelled.current && next !== value) onChange(next);
+      }}
+      placeholder={placeholder}
       className={className}
     />
   );
 };
+
+// تصحيح قراءة التفقيط: يُعتمد النص عند مغادرة الحقل أو Enter، وEscape يلغي. يُكتب كما في العطاء ولا
+// يُولَّد من الرقم، لأن المكتوب كتابةً هو ما يُعتد به (ضوابط رقم (4) خامساً/ب/1).
+// onDone يُبلغ إن انتهى التعديل من لوحة المفاتيح، ليعيد الجدول التركيز إلى زر القلم بدل ضياعه
+const WrittenTextInput: React.FC<{ value: string; onCommit: (v: string) => void; onDone: (byKeyboard: boolean) => void }> = ({ value, onCommit, onDone }) => {
+  const [draft, setDraft] = useState(value);
+  const cancelled = useRef(false);
+  const byKeyboard = useRef(false);
+  return (
+    <textarea
+      autoFocus
+      dir="rtl"
+      rows={2}
+      value={draft}
+      aria-label="نص التفقيط كما في العطاء"
+      placeholder="المبلغ كتابةً كما في العطاء"
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); byKeyboard.current = true; e.currentTarget.blur(); }
+        if (e.key === 'Escape') { cancelled.current = true; byKeyboard.current = true; e.currentTarget.blur(); }
+      }}
+      onBlur={() => {
+        if (!cancelled.current && draft.trim() !== value.trim()) onCommit(draft);
+        onDone(byKeyboard.current);
+      }}
+      className="w-full field-sizing-content min-h-[2.5rem] bg-white border border-indigo-400 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg px-2 py-1 text-[11px] leading-relaxed resize-y"
+    />
+  );
+};
+
+const EditTextButton: React.FC<{ rowId: string; itemNo: number | string; onClick: () => void }> = ({ rowId, itemNo, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    data-edit-text={rowId}
+    className="shrink-0 p-0.5 rounded text-slate-500 hover:text-indigo-700 hover:bg-white transition cursor-pointer"
+    title="تصحيح قراءة التفقيط إن خالف نص العطاء، فيُعاد فحص الفقرة"
+    aria-label={`تصحيح قراءة التفقيط للفقرة ${itemNo}`}
+  >
+    <Pencil className="w-3 h-3" />
+  </button>
+);
 
 // وصف الفقرة: يظهر ملفوفاً حتى ثلاثة أسطر من أوله (كان سطراً واحداً مقصوصاً)، والنقر عليه يفتح
 // حقل تعديل يعرض النص كاملاً. dir="auto" يُظهر الوصف الإنجليزي من اليسار بترتيبه الصحيح
@@ -75,6 +130,8 @@ interface BOQTableProps {
   onUpdateItem: (index: number, field: keyof BOQItem, val: any) => void;
   // تعديل مركّب لعدة حقول دفعة واحدة (انظر handleUpdateItemFields في App.tsx)
   onUpdateFields: (index: number, patch: Partial<BOQItem>, logAction?: string) => void;
+  // تعديل الكمية أو المفرد أو المبلغ أو التفقيط يدوياً = تصحيح قراءة يعيد فحص الفقرة (handleCorrectReading في App.tsx)
+  onCorrectReading: (index: number, field: ReadingField, value: number | string) => void;
   onAddItem: () => void;
   onDeleteItem: (index: number) => void;
   onDuplicateItem: (index: number) => void;
@@ -88,6 +145,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   bidderName,
   onUpdateItem,
   onUpdateFields,
+  onCorrectReading,
   onAddItem,
   onDeleteItem,
   onDuplicateItem,
@@ -95,6 +153,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onOpenSmartImport
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  // الفقرة التي يُصحَّح نص تفقيطها الآن (بمعرّفها)
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
 
   // ارتفاع شريط الشركة المثبت يُقاس فعلياً (قد يلتف اسم شركة طويل إلى سطرين)، لتثبت
@@ -194,6 +254,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               </div>
               <p className="text-rose-900 text-xs mt-1 leading-relaxed">
                 قام النظام بتأشير هذه الأخطاء فقط دون أي تصحيح تلقائي أو صامت للأرقام الأصلية المدونة من قبل مقدم العطاء. اعتماد التصحيح (بحاصل الضرب أو بالمكتوب كتابةً) قرار صريح تتخذه اللجنة يدوياً لكل فقرة.
+                وإن كان الخطأ في قراءة العطاء لا في العطاء نفسه، فصحّح الرقم أو التفقيط في خانته كما في الأصل، فيُعاد فحص الفقرة.
               </p>
             </div>
           </div>
@@ -334,9 +395,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 const isSaving = item.diffAmount < 0;
                 const hasError = item.hasMathError || item.hasTextDiscrepancy;
 
-                const displayUnitPrice = item.enteredUnitPrice !== undefined && item.enteredUnitPrice > 0
-                  ? item.enteredUnitPrice
-                  : item.quantity > 0 ? (item.bidderTotal / item.quantity) : 0;
+                // فقرة بلا مفرد مدون (جدول بلا عمود للمفرد، أو مُسح مفردها تصحيحاً للقراءة): يظهر المبلغ ÷ الكمية
+                // باهتاً في مكان الرقم لا رقماً مدوناً، فلا يُظن مقروءاً من العطاء ولا يبدو المسح كأنه لم يقع
+                const recordedUnitPrice = item.enteredUnitPrice && item.enteredUnitPrice > 0 ? item.enteredUnitPrice : 0;
+                const derivedUnitPrice = item.quantity > 0 ? item.bidderTotal / item.quantity : 0;
 
                 return (
                   <tr 
@@ -364,17 +426,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       />
                     </td>
 
-                    {/* Quantity — مع الإجمالي في تعديل واحد (تعديلان متتاليان كانا يُرجعان الكمية القديمة) */}
+                    {/* Quantity — تصحيح قراءة مشترك: يُعاد فحص الفقرة لدى كل المجهزين، ولا تتغير مبالغهم المدونة
+                        (كانت الكمية تُعيد بناء مبلغ المجهز النشط من المفرد فتُخفي الفرق) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-slate-50/50">
-                      <input
-                        type="number"
+                      <AmountInput
                         value={item.quantity || 1}
-                        onChange={(e) => {
-                          const newQty = parseFloat(e.target.value) || 1;
-                          onUpdateFields(actualIndex, item.enteredUnitPrice
-                            ? { quantity: newQty, bidderTotal: item.enteredUnitPrice * newQty }
-                            : { quantity: newQty });
-                        }}
+                        onChange={(v) => onCorrectReading(actualIndex, 'quantity', v || 1)}
+                        label={`كمية الفقرة ${item.itemNo}`}
+                        placeholder="1"
                         className="w-16 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
                       />
                     </td>
@@ -382,27 +441,23 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     {/* Bidder Unit Price (سعر المفرد)
                         حقول المبالغ الثلاثة بحد أدنى للعرض: بدونه يضيّق المتصفح أعمدتها حتى عرض كلمة العنوان،
                         فيُقص أول الرقم (60000000 كان يظهر 0000) ويبدو كأن القراءة خاطئة.
-                        السعر والإجمالي في تعديل واحد، ومعهما bidderUnitPrice الذي يبني منه calculateBOQMetrics
-                        الإجمالي إن كان صفراً (بدونه لا يمكن مسح سعر الفقرة) */}
+                        تعديل المفرد تصحيح قراءة لا يمس المبلغ المدون إلا إن كان فارغاً (handleCorrectReading) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/30">
                       <AmountInput
-                        value={displayUnitPrice}
-                        onChange={(newUnit) => onUpdateFields(actualIndex, {
-                          enteredUnitPrice: newUnit,
-                          bidderUnitPrice: newUnit,
-                          bidderTotal: newUnit * (item.quantity || 1)
-                        })}
+                        value={recordedUnitPrice}
+                        onChange={(newUnit) => onCorrectReading(actualIndex, 'unitPrice', newUnit)}
+                        label={`سعر المفرد للفقرة ${item.itemNo}`}
+                        placeholder={derivedUnitPrice > 0 ? formatNumber(derivedUnitPrice, Number.isInteger(derivedUnitPrice) ? 0 : 2) : '0.00'}
                         className="w-full min-w-[7rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
-                    {/* Bidder Total Amount (مبلغ المجهز الإجمالي) — مسحه يمسح سعر المفرد معه، وإلا أعاده الحساب */}
+                    {/* Bidder Total Amount (مبلغ المجهز الإجمالي) — تصحيح قراءة؛ مسحه يمسح سعر المفرد معه */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/60 font-mono font-black text-indigo-950 text-xs">
                       <AmountInput
                         value={item.bidderTotal}
-                        onChange={(v) => onUpdateFields(actualIndex, v === 0
-                          ? { bidderTotal: 0, bidderUnitPrice: 0, enteredUnitPrice: 0 }
-                          : { bidderTotal: v })}
+                        onChange={(v) => onCorrectReading(actualIndex, 'total', v)}
+                        label={`مبلغ المجهز للفقرة ${item.itemNo}`}
                         className="w-full min-w-[7rem] text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
@@ -413,6 +468,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       <AmountInput
                         value={item.estimatedTotal}
                         onChange={(v) => onUpdateFields(actualIndex, { estimatedTotal: v, estimatedUnitPrice: 0 })}
+                        label={`المبلغ التخميني للفقرة ${item.itemNo}`}
                         className="w-full min-w-[7rem] text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
                       />
                     </td>
@@ -420,7 +476,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     {/* Forensic Math & Text Audit Column */}
                     <td className="p-2 border-l border-slate-200 text-xs leading-tight">
                       <div className="space-y-1.5">
-                        
+
                         {/* 1. خطأ الضرب الحسابي (أحمر) */}
                         {item.hasMathError && (
                           <div className="bg-rose-100 text-rose-950 border border-rose-300 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
@@ -452,8 +508,22 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                             المكتوب كتابةً هو المعتمد (ضوابط رقم (4) خامساً/ب/1). التفقيط قد يكون لسعر المفرد فيكون
                             المبلغ حاصل ضربه بالكمية (خامساً/ب/2)، أو لمبلغ الفقرة. الأرقام وحدها لا تحسم أيهما (الرقم
                             المدون نفسه قد يكون الخاطئ)، فحين يحتمل الأمرين يُعرض زران وتختار اللجنة، ويُبرز الأرجح.
-                            كان زر واحد يجعل قيمة تفقيط المفرد مبلغاً للفقرة كلها */}
-                        {item.hasTextDiscrepancy && (() => {
+                            كان زر واحد يجعل قيمة تفقيط المفرد مبلغاً للفقرة كلها.
+                            أثناء تصحيح قراءة التفقيط يحل حقل التعديل محل مربعه (المتعارض أو المطابق)، وتختفي أزرار
+                            الاعتماد لأنها مبنية على النص القديم */}
+                        {editingTextId === item.id && (
+                          <WrittenTextInput
+                            value={item.writtenText || ''}
+                            onCommit={(v) => onCorrectReading(actualIndex, 'writtenText', v)}
+                            onDone={(byKeyboard) => {
+                              setEditingTextId(null);
+                              // بعد Enter أو Escape يعود التركيز إلى زر القلم، وإلا ضاع مع حذف الحقل
+                              if (byKeyboard) requestAnimationFrame(() =>
+                                document.querySelector<HTMLButtonElement>(`[data-edit-text="${item.id}"]`)?.focus());
+                            }}
+                          />
+                        )}
+                        {item.hasTextDiscrepancy && editingTextId !== item.id && (() => {
                           const written = item.writtenText ? parseArabicTextToNumber(item.writtenText) : null;
                           const qty = item.quantity || 1;
                           const unit = item.enteredUnitPrice || 0;
@@ -480,11 +550,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           <div className="bg-amber-100 text-amber-950 border border-amber-400 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
                             <div className="flex items-start gap-1.5">
                               <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
-                              <div>
+                              <div className="flex-1">
                                 <span className="font-black text-amber-900">⚠️ تعارض تفقيط:</span> المكتوب كتابةً ({item.writtenText}) يختلف عن {ambiguous
                                   ? <>سعر المفرد المدون ({unit.toLocaleString()} د.ع) وعن مبلغ الفقرة المدون ({enteredTotal.toLocaleString()} د.ع)</>
                                   : <>الرقم المدون ({enteredTotal.toLocaleString()} د.ع)</>}
                               </div>
+                              <EditTextButton rowId={item.id} itemNo={item.itemNo} onClick={() => setEditingTextId(item.id)} />
                             </div>
                             {written !== null && written > 0 && (
                             <div className="flex flex-wrap items-center gap-1.5 mt-1 mr-5">
@@ -519,10 +590,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         })()}
 
                         {/* 3. التفقيط المطابق والسليم (أخضر) */}
-                        {item.writtenText && !item.hasTextDiscrepancy && (
+                        {item.writtenText && !item.hasTextDiscrepancy && editingTextId !== item.id && (
                           <div className="bg-emerald-50 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-lg text-[11px] font-semibold flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            <span><strong className="text-emerald-950 font-bold">تفقيط مطابق:</strong> {item.writtenText}</span>
+                            <span className="flex-1"><strong className="text-emerald-950 font-bold">تفقيط مطابق:</strong> {item.writtenText}</span>
+                            <EditTextButton rowId={item.id} itemNo={item.itemNo} onClick={() => setEditingTextId(item.id)} />
                           </div>
                         )}
 

@@ -25,6 +25,9 @@ export interface BOQItem {
   unpriced?: boolean;              // الفقرة غير مسعّرة في العطاء نفسه («-» في خانة السعر)، كما قرأها الاستخراج
 }
 
+// الحقول التي يُعدّ تعديلها اليدوي في الجدول تصحيحاً لما قُرئ من العطاء (handleCorrectReading في App.tsx)
+export type ReadingField = 'quantity' | 'unitPrice' | 'total' | 'writtenText';
+
 export interface TenderTotals {
   totalEstimatedAmount: number;
   totalBidderAmount: number;

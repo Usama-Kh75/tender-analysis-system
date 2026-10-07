@@ -15,7 +15,7 @@ import {
 import { calculateBOQMetrics } from './utils/calculations';
 import { hasBidAmounts } from './utils/recommendation';
 import { exportTenderToExcel } from './utils/excelService';
-import { TenderProject, Bidder, BOQItem, ContractType } from './types/tender';
+import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './types/tender';
 
 import { Navbar } from './components/Navbar';
 import { KPIStatsCards } from './components/KPIStatsCards';
@@ -256,6 +256,109 @@ export function App() {
 
   const handleUpdateItem = (index: number, field: keyof BOQItem, val: any) =>
     handleUpdateItemFields(index, { [field]: val } as Partial<BOQItem>);
+
+  // فقرة صحّحتها اللجنة (باعتماد حاصل الضرب أو المكتوب كتابةً): مبلغها المعتمد غير الذي دوّنه المجهز،
+  // والأخير محفوظ في enteredBidderTotal دليلاً. تصحيح القراءة يُبقي الاثنين متساويين
+  const isCommitteeCorrected = (item: BOQItem) =>
+    (item.enteredBidderTotal || 0) > 0 && Math.abs(item.bidderTotal - (item.enteredBidderTotal || 0)) > 0.01;
+
+  const READING_FIELD_LABELS: Record<ReadingField, string> = {
+    quantity: 'الكمية',
+    unitPrice: 'سعر المفرد',
+    total: 'مبلغ الفقرة',
+    writtenText: 'التفقيط'
+  };
+
+  // تصحيح قراءة: تعديل الكمية أو المفرد أو المبلغ أو التفقيط يدوياً في الجدول يُعدّ تصحيحاً لما قرأه الاستيراد
+  // من العطاء، لا تصحيحاً حسابياً. فيصير الرقم الجديد هو «المدون» (enteredUnitPrice/enteredBidderTotal)،
+  // وتُمسح علامتا التدقيق ليعيد calculateBOQMetrics حسابهما: كانت العلامتان القديمتان تبقيان، فيبقى تشخيص
+  // بُني على رقم مقروء خطأً. لا يغيّر التعديل رقماً آخر (المفرد لا يمس المبلغ إلا إن كان فارغاً) كي لا يُخفي
+  // خطأ ضرب وقع فيه المجهز. التصحيح الحسابي يبقى زراً صريحاً للجنة، وتعديل فقرة صحّحتها اللجنة يلغي تصحيحها
+  // علناً بعد التأكيد، لأنه بُني على القراءة القديمة. الكمية مشتركة فيُعاد فحص فقرتها لدى كل المجهزين
+  const handleCorrectReading = (index: number, field: ReadingField, value: number | string) => {
+    const before = activeBidder.items[index];
+    if (!before) return;
+    const isQuantity = field === 'quantity';
+    const label = READING_FIELD_LABELS[field];
+    const newValue = field === 'writtenText' ? (String(value).trim() || undefined)
+      : field === 'unitPrice' ? ((value as number) || undefined)
+      : (value as number);
+    const oldValue = field === 'quantity' ? before.quantity
+      : field === 'unitPrice' ? (before.enteredUnitPrice || undefined)
+      : field === 'total' ? before.bidderTotal
+      : before.writtenText;
+    if (newValue === oldValue) return;
+
+    const affected = currentProject.bidders.filter(b => b.items[index] && (isQuantity || b.id === activeBidder.id));
+    const corrected = affected.filter(b => isCommitteeCorrected(b.items[index]));
+    const fmt = (v: unknown) => v === undefined || v === '' ? '—' : typeof v === 'number' ? v.toLocaleString('en-US') : String(v);
+
+    if (corrected.length > 0) {
+      const lines = corrected.map(b => {
+        const it = b.items[index];
+        return `• ${b.name}: المبلغ المعتمد (${fmt(it.bidderTotal)})، والذي دوّنه المجهز (${fmt(it.enteredBidderTotal)})`;
+      }).join('\n');
+      const ok = window.confirm(
+        `الفقرة رقم (${before.itemNo}) عليها تصحيح حسابي من اللجنة:\n${lines}\n\n`
+        + `تعديل ${label} يُعدّ تصحيحاً لقراءة العطاء، والتصحيح بُني على القراءة القديمة فيُلغى: يعود مبلغ الفقرة `
+        + `إلى ما دوّنه المجهز ثم يُعاد فحصها، ويُسجَّل الإلغاء في سجل التدقيق.\n\nهل تريد المتابعة؟`
+      );
+      if (!ok) return;
+    }
+
+    const updatedBidders = currentProject.bidders.map(b => {
+      if (!affected.includes(b)) return b;
+      const item = b.items[index];
+      const base: BOQItem = isCommitteeCorrected(item) ? { ...item, bidderTotal: item.enteredBidderTotal || 0 } : item;
+      let patch: Partial<BOQItem>;
+      if (field === 'quantity') {
+        patch = { quantity: value as number };
+      } else if (field === 'unitPrice') {
+        const unit = value as number;
+        patch = { enteredUnitPrice: unit, bidderUnitPrice: unit, bidderTotal: base.bidderTotal || unit * (base.quantity || 1) };
+      } else if (field === 'total') {
+        // مسح المبلغ يمسح المفرد معه، وإلا أعاد calculateBOQMetrics بناءه من المفرد × الكمية
+        patch = value === 0 ? { bidderTotal: 0, bidderUnitPrice: 0, enteredUnitPrice: 0 } : { bidderTotal: value as number };
+      } else {
+        patch = { writtenText: newValue as string | undefined };
+      }
+      const next: BOQItem = { ...base, ...patch };
+      const updatedRaw = [...b.items];
+      updatedRaw[index] = {
+        ...next,
+        enteredBidderTotal: next.bidderTotal || undefined,
+        hasMathError: undefined,
+        hasTextDiscrepancy: undefined,
+        // كما في ImageOcrModal: إدخال سعر لفقرة قُرئت «-» يعني أنها مسعّرة
+        unpriced: (field === 'unitPrice' || field === 'total') && (value as number) > 0 ? undefined : next.unpriced
+      };
+      const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+      return { ...b, items: recalculation.items, totals: recalculation.totals };
+    });
+
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: updatedBidders,
+      updatedAt: new Date().toISOString()
+    };
+    corrected.forEach(b => {
+      const it = b.items[index];
+      updatedProj = addAuditLog(
+        updatedProj,
+        'إلغاء تصحيح اللجنة لتصحيح قراءة',
+        `أُلغي التصحيح الحسابي للفقرة رقم (${before.itemNo}) في عطاء (${b.name}) لتصحيح قراءة ${label}: عاد مبلغها من (${fmt(it.bidderTotal)}) إلى ما دوّنه المجهز (${fmt(it.enteredBidderTotal)})`,
+        { itemNo: before.itemNo, oldValue: it.bidderTotal, newValue: it.enteredBidderTotal }
+      );
+    });
+    updatedProj = addAuditLog(
+      updatedProj,
+      'تصحيح قراءة',
+      `تصحيح قراءة ${label} للفقرة رقم (${before.itemNo}) ${isQuantity ? '(مشتركة لكل المجهزين)' : `في عطاء (${activeBidder.name})`} من (${fmt(oldValue)}) إلى (${fmt(newValue)})، وأُعيد فحصها`,
+      { itemNo: before.itemNo, oldValue, newValue }
+    );
+
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
 
   // المبلغ الإجمالي المدون في العطاء (قبل التصحيح الحسابي): تملؤه قراءة Gemini، أو يدخله العضو من الأصل
   const handleUpdateStatedTotal = (value: number) => {
@@ -1110,6 +1213,7 @@ export function App() {
               bidderName={activeBidder.name}
               onUpdateItem={handleUpdateItem}
               onUpdateFields={handleUpdateItemFields}
+              onCorrectReading={handleCorrectReading}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}
