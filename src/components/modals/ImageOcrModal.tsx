@@ -853,7 +853,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   </div>
                 )}
 
-                {!isLoading && <QuantityMismatchNotice mismatches={qtyMismatchList} source="العطاء المقروء" />}
+                {/* مركّب دائماً (فارغ أثناء القراءة): منطقة الإعلان فيه يجب أن تسبق محتواها ليُعلن عنه */}
+                <QuantityMismatchNotice mismatches={isLoading ? [] : qtyMismatchList} source="العطاء المقروء" />
 
                 {/* Progress / Loading State */}
                 {isLoading ? (
@@ -898,7 +899,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                         <tr>
                           <th className="p-2 w-10 text-center border-l border-slate-800">ت</th>
                           <th className="p-2 min-w-[140px] border-l border-slate-800">اسم المادة / الوصف</th>
-                          <th className="p-2 w-14 text-center border-l border-slate-800">العدد</th>
+                          <th className="p-2 w-24 text-center border-l border-slate-800">العدد</th>
                           <th className="p-2 w-24 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">المفرد (د.ع)</th>
                           <th className="p-2 w-28 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">المبلغ الإجمالي</th>
                           <th className="p-2 min-w-[120px] border-l border-slate-800 bg-amber-950 text-amber-200">التفقيط</th>
