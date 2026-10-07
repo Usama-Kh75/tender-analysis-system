@@ -448,49 +448,67 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         )}
 
                         {/* 2. تعارض وتناقض التفقيط (برتقالي / كهرماني)
-                            المكتوب كتابةً هو المعتمد (ضوابط رقم (4) خامساً/ب/1). إن كان التفقيط لسعر المفرد فالمبلغ
-                            حاصل ضربه بالكمية (خامساً/ب/2): كان الزر يجعل قيمة تفقيط المفرد مبلغاً للفقرة كلها */}
+                            المكتوب كتابةً هو المعتمد (ضوابط رقم (4) خامساً/ب/1). التفقيط قد يكون لسعر المفرد فيكون
+                            المبلغ حاصل ضربه بالكمية (خامساً/ب/2)، أو لمبلغ الفقرة. الأرقام وحدها لا تحسم أيهما (الرقم
+                            المدون نفسه قد يكون الخاطئ)، فحين يحتمل الأمرين يُعرض زران وتختار اللجنة، ويُبرز الأرجح.
+                            كان زر واحد يجعل قيمة تفقيط المفرد مبلغاً للفقرة كلها */}
                         {item.hasTextDiscrepancy && (() => {
                           const written = item.writtenText ? parseArabicTextToNumber(item.writtenText) : null;
                           const qty = item.quantity || 1;
+                          const unit = item.enteredUnitPrice || 0;
                           const enteredTotal = item.enteredBidderTotal || item.bidderTotal;
-                          const forUnit = written !== null && qty > 1
-                            && writtenAmountTarget(written, item.enteredUnitPrice || 0, enteredTotal) === 'unit';
+                          // كمية 1: المفرد هو المبلغ فلا فرق بين الاعتمادين
+                          const ambiguous = written !== null && unit > 0 && qty !== 1;
+                          const likelyUnit = ambiguous && writtenAmountTarget(written, unit, enteredTotal) === 'unit';
+                          const adoptAsUnit = () => written && onUpdateFields(actualIndex, {
+                            enteredUnitPrice: written,
+                            bidderUnitPrice: written,
+                            bidderTotal: written * qty,
+                            hasTextDiscrepancy: false,
+                            hasMathError: false
+                          }, 'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة');
+                          const adoptAsTotal = () => written && onUpdateFields(actualIndex, { bidderTotal: written, hasTextDiscrepancy: false },
+                            'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة');
+                          const solid = 'bg-amber-700 hover:bg-amber-800 text-white';
+                          const outline = 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-500';
                           return (
                           <div className="bg-amber-100 text-amber-950 border border-amber-400 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
                             <div className="flex items-start gap-1.5">
                               <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
                               <div>
-                                <span className="font-black text-amber-900">⚠️ تعارض تفقيط:</span> المكتوب كتابةً ({item.writtenText}) يختلف عن {forUnit
-                                  ? <>سعر المفرد المدون ({(item.enteredUnitPrice || 0).toLocaleString()} د.ع)</>
+                                <span className="font-black text-amber-900">⚠️ تعارض تفقيط:</span> المكتوب كتابةً ({item.writtenText}) يختلف عن {ambiguous
+                                  ? <>سعر المفرد المدون ({unit.toLocaleString()} د.ع) وعن مبلغ الفقرة المدون ({enteredTotal.toLocaleString()} د.ع)</>
                                   : <>الرقم المدون ({enteredTotal.toLocaleString()} د.ع)</>}
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5 mt-1 mr-5">
-                              <button
-                                onClick={() => {
-                                  if (!written || written <= 0) return;
-                                  if (forUnit) {
-                                    onUpdateFields(actualIndex, {
-                                      enteredUnitPrice: written,
-                                      bidderUnitPrice: written,
-                                      bidderTotal: written * qty,
-                                      hasTextDiscrepancy: false,
-                                      hasMathError: false
-                                    }, 'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة');
-                                  } else {
-                                    onUpdateFields(actualIndex, { bidderTotal: written, hasTextDiscrepancy: false },
-                                      'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة');
-                                  }
-                                }}
-                                className="bg-amber-700 hover:bg-amber-800 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
-                                title="اعتماد المبلغ المكتوب كتابةً بعد موافقة اللجنة / الإدارة وفق التعليمات"
-                              >
-                                {forUnit && written
-                                  ? `⚖️ اعتماد المفرد المكتوب كتابةً (${written.toLocaleString()} × ${qty} = ${(written * qty).toLocaleString()})`
-                                  : '⚖️ اعتماد المكتوب كتابةً بموافقة اللجنة'}
-                              </button>
+                            {written !== null && written > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1 mr-5">
+                              {ambiguous ? (<>
+                                <button
+                                  onClick={adoptAsUnit}
+                                  className={`${likelyUnit ? solid : outline} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
+                                  title="التفقيط لسعر المفرد: يُعتمد مفرداً ويُضرب بالكمية، بقرار اللجنة"
+                                >
+                                  ⚖️ اعتماده سعراً للمفرد ({written.toLocaleString()} × {qty} = {(written * qty).toLocaleString()})
+                                </button>
+                                <button
+                                  onClick={adoptAsTotal}
+                                  className={`${likelyUnit ? outline : solid} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
+                                  title="التفقيط لمبلغ الفقرة: يُعتمد مبلغاً لها، بقرار اللجنة"
+                                >
+                                  ⚖️ اعتماده مبلغاً للفقرة ({written.toLocaleString()})
+                                </button>
+                              </>) : (
+                                <button
+                                  onClick={adoptAsTotal}
+                                  className={`${solid} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
+                                  title="اعتماد المبلغ المكتوب كتابةً بعد موافقة اللجنة / الإدارة وفق التعليمات"
+                                >
+                                  ⚖️ اعتماد المكتوب كتابةً بموافقة اللجنة
+                                </button>
+                              )}
                             </div>
+                            )}
                           </div>
                           );
                         })()}
