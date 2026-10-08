@@ -296,11 +296,16 @@ export function App() {
     const newValue = field === 'writtenText' ? (String(value).trim() || undefined)
       : field === 'unitPrice' ? ((value as number) || undefined)
       : (value as number);
-    const oldValue = field === 'quantity' ? before.quantity
-      : field === 'unitPrice' ? ((before.originalUnitPrice ?? before.enteredUnitPrice) || undefined)
+    // لا تعديل إن ساوى الرقم ما في الخانة. أما «من» في السجل فهي ما دوّنه المجهز لا ما اعتمدته اللجنة:
+    // كتابة المفرد الأصلي في فقرة اعتُمد تفقيطها كانت تُقارن بالأصل فلا يحدث شيء
+    const shownValue = field === 'quantity' ? before.quantity
+      : field === 'unitPrice' ? (before.enteredUnitPrice || undefined)
       : field === 'total' ? before.bidderTotal
       : before.writtenText;
-    if (newValue === oldValue) return;
+    if (newValue === shownValue) return;
+    const oldValue = field === 'unitPrice' ? ((before.originalUnitPrice ?? before.enteredUnitPrice) || undefined)
+      : field === 'total' ? (before.enteredBidderTotal || before.bidderTotal)
+      : shownValue;
 
     const affected = currentProject.bidders.filter(b => b.items[index] && (isQuantity || b.id === activeBidder.id));
     const corrected = affected.filter(b => isCommitteeCorrected(b.items[index]));
