@@ -9,7 +9,9 @@ import {
   Plus,
   Key,
   Cpu,
-  Eye
+  Eye,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
 import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl, ReadingPages } from '../../utils/ocrService';
@@ -64,6 +66,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [readingRange, setReadingRange] = useState<ReadingPages | null>(null);
   const lastReading = useRef('');
   const thumbRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // شريط الصفحات وسهما طرفيه: يظهران حين لا يتسع الشريط لكل الصفحات، ويخفت كلٌّ منهما عند طرفه
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const [stripEdges, setStripEdges] = useState({ overflows: false, atStart: true, atEnd: true });
 
   // دفعة جديدة تنقل المعاينة إلى أول صفحاتها مرة واحدة (لا مع كل رسالة تقدم)، فيبقى للمستخدم أن يفتح
   // غيرها أثناء الانتظار. Gemini يقرأ صفحات الدفعة معاً، فالمتابعة بالدفعة لا بالصفحة
@@ -80,6 +85,32 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   useEffect(() => {
     if (readingRange) thumbRefs.current[activeImageIndex]?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }, [activeImageIndex, readingRange]);
+
+  // في الاتجاه من اليمين إلى اليسار يبدأ scrollLeft من 0 عند الصفحة الأولى ويصير سالباً نحو الأخيرة
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const update = () => {
+      const max = strip.scrollWidth - strip.clientWidth;
+      const pos = Math.abs(strip.scrollLeft);
+      setStripEdges({ overflows: max > 1, atStart: pos <= 1, atEnd: pos >= max - 1 });
+    };
+    update();
+    strip.addEventListener('scroll', update, { passive: true });
+    const resize = new ResizeObserver(update);
+    resize.observe(strip);
+    return () => {
+      strip.removeEventListener('scroll', update);
+      resize.disconnect();
+    };
+  }, [imagePreviews.length, isOpen]);
+
+  const scrollStrip = (towardEnd: boolean) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const sign = getComputedStyle(strip).direction === 'rtl' ? -1 : 1;
+    strip.scrollBy({ left: (towardEnd ? sign : -sign) * strip.clientWidth * 0.8, behavior: 'smooth' });
+  };
 
   // ملف كبير قد تكون أغلب صفحاته منخفضة الجودة: تُذكر أول خمس فقط
   const summarizePages = (withConfidence: boolean) => {
@@ -700,7 +731,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
                 {/* Thumbnail Strip for multiple pages */}
                 {imagePreviews.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className="flex items-start gap-1">
+                  {stripEdges.overflows && (
+                    <button
+                      type="button"
+                      onClick={() => scrollStrip(false)}
+                      disabled={stripEdges.atStart}
+                      aria-label="الصفحات السابقة"
+                      title="الصفحات السابقة"
+                      className="shrink-0 h-16 w-7 flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 cursor-pointer transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-700 disabled:hover:border-slate-200"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div ref={stripRef} className="flex-1 min-w-0 flex gap-2 overflow-x-auto pb-1">
                     {imagePreviews.map((img, idx) => {
                       // أثناء القراءة: ما قبل الدفعة الحالية مقروء، وصفحاتها قيد القراءة، وما بعدها ينتظر
                       const pageState = !readingRange ? null
@@ -735,6 +779,19 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       </div>
                       );
                     })}
+                  </div>
+                  {stripEdges.overflows && (
+                    <button
+                      type="button"
+                      onClick={() => scrollStrip(true)}
+                      disabled={stripEdges.atEnd}
+                      aria-label="الصفحات التالية"
+                      title="الصفحات التالية"
+                      className="shrink-0 h-16 w-7 flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 cursor-pointer transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-700 disabled:hover:border-slate-200"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  )}
                   </div>
                 )}
 
