@@ -19,6 +19,11 @@ import { auditBidderRows, auditRowAmounts, BidderAuditReport, quantityMismatches
 import { isPdfFile } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
 
+// «مجموع» أو «إجمالي» كلمةً مستقلة: لا يطابق «مجموعة» (حرف عربي بعدها) ولا «بالمجموع»
+const SUMMARY_WORD = /(^|\P{Script=Arabic})(ال)?(مجموع|إجمالي|اجمالي)(?!\p{Script=Arabic})|\b(sub)?total\b/iu;
+// صف عنوانه عبارة مجموع وحدها («المجموع»، «المجموع الكلي»، «مجموع الصفحة»، «Grand Total») ليس فقرة ولو رُقّم وفيه مبلغ
+const TOTAL_LABEL = /^(ال)?(مجموع|إجمالي|اجمالي)(\s+(ال)?(كلي|عام|فرعي|نهائي|صفحة|جدول))?$|^(grand\s+|sub\s*)?total$/iu;
+
 export type ImportDocType = 'bidder' | 'estimated' | 'both';
 export type ImportMode = 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace';
 
@@ -119,6 +124,29 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         return 'description';
       }
 
+      // الترتيب مقصود: «سعر المفرد كتابةً» تفقيط لا سعر، و«الكمية × المفرد» و«المفرد التخميني» ليسا سعر المجهز.
+      // كان سعر المفرد يُفحص أولاً، فيصير التفقيط سعراً ولا يُستورد، ويحل حاصل الضرب محل السعر إن سبقه
+
+      // أعمدة محسوبة لا تُستورد: حاصل الضرب والفرق والنسب والأسعار الموزونة
+      if (/[×*]|\sx\s/.test(clean) || ['حاصل', 'فرق', 'نسبة', 'انحراف', 'منحرف', 'موزون', 'جديد'].some(w => clean.includes(w))) {
+        return 'ignore';
+      }
+
+      // التفقيط / المبلغ كتابةً
+      if (
+        clean.includes('كتابة') ||
+        clean.includes('كتابةً') ||
+        clean.includes('تفقيط') ||
+        clean.includes('words')
+      ) {
+        return 'writtenText';
+      }
+
+      // الكلفة التخمينية: مبلغها فقط (لا دور لمفردها، فيُشتق من المبلغ والكمية)
+      if (clean.includes('تخمين') || clean.includes('estimated')) {
+        return clean.includes('مفرد') || clean.includes('unit') ? 'ignore' : 'estimatedTotal';
+      }
+
       // 3. سعر المفرد
       if (
         clean.includes('سعر المفرد') || 
@@ -142,17 +170,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         return 'quantity';
       }
 
-      // 5. التفقيط / مبلغ الفقرة كتابةً
-      if (
-        clean.includes('كتابة') || 
-        clean.includes('كتابةً') || 
-        clean.includes('تفقيط') || 
-        clean.includes('words')
-      ) {
-        return 'writtenText';
-      }
-
-      // 6. مبلغ الفقرة رقماً
+      // 5. مبلغ الفقرة رقماً
       if (
         clean.includes('مبلغ الفقرة') || 
         clean.includes('مبلغ') || 
@@ -164,11 +182,6 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         clean.includes('total')
       ) {
         return selectedDocType === 'estimated' ? 'estimatedTotal' : 'bidderTotal';
-      }
-
-      // 7. الكلفة التخمينية
-      if (clean.includes('تخمين') || clean.includes('estimated')) {
-        return 'estimatedTotal';
       }
 
       return 'ignore';
@@ -206,8 +219,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     return bestIdx;
   };
 
-  // صفوف الملف كما تُدرج (handleConfirmImport) وكما تُدقَّق في المعاينة، فيتطابقان. kept يُسقط صفوف «المجموع»
-  // الخالية من المبالغ، وtableQty كمية الجدول في موضع الفقرة بعد الإسقاط (الدمج بالترتيب). استيراد عطاء المجهز
+  // صفوف الملف كما تُدرج (handleConfirmImport) وكما تُدقَّق في المعاينة، فيتطابقان. kept يُسقط صفوف المجاميع،
+  // وtableQty كمية الجدول في موضع الفقرة بعد الإسقاط (الدمج بالترتيب). استيراد عطاء المجهز
   // يُبقي كمية الجدول (handleApplyExtractedItems)، فيُفحص الضرب بها، وبلا عمود للمبلغ يُحسب المبلغ بها
   const mapImportRows = (rows: string[][], roles: ColumnRole[], selectedDoc: ImportDocType) => {
     const itemNoIdx = roles.indexOf('itemNo');
@@ -229,7 +242,17 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       const writtenVal = writtenIdx !== -1 && row[writtenIdx] ? String(row[writtenIdx]).trim() : undefined;
 
       const hasBidAmount = selectedDoc !== 'estimated' && (writtenBid !== null ? writtenBid > 0 : unitPriceVal > 0);
-      const kept = estVal > 0 || hasBidAmount || !descVal.includes('مجموع');
+      // صف مجاميع لا فقرة: «مجموع» أو «إجمالي» كلمةً مستقلة (لا «مجموعة») في صف بلا رقم فقرة أو بلا مبلغ، أو عبارة
+      // في خانة الرقم بلا وصف وبجانبها مبلغ (صفوف الإجمالي أسفل الجدول). كان يُسقط ما في وصفه «مجموع» بلا مبلغ
+      // فقط: فتُدرج صفوف الإجمالي بمبالغها فقراتٍ، وتسقط «مجموعة مفاتيح» بلا مبلغ فتتزحزح الفقرات بعدها
+      const rawNo = itemNoIdx !== -1 ? String(row[itemNoIdx] ?? '').trim() : '';
+      const rawDesc = descIdx !== -1 ? String(row[descIdx] ?? '').trim() : '';
+      const numbered = /^[0-9٠-٩۰-۹]/.test(rawNo);
+      const hasAmount = estVal > 0 || hasBidAmount;
+      const summaryRow = TOTAL_LABEL.test(rawNo) || TOTAL_LABEL.test(rawDesc)
+        || ((SUMMARY_WORD.test(rawNo) || SUMMARY_WORD.test(rawDesc)) && (!numbered || !hasAmount));
+      const labelRow = rawNo !== '' && !numbered && rawDesc === '' && hasAmount;
+      const kept = !summaryRow && !labelRow;
       const tableQty = kept && selectedDoc === 'bidder' ? (tableRows[keptCount]?.quantity || 0) : 0;
       if (kept) keptCount++;
       const checkQty = tableQty > 0 ? tableQty : (fileQty || 1);
@@ -410,6 +433,16 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   const handleConfirmImport = () => {
     if (rawRows.length === 0) {
       alert('لا توجد بيانات للاستيراد.');
+      return;
+    }
+
+    // بلا عمود للمبلغ يُدرج صفر في كل فقرة فيحل محل الكلفة التخمينية أو أسعار المجهز القائمة
+    if (docType === 'estimated' && !columnMappings.includes('estimatedTotal')) {
+      alert('لم يُحدَّد عمود المبلغ التخميني، فلا شيء يُدرج: بدونه تُصفَّر الكلفة التخمينية القائمة.\n\nحدّد دوره من القائمة أعلى عموده في المعاينة، ثم أعد المحاولة.');
+      return;
+    }
+    if (docType === 'bidder' && !columnMappings.includes('bidderTotal') && !columnMappings.includes('unitPrice')) {
+      alert('لم يُحدَّد عمود مبلغ الفقرة أو سعر المفرد، فلا شيء يُدرج: بدونهما تُصفَّر أسعار المجهز القائمة.\n\nحدّد دور أحدهما من القائمة أعلى عموده في المعاينة، ثم أعد المحاولة.');
       return;
     }
 
@@ -883,7 +916,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         {/* Modal Footer */}
         <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
           <div className="text-xs text-slate-500 font-medium">
-            {rawRows.length > 0 ? `جاهز لاستيراد (${rawRows.length}) فقرة مع تطبيق معايير التدقيق والتصحيح القانوني` : 'حدد نوع الجدول أولاً ثم ارفع الملف للبدء'}
+            {rawRows.length > 0 ? `جاهز لاستيراد (${mappedRows.filter(r => r.kept).length}) فقرة مع تطبيق معايير التدقيق والتصحيح القانوني` : 'حدد نوع الجدول أولاً ثم ارفع الملف للبدء'}
           </div>
 
           <div className="flex items-center gap-2">

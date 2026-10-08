@@ -937,6 +937,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                               {missingAmount && (
                                 <span className="inline-block mt-0.5 text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 rounded">تعذّرت قراءة المبلغ — أدخله من الأصل</span>
                               )}
+                              {!item.quantity && (
+                                <span className="inline-block mt-0.5 text-[10px] font-bold text-slate-700 bg-slate-200 px-1.5 rounded">تعذّرت قراءة الكمية — تبقى كمية الجدول، أو أدخلها من الأصل</span>
+                              )}
                               {rowMath[idx] && (
                                 <span className="inline-block mt-0.5 text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 rounded">
                                   العدد × المفرد = <bdi>{fmt((item.enteredUnitPrice || 0) * (item.quantity || 1))}</bdi> ≠ المبلغ — طابقه مع الصورة
@@ -947,8 +950,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                             <td className="p-1.5 text-center">
                               <input
                                 type="number"
-                                value={item.quantity || 1}
-                                onChange={(e) => handleUpdateExtractedItem(idx, 'quantity', parseFloat(e.target.value) || 1)}
+                                value={item.quantity || ''}
+                                placeholder="—"
+                                onChange={(e) => handleUpdateExtractedItem(idx, 'quantity', parseFloat(e.target.value) || undefined)}
                                 aria-label={`كمية الفقرة ${item.itemNo ?? idx + 1}`}
                                 className="w-20 text-center bg-slate-50 border border-slate-200 rounded p-1 font-bold"
                               />

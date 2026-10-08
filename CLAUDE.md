@@ -81,8 +81,24 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 - An estimate import sets the quantity. Bidder rows whose quantity changed are rechecked, except committee-corrected rows.
 - A file without a quantity column leaves quantities unchanged; `mapImportRows` returns `undefined`, not 1.
 - `SmartTableImportModal.mapImportRows` is the single row mapping for both the preview audit and the insert. Keep them on it.
+- Item identity is shared too (since v1.12.2). Both bidder merges take `itemNo`, description and unit from `sharedIdentity` in `App.tsx`:
+  - An existing row keeps the table's values. The file's values apply only to a new row or a blank placeholder row.
+  - Before this, a new bidder overwrote everyone's descriptions. Both paths also dropped `unit`, which `calculateBOQMetrics` then defaulted to «عدد» for every bidder.
+- The merges pass the read unit price as `bidderUnitPrice` as well. `calculateBOQMetrics` derives a missing amount only from that field, so an amount that was not read is computed with the table quantity.
+- A Gemini quantity that was not read stays `undefined`, not 1, and the reading window marks it. An amount that was not read is derived only from a quantity that was read. Otherwise it stays empty, with `enteredBidderTotal` undefined, so no recorded zero gets flagged.
+- `mapImportRows` drops summary rows (`kept`) in two cases:
+  - **Total word (`SUMMARY_WORD`):** «مجموع» or «إجمالي» as a whole word, never «مجموعة». The row is dropped if it has no item number or no amount.
+  - **Total label (`TOTAL_LABEL`):** a label that is only a total phrase («المجموع», «مجموع الصفحة», «Grand Total»). This applies even when the row has a number and an amount.
+  - It also drops a text label in the item-number cell with no description but with an amount (the totals block under a table).
+  - A dropped row shifts the index merge, so never drop by substring alone.
+- `autoDetectRoles` checks in this order: item number, description, computed columns («×», فرق, نسبة, موزون… → ignore), tafqeet, estimate, unit price, quantity, amount. Checking unit price first made «سعر المفرد كتابةً» a unit price, and made «الكمية × المفرد» the unit price whenever it came first.
+- An import with no amount column stops with a message: no estimate-amount column for an estimate, and no amount or unit-price column for a bid. It used to write 0 over the existing values.
 
-**Legal/audit framing matters for UI behavior**: arithmetic correction is the committee's act, notified to and signed by the bidder (ضوابط رقم (4) خامساً/ب/3), so the system never silently auto-corrects a bidder's submitted numbers — math-error and text-discrepancy detection only *flags* rows (`hasMathError`, `hasTextDiscrepancy` in `BOQItem`); correction is an explicit, logged committee action (see `correctionRationale`, `AuditLogEntry`). Keep this "detect and flag, never silently rewrite" pattern when adding audit features.
+**Legal/audit framing matters for UI behavior**: arithmetic correction is the committee's act, notified to and signed by the bidder (ضوابط رقم (4) خامساً/ب/3), so the system never silently auto-corrects a bidder's submitted numbers — math-error and text-discrepancy detection only *flags* rows (`hasMathError`, `hasTextDiscrepancy` in `BOQItem`); correction is an explicit, logged committee action (see `correctionRationale`, `AuditLogEntry`). Keep this "detect and flag, never silently rewrite" pattern when adding audit features. Stored flags are sticky, so `recheckStoredFlags` (`storageService.ts`, since v1.12.2) runs them again on every load and backup restore:
+- It covers only rows the committee did not correct (`isCommitteeCorrected`), and skips rows with an amount but no recorded amount.
+- It logs every change as «إعادة فحص تلقائية».
+- It fixes flags left stale by older parsers (item 41) or missing flags.
+- It changes flags only, never amounts.
 
 **A plain edit in the main table is a reading correction, not an arithmetic one** (since v1.11.7). Editing the quantity, unit price, item amount or tafqeet goes through `handleCorrectReading` in `App.tsx`, not `handleUpdateItemFields`:
 - The new value becomes the bidder's recorded value (`enteredUnitPrice`/`enteredBidderTotal`).

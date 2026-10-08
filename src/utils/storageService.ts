@@ -1,5 +1,6 @@
 import { TenderProject, Bidder, AuditLogEntry, BOQItem } from '../types/tender';
 import { calculateBOQMetrics } from './calculations';
+import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
 const ACTIVE_PROJECT_KEY = 'antigravity_active_project_id_v2';
@@ -223,6 +224,48 @@ function reconcileProjectSharedFields(project: TenderProject): TenderProject {
   );
 }
 
+/**
+ * علامتا التدقيق تُخزَّنان ولا يعيد calculateBOQMetrics حسابهما، فتبقى علامة حسبها محلل أقدم وإن صارت خاطئة
+ * (الفقرة 41)، وقد تغيب علامة. عند كل تحميل واستعادة يُعاد فحص الفقرات التي لم تمسها اللجنة بأرقامها المسجلة،
+ * ويُسجَّل كل تغيير. لا تُمس الفقرة المصحَّحة (isCommitteeCorrected)، ولا فقرة لها مبلغ بلا رقم مدون (قد يكون
+ * من إدخال اللجنة)
+ */
+function recheckStoredFlags(project: TenderProject): TenderProject {
+  const changes: { bidder: Bidder; itemNo: number | string; details: string[] }[] = [];
+  const bidders = project.bidders.map(b => {
+    let changed = false;
+    const items = b.items.map(item => {
+      if (isCommitteeCorrected(item)) return item;
+      const stated = item.enteredBidderTotal ?? item.bidderTotal;
+      if (!(stated > 0) && item.bidderTotal > 0) return item;
+      const flags = auditRowAmounts(item.quantity, item.enteredUnitPrice || 0, stated, item.writtenText);
+      const details: string[] = [];
+      if (!!item.hasMathError !== flags.hasMathError) details.push(flags.hasMathError ? 'أُشّر خطأ ضرب' : 'أُزيلت علامة خطأ الضرب');
+      if (!!item.hasTextDiscrepancy !== flags.hasTextDiscrepancy) details.push(flags.hasTextDiscrepancy ? 'أُشّر تعارض تفقيط' : 'أُزيلت علامة تعارض التفقيط');
+      if (details.length === 0) return item;
+      changed = true;
+      changes.push({ bidder: b, itemNo: item.itemNo, details });
+      return {
+        ...item,
+        ...flags,
+        correctionRationale: flags.hasMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد' : undefined
+      };
+    });
+    return changed ? { ...b, items } : b;
+  });
+  if (changes.length === 0) return project;
+
+  return changes.reduce((p, c) => addAuditLog(
+    p,
+    'إعادة فحص تلقائية',
+    `أُعيد فحص الفقرة رقم (${c.itemNo}) في عطاء (${c.bidder.name}) بأرقامها المسجلة: ${c.details.join('، و')}`,
+    { itemNo: c.itemNo, bidderId: c.bidder.id }
+  ), { ...project, bidders, updatedAt: new Date().toISOString() });
+}
+
+// كل مشروع يُحمَّل أو يُستعاد: توحيد الحقول المشتركة ثم إعادة فحص العلامات المخزنة
+const normalizeLoadedProject = (project: TenderProject) => recheckStoredFlags(reconcileProjectSharedFields(project));
+
 export function getAllProjects(): TenderProject[] {
   const data = localStorage.getItem(STORAGE_KEY);
   if (!data) {
@@ -232,7 +275,7 @@ export function getAllProjects(): TenderProject[] {
   }
   try {
     const projects: TenderProject[] = JSON.parse(data);
-    const reconciled = projects.map(reconcileProjectSharedFields);
+    const reconciled = projects.map(normalizeLoadedProject);
     if (reconciled.some((p, i) => p !== projects[i])) {
       saveAllProjects(reconciled);
     }
@@ -328,7 +371,7 @@ export function parseAllProjectsBackupFile(file: File): Promise<TenderProject[]>
           return;
         }
 
-        resolve(projects.map(reconcileProjectSharedFields));
+        resolve(projects.map(normalizeLoadedProject));
       } catch (err) {
         reject(new Error('تعذر قراءة الملف: تأكد من أنه ملف نسخة احتياطية (JSON) سليم'));
       }
@@ -354,7 +397,7 @@ export function parseProjectBackupFile(file: File): Promise<TenderProject> {
           return;
         }
 
-        resolve(reconcileProjectSharedFields(project));
+        resolve(normalizeLoadedProject(project));
       } catch (err) {
         reject(new Error('تعذر قراءة الملف: تأكد من أنه ملف نسخة احتياطية (JSON) سليم'));
       }

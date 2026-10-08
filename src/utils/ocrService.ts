@@ -287,12 +287,16 @@ function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
   const description = isBlank(r?.description) ? `فقرة ${itemNo}` : String(r.description).trim();
   const unit = isBlank(r?.unit) ? 'عدد' : String(r.unit).trim();
   const unpriced = r?.unpriced === true || isDash(r?.unitPrice) || isDash(r?.total);
-  const quantity = parseArabicNumber(r?.quantity) || 1;
+  // كمية لم تُقرأ تبقى فارغة: كانت 1 فتحل محل كمية الجدول عند «تعبئة الكلفة التخمينية». الفحص هنا بـ 1
+  const quantity = parseArabicNumber(r?.quantity) || undefined;
+  const qty = quantity || 1;
   const unitPrice = unpriced ? 0 : (parseArabicNumber(r?.unitPrice) || 0);
-  const total = unpriced ? 0 : (parseArabicNumber(r?.total) || (unitPrice * quantity));
+  // مبلغ لم يُقرأ يُشتق من المفرد × الكمية المقروءة. وبلا كمية مقروءة يبقى فارغاً (تنبّه النافذة إليه)، فيشتقه
+  // calculateBOQMetrics بعد الإدراج من كمية الجدول: كان المفرد × 1 يصير مبلغاً مدوناً فيُؤشَّر خطأ ضرب لم يقع
+  const total = unpriced ? 0 : (parseArabicNumber(r?.total) || (quantity ? unitPrice * quantity : 0));
   const writtenText = isBlank(r?.writtenText) ? undefined : String(r.writtenText).trim();
   const { hasMathError: isMathError, hasTextDiscrepancy: isTextDiscrepancy } =
-    auditRowAmounts(quantity, unitPrice, total, writtenText);
+    auditRowAmounts(qty, unitPrice, total, writtenText);
 
   return {
     itemNo,
@@ -302,7 +306,7 @@ function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
     estimatedTotal: 0,
     bidderTotal: total,
     enteredUnitPrice: unitPrice,
-    enteredBidderTotal: total,
+    enteredBidderTotal: total || undefined, // صفر مدون يُؤشَّر خطأ ضرب أمام المبلغ المشتق
     writtenText,
     hasMathError: isMathError,
     hasTextDiscrepancy: isTextDiscrepancy,

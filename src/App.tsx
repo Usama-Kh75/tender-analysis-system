@@ -196,6 +196,22 @@ export function App() {
     activeBidder.items[index] && !isBlankRow(index) ? activeBidder.items[index].quantity : undefined;
   // فقرات الجدول كما تُعرض لنافذتي الاستيراد لمقارنة الكمية: الفارغة بلا كمية مرجعية
   const referenceRows = activeBidder.items.map((item, i) => ({ itemNo: item.itemNo, quantity: referenceQuantity(i) || 0 }));
+  // هوية الفقرة (الرقم والوصف والوحدة) مشتركة كالكمية: تبقى من الجدول القائم، وتؤخذ من الملف لفقرة جديدة أو
+  // فارغة. كان المجهز الجديد يكتب أوصافه فوق أوصاف الجدول لدى كل المجهزين، وكان استيراد العطاء يُسقط الوحدة
+  // فيعيدها calculateBOQMetrics «عدد» ثم تُوحَّد على الجميع
+  const sharedIdentity = (i: number, ext?: Partial<BOQItem>) => {
+    const existing = activeBidder.items[i];
+    const realDesc = (d?: string) => d && !d.startsWith('فقرة ') ? d : undefined;
+    if (!existing || isBlankRow(i)) {
+      const itemNo = ext?.itemNo || existing?.itemNo || String(i + 1);
+      return { itemNo, description: realDesc(ext?.description) || existing?.description || `فقرة ${itemNo}`, unit: ext?.unit || existing?.unit };
+    }
+    return {
+      itemNo: existing.itemNo || ext?.itemNo || String(i + 1),
+      description: realDesc(existing.description) || realDesc(ext?.description) || existing.description,
+      unit: existing.unit || ext?.unit
+    };
+  };
 
   // حقول هوية الفقرة والكلفة التخمينية مشتركة لكل المجهزين (الكلفة التخمينية واحدة للمشروع)
   // بينما حقول السعر والتدقيق (bidderTotal, enteredUnitPrice, writtenText...) خاصة بكل مجهز على حدة
@@ -531,20 +547,16 @@ export function App() {
           ? ext.bidderTotal 
           : 0;
 
-        const itemNo = ext?.itemNo || existing?.itemNo || String(i + 1);
-        const desc = ext?.description && !ext.description.startsWith('فقرة ')
-          ? ext.description
-          : (existing?.description || `فقرة ${itemNo}`);
-
         // الكمية مشتركة: تبقى كمية الجدول القائمة (كانت كمية الملف تحل محلها لدى كل المجهزين)، وتُمسح علامتا
         // الاستخراج ليعيد calculateBOQMetrics فحص الفقرة بها، كما في «تعبئة أسعار المجهز الحالي»
         mergedItems.push({
-          itemNo,
-          description: desc,
+          ...sharedIdentity(i, ext),
           quantity: referenceQuantity(i) || ext?.quantity || existing?.quantity || 1,
           estimatedTotal: estVal,
           bidderTotal: bidVal,
           enteredUnitPrice: ext?.enteredUnitPrice,
+          // يشتق منه calculateBOQMetrics مبلغاً لم يُقرأ بكمية الجدول (لا يشتق من enteredUnitPrice)
+          bidderUnitPrice: ext?.enteredUnitPrice,
           enteredBidderTotal: ext?.enteredBidderTotal,
           writtenText: ext?.writtenText,
           hasMathError: undefined,
@@ -658,22 +670,18 @@ export function App() {
           continue;
         }
 
-        const itemNo = existing?.itemNo || ext?.itemNo || String(i + 1);
-        const desc = existing?.description && !existing.description.startsWith('فقرة ')
-          ? existing.description
-          : (ext?.description || `فقرة ${itemNo}`);
-
         // تبقى كمية الجدول القائمة (مشتركة مع الكلفة التخمينية وبقية المجهزين)، فتُمسح علامتا الاستخراج ليعيد
         // calculateBOQMetrics فحص الفقرة بها: كانت العلامتان محسوبتين بكمية الملف والصف مخزناً بكمية الجدول.
         // نافذتا الاستيراد تعرضان الفقرات المختلفة الكمية قبل الإدراج (QuantityMismatchNotice)
         mergedItems.push({
           id: existing?.id || `item-${i + 1}-${Date.now()}`,
-          itemNo,
-          description: desc,
+          ...sharedIdentity(i, ext),
           quantity: referenceQuantity(i) || ext?.quantity || existing?.quantity || 1,
           estimatedTotal: existing?.estimatedTotal || 0, // الحفاظ التام على الكلفة التخمينية
           bidderTotal: ext?.bidderTotal !== undefined ? ext.bidderTotal : (existing?.bidderTotal || 0),
           enteredUnitPrice: ext?.enteredUnitPrice,
+          // يشتق منه calculateBOQMetrics مبلغاً لم يُقرأ بكمية الجدول (لا يشتق من enteredUnitPrice)
+          bidderUnitPrice: ext?.enteredUnitPrice,
           enteredBidderTotal: ext?.enteredBidderTotal,
           writtenText: ext?.writtenText,
           hasMathError: undefined,
