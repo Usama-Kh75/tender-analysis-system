@@ -445,6 +445,12 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       alert('لم يُحدَّد عمود مبلغ الفقرة أو سعر المفرد، فلا شيء يُدرج: بدونهما تُصفَّر أسعار المجهز القائمة.\n\nحدّد دور أحدهما من القائمة أعلى عموده في المعاينة، ثم أعد المحاولة.');
       return;
     }
+    // الجدول المتكامل يستبدل الجدول كله، فيُصفَّر ما لا عمود له
+    if (docType === 'both' && (!columnMappings.includes('estimatedTotal')
+      || (!columnMappings.includes('bidderTotal') && !columnMappings.includes('unitPrice')))) {
+      alert('الجدول المتكامل يستبدل الجدول كله، فيُصفَّر ما لا عمود له.\n\nحدّد عمود المبلغ التخميني، وعمود مبلغ الفقرة أو سعر المفرد للمجهز، من القائمة أعلى كل عمود في المعاينة، ثم أعد المحاولة.');
+      return;
+    }
 
     const extractedItems = mapImportRows(rawRows, columnMappings, docType).filter(r => r.kept).map(r => r.item);
 
