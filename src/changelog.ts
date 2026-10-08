@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.13.0',
+    date: '2026-10-08',
+    notes: [
+      'يمكنك استعراض كل المناقصات وعروضها من زر «المناقصات» في الشريط العلوي، وفتح أي مناقصة أو عرض منها.'
+    ]
+  },
+  {
     version: '1.12.0',
     date: '2026-10-08',
     notes: [

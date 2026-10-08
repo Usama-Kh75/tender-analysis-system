@@ -32,6 +32,7 @@ import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PrintReportModal } from './components/modals/PrintReportModal';
 import { NewProjectModal } from './components/modals/NewProjectModal';
+import { ProjectsBrowserModal } from './components/modals/ProjectsBrowserModal';
 import { UpdateNotice } from './components/UpdateNotice';
 import { versionLabel } from './changelog';
 import { RESUMED_STATE } from './resume';
@@ -67,6 +68,7 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
 
   // Load from Storage
@@ -965,6 +967,16 @@ export function App() {
     setActiveProjectId(newProj.id);
   };
 
+  // فتح مناقصة أو أحد عروضها من نافذة «المناقصات». اختيار المجهز لا يغيّر updatedAt، كقائمة المجهزين
+  const handleOpenFromBrowser = (projectId: string, bidderId?: string) => {
+    if (bidderId) {
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, activeBidderId: bidderId } : p));
+    }
+    setActiveId(projectId);
+    setActiveProjectId(projectId);
+    setIsProjectsOpen(false);
+  };
+
   // Import Project Backup (JSON)
   const handleImportBackup = async (file: File) => {
     try {
@@ -1037,6 +1049,7 @@ export function App() {
           setActiveProjectId(id);
         }}
         onNewProject={() => setIsNewProjectOpen(true)}
+        onOpenProjectsBrowser={() => setIsProjectsOpen(true)}
         onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -1395,6 +1408,18 @@ export function App() {
         isOpen={isNewProjectOpen}
         onClose={() => setIsNewProjectOpen(false)}
         onCreate={handleCreateProject}
+      />
+
+      <ProjectsBrowserModal
+        isOpen={isProjectsOpen}
+        onClose={() => setIsProjectsOpen(false)}
+        projects={projects}
+        activeProjectId={currentProject.id}
+        onOpenProject={handleOpenFromBrowser}
+        onNewProject={() => {
+          setIsProjectsOpen(false);
+          setIsNewProjectOpen(true);
+        }}
       />
 
       <PrintReportModal

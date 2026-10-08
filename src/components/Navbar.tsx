@@ -17,6 +17,7 @@ interface NavbarProps {
   activeBidder: Bidder;
   onSelectProject: (id: string) => void;
   onNewProject: () => void;
+  onOpenProjectsBrowser: () => void;
   onOpenMultiBidder: () => void;
   onOpenAuditTrail: () => void;
   onOpenSettings: () => void;
@@ -27,6 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   projects,
   onSelectProject,
   onNewProject,
+  onOpenProjectsBrowser,
   onOpenMultiBidder,
   onOpenAuditTrail,
   onOpenSettings
@@ -86,7 +88,21 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Left Side: Clean Action Tools */}
           <div className="flex items-center gap-2">
-            
+
+            {/* كل المناقصات وعروضها — ظاهر في كل المقاسات، بخلاف القائمة المنسدلة */}
+            <button
+              onClick={onOpenProjectsBrowser}
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
+              title="استعراض كل المناقصات وعروضها"
+              aria-label={`المناقصات (${projects.length})`}
+            >
+              <FolderOpen className="w-4 h-4 text-amber-400" />
+              <span className="hidden md:inline">المناقصات</span>
+              <span className="bg-amber-500/20 text-amber-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                {projects.length}
+              </span>
+            </button>
+
             {/* Multi-Bidder Comparison */}
             <button
               onClick={onOpenMultiBidder}

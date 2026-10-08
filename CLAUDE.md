@@ -80,6 +80,12 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 - Tesseract hang on first visit: if the offline engine starts while the service worker is still installing/claiming the page, `createWorker` hangs forever at «التهيئة». `extractBOQFromImage` therefore awaits `waitForServiceWorkerControl()` first (no-op on `file://`).
 - `src/utils/storageService.ts` — `localStorage` CRUD for projects, `createNewTenderProject()` (a genuinely blank tender with one zeroed bidder per entered name — never build new tenders from `createDefaultProject()`, which is the demo seed), plus `downloadProjectBackup()`/`parseProjectBackupFile()` for JSON export/import of a whole project (the user's substitute for cloud sync/multi-device support, given the no-backend constraint above).
 
+**The «المناقصات» window** (`src/components/modals/ProjectsBrowserModal.tsx`, since v1.13.0) is opened by a Navbar button that shows at every width. The old `<select>` switcher appears only at 2xl.
+- It lists every saved tender, most recently updated first. Each card shows the tender's details, its estimate (or «بانتظار الكلفة التخمينية»), and each bidder's corrected total and deviation from the stored `totals`.
+- A bidder without amounts (`hasBidAmounts` false) shows «لم تُدخل أسعاره بعد».
+- Clicking a card opens the tender. Clicking a bidder row also sets `activeBidderId`, without touching `updatedAt`.
+- Each tender is shown on its own, with no cross-tender totals or comparison: each tender is a separate committee decision (the user rejected a portfolio dashboard).
+
 **Multi-bidder / multi-page merge logic** (in `App.tsx`'s `handleApplyExtractedItems` and `ImageOcrModal`'s `processAllImages`) is intentionally conservative: imports merge row-by-row by array index, preserving whichever side (existing table vs. newly extracted) already has real data rather than blindly overwriting — e.g. importing bidder prices never touches `estimatedTotal`, and vice versa. Preserve this merge discipline when touching import/OCR code; it's what prevents an OCR misread from silently clobbering already-verified figures.
 
 **Quantity is shared, and a bidder import keeps the table's quantity** (user decision, v1.11.10):
