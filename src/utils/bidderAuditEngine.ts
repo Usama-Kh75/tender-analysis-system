@@ -1,4 +1,12 @@
 import { parseArabicNumber } from './calculations';
+import { BOQItem } from '../types/tender';
+
+// فقرة صحّحتها اللجنة (باعتماد حاصل الضرب أو المكتوب كتابةً): مبلغها المعتمد غير الذي دوّنه المجهز،
+// والأخير محفوظ في enteredBidderTotal دليلاً، أو حلّ التفقيط محل سعر المفرد المدون (originalUnitPrice).
+// تصحيح القراءة يُبقي المبلغين متساويين
+export const isCommitteeCorrected = (item: BOQItem) =>
+  ((item.enteredBidderTotal || 0) > 0 && Math.abs(item.bidderTotal - (item.enteredBidderTotal || 0)) > 0.01)
+  || item.originalUnitPrice !== undefined;
 
 export interface BidderRowAudit {
   itemNo: string | number;

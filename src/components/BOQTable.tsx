@@ -10,7 +10,8 @@ import {
   Building2,
   FileSpreadsheet,
   Search,
-  Pencil
+  Pencil,
+  Download
 } from 'lucide-react';
 import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber } from '../utils/calculations';
@@ -140,6 +141,8 @@ interface BOQTableProps {
   onDuplicateItem: (index: number) => void;
   onClearBidderPrices?: () => void;
   onOpenSmartImport?: () => void;
+  // جدول واقع الحال والجدول المعدل لهذا المجهز في ملف Excel (exportBidderAuditToExcel)
+  onExportAudit?: () => void;
 }
 
 export const BOQTable: React.FC<BOQTableProps> = ({
@@ -153,7 +156,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onDeleteItem,
   onDuplicateItem,
   onClearBidderPrices,
-  onOpenSmartImport
+  onOpenSmartImport,
+  onExportAudit
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   // الفقرة التي يُصحَّح نص تفقيطها الآن (بمعرّفها)
@@ -224,6 +228,17 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4 text-indigo-200" />
               <span>استيراد جدول <bdi dir="ltr">(Excel / Word / PDF)</bdi> أو صورة</span>
+            </button>
+          )}
+          {onExportAudit && (
+            <button
+              type="button"
+              onClick={onExportAudit}
+              className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-emerald-400/30"
+              title="ملف Excel بورقتين: عطاء المجهز كما قدّمه بعيوبه مؤشرة ومشروحة، والجدول المعدل بعد تصحيحات اللجنة"
+            >
+              <Download className="w-4 h-4 text-emerald-100" />
+              <span>تصدير الجدول <bdi dir="ltr">(Excel)</bdi></span>
             </button>
           )}
           {onClearBidderPrices && (
@@ -534,7 +549,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           // كمية 1: المفرد هو المبلغ فلا فرق بين الاعتمادين
                           const ambiguous = written !== null && unit > 0 && qty !== 1;
                           const likelyUnit = ambiguous && writtenAmountTarget(written, unit, enteredTotal) === 'unit';
+                          // المفرد المدون رقماً يُحفظ قبل أن يحل محله التفقيط، لجدول واقع الحال ولإلغاء التصحيح
                           const adoptAsUnit = (logAction = 'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة') => written && onUpdateFields(actualIndex, {
+                            originalUnitPrice: item.originalUnitPrice ?? unit,
                             enteredUnitPrice: written,
                             bidderUnitPrice: written,
                             bidderTotal: written * qty,

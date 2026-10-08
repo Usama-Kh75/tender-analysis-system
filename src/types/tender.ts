@@ -17,6 +17,9 @@ export interface BOQItem {
   weightedUnitPrice: number;    // المفرد المجهز الموزون = السعر الجديد / الكمية
   notes?: string;
   enteredUnitPrice?: number;       // سعر المفرد المدون
+  // سعر المفرد كما دوّنه المجهز رقماً، يُحفظ حين تعتمد اللجنة التفقيط سعراً للمفرد فيحل محل enteredUnitPrice
+  // (كان يُمحى فلا يبقى له أثر في جدول واقع الحال)، ويعود إليه السعر إن أُلغي التصحيح بتصحيح قراءة
+  originalUnitPrice?: number;
   enteredBidderTotal?: number;     // المبلغ المدون رقماً
   writtenText?: string;            // المبلغ المكتوب كتابةً
   hasMathError?: boolean;          // خطأ ضرب حسابي
@@ -60,6 +63,7 @@ export interface AuditLogEntry {
   action: string;
   details: string;
   itemNo?: number | string;
+  bidderId?: string;      // المجهز الذي يخصه تعديل سعر (منذ 1.12.0)، ليُنسب اعتماد اللجنة إلى عطائه في التصدير
   fieldName?: string;
   oldValue?: any;
   newValue?: any;

@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.12.0',
+    date: '2026-10-08',
+    notes: [
+      'يمكنك تصدير جدول المجهز إلى Excel بزر «تصدير الجدول»: جدول واقع الحال كما قدّمه المجهز بعيوبه مؤشرة ومشروحة، والجدول المعدل بعد تصحيحات اللجنة.'
+    ]
+  },
+  {
     version: '1.11.0',
     date: '2026-10-07',
     notes: [
