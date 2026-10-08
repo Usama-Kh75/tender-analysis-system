@@ -93,7 +93,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     const update = () => {
       const max = strip.scrollWidth - strip.clientWidth;
       const pos = Math.abs(strip.scrollLeft);
-      setStripEdges({ overflows: max > 1, atStart: pos <= 1, atEnd: pos >= max - 1 });
+      const next = { overflows: max > 1, atStart: pos <= 1, atEnd: pos >= max - 1 };
+      // حدث التمرير يتكرر مع كل إطار: الحالة نفسها تُعاد كما هي فلا تُرسم النافذة وجدول فقراتها من جديد
+      setStripEdges(prev => prev.overflows === next.overflows && prev.atStart === next.atStart && prev.atEnd === next.atEnd ? prev : next);
     };
     update();
     strip.addEventListener('scroll', update, { passive: true });
