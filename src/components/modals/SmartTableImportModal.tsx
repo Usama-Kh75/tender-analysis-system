@@ -12,7 +12,7 @@ import {
   Calculator,
   FileCheck2
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style'; // SheetJS 0.18.5 نفسها، ومعها كتابة التنسيق (bidderAuditExcel)
 import { BOQItem } from '../../types/tender';
 import { parseArabicNumber } from '../../utils/calculations';
 import { auditBidderRows, auditRowAmounts, BidderAuditReport, quantityMismatches } from '../../utils/bidderAuditEngine';

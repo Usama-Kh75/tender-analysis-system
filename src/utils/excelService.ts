@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style'; // SheetJS 0.18.5 نفسها، ومعها كتابة التنسيق (bidderAuditExcel)
 import { BOQItem, TenderProject, Bidder } from '../types/tender';
 import { hasBidAmounts } from './recommendation';
 

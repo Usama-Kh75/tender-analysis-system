@@ -46,13 +46,27 @@ function embeddedPdfWasm(): Plugin {
 }
 
 // https://vite.dev/config/
+// xlsx-js-style (تصدير Excel منسّق) يطلب جداول ترميز الصفحات cpexcel.js (471KB) إن وجد require، وهي لقراءة ملفات
+// XLS القديمة فقط: التصدير يكتب XLSX فلا يحتاجها. تُستبدل بوحدة فارغة فيعمل كما في المتصفح بلا cptable
+function dropStyledXlsxCodepages(): Plugin {
+  const id = 'virtual:xlsx-js-style-no-cpexcel'
+  return {
+    name: 'drop-xlsx-js-style-cpexcel',
+    enforce: 'pre',
+    resolveId: (source, importer) =>
+      source === './cpexcel.js' && importer?.split(String.fromCharCode(92)).join('/').includes('/xlsx-js-style/') ? id : null,
+    load: (resolved) => (resolved === id ? 'module.exports = undefined;' : null),
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     viteSingleFile(),
     serviceWorker(),
-    embeddedPdfWasm()
+    embeddedPdfWasm(),
+    dropStyledXlsxCodepages()
   ],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version)
