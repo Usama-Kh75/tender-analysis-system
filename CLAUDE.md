@@ -29,6 +29,8 @@ npm run build
 cp dist/index.html "نظام_تحليل_العطاءات.html"
 ```
 
+Since v1.14.0 the built `نظام_تحليل_العطاءات.html` is git-ignored (it made every commit ~6 MB). It stays on disk for the user, and each release attaches it to a GitHub Release: `gh release create vX.Y.Z "نظام_تحليل_العطاءات.html" --title vX.Y.Z`. To get an old version, check out its tag and rebuild, or download it from Releases.
+
 (`vite-plugin-singlefile` inlines all JS/CSS into one `dist/index.html`; the copy step is what the end user actually opens via `تشغيل_النظام.bat`.) Always run `npm run build` (which runs `tsc -b` first) before considering a change done — it is the project's only type/build check.
 
 ### Installable web app (PWA)

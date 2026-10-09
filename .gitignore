@@ -4,3 +4,6 @@ dist/
 *.log
 scratch/
 *.py
+
+# الملف المنفرد المبني: يُنسخ من dist بعد كل بناء ويُنشر في GitHub Releases، لا في git
+نظام_تحليل_العطاءات.html
