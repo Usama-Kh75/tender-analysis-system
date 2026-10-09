@@ -15,7 +15,6 @@ interface ProjectSettingsModalProps {
   onDeleteProject: () => void;
   onFactoryReset: () => void;
   onResetAllBidders: () => void;
-  canDeleteProject: boolean;
 }
 
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
@@ -30,7 +29,6 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onDeleteProject,
   onFactoryReset,
   onResetAllBidders,
-  canDeleteProject
 }) => {
   const [title, setTitle] = useState(project.title);
   const [referenceNumber, setReferenceNumber] = useState(project.referenceNumber);
@@ -338,9 +336,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
               <button
                 type="button"
                 onClick={onDeleteProject}
-                disabled={!canDeleteProject}
-                title={canDeleteProject ? 'حذف هذه المناقصة/الطلبية نهائياً' : 'لا يمكن حذف آخر مناقصة/طلبية في النظام'}
-                className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="حذف هذه المناقصة/الطلبية نهائياً"
+                className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-xs transition cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 حذف هذه المناقصة/الطلبية

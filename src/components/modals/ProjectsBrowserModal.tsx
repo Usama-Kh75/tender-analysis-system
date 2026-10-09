@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, FolderOpen, Plus } from 'lucide-react';
+import { X, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import type { TenderProject } from '../../types/tender';
 import { formatNumber, formatPercent } from '../../utils/calculations';
 import { hasBidAmounts, hasNoEstimate } from '../../utils/recommendation';
@@ -12,6 +12,7 @@ interface ProjectsBrowserModalProps {
   activeProjectId: string;
   // bidderId: يُفتح العرض نفسه داخل مناقصته
   onOpenProject: (projectId: string, bidderId?: string) => void;
+  onDeleteProject: (projectId: string) => void;
   onNewProject: () => void;
 }
 
@@ -32,6 +33,7 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
   projects,
   activeProjectId,
   onOpenProject,
+  onDeleteProject,
   onNewProject
 }) => {
   if (!isOpen) return null;
@@ -63,6 +65,9 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
         </div>
 
         <div className="p-4 sm:p-6 space-y-3 bg-slate-50 flex-1 overflow-y-auto">
+          {sorted.length === 0 && (
+            <p className="text-center text-sm text-slate-500 py-6">لا توجد مناقصة محفوظة.</p>
+          )}
           {sorted.map(project => {
             const isActive = project.id === activeProjectId;
             const noEstimate = hasNoEstimate(project);
@@ -107,7 +112,18 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                 </button>
 
                 <div className="border-t border-slate-100">
-                  <p className="px-4 pt-2 text-[11px] font-bold text-slate-500">المجهزون ({project.bidders.length})</p>
+                  <div className="flex items-center justify-between gap-2 px-4 pt-2">
+                    <p className="text-[11px] font-bold text-slate-500">المجهزون ({project.bidders.length})</p>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteProject(project.id)}
+                      aria-label={`حذف المناقصة ${project.title}`}
+                      className="flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      حذف
+                    </button>
+                  </div>
                   <ul className="divide-y divide-slate-100">
                     {project.bidders.map(bidder => {
                       const priced = hasBidAmounts(bidder);

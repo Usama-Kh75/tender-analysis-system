@@ -518,6 +518,30 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                               >
                                 🔢 اعتماد حاصل الضرب ({((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()})
                               </button>
+                              {/* استثناء ضوابط رقم (4) خامساً/ب/2: إن رأت اللجنة خطأً فادحاً في العلامة العشرية بسعر المفرد
+                                  اعتمدت المبلغ كما هو وصحّحت المفرد. الأصل يُحفظ في originalUnitPrice كاعتماد التفقيط مفرداً */}
+                              <button
+                                onClick={() => {
+                                  const amount = item.enteredBidderTotal || item.bidderTotal;
+                                  const qty = item.quantity || 1;
+                                  const unit = item.enteredUnitPrice || 0;
+                                  if (!(amount > 0)) return;
+                                  if (!window.confirm(`استثناء ضوابط رقم (4) خامساً/ب/2: هل ترى اللجنة أن في سعر المفرد المدون (${unit.toLocaleString()}) خطأً فادحاً في العلامة العشرية؟
+
+سيُعتمد مبلغ الفقرة كما دوّنه المجهز (${amount.toLocaleString()}) ويُصحَّح سعر المفرد إلى ${(amount / qty).toLocaleString()}.`)) return;
+                                  onUpdateFields(actualIndex, {
+                                    originalUnitPrice: item.originalUnitPrice ?? unit,
+                                    enteredUnitPrice: amount / qty,
+                                    bidderUnitPrice: amount / qty,
+                                    bidderTotal: amount,
+                                    hasMathError: false
+                                  }, 'اعتماد المبلغ وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية');
+                                }}
+                                className="bg-white hover:bg-rose-50 text-rose-900 border border-rose-500 text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
+                                title="استثناء ضوابط رقم (4) خامساً/ب/2: خطأ فادح في العلامة العشرية بسعر المفرد، فيُعتمد المبلغ ويُصحَّح المفرد"
+                              >
+                                ⚖️ اعتماد المبلغ وتصحيح المفرد (علامة عشرية)
+                              </button>
                             </div>
                           </div>
                         )}

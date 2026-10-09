@@ -83,6 +83,8 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 **The «المناقصات» window** (`src/components/modals/ProjectsBrowserModal.tsx`, since v1.13.0) is opened by a Navbar button that shows at every width. The old `<select>` switcher appears only at 2xl.
 - It lists every saved tender, most recently updated first. Each card shows the tender's details, its estimate (or «بانتظار الكلفة التخمينية»), and each bidder's corrected total and deviation from the stored `totals`.
 - A bidder without amounts (`hasBidAmounts` false) shows «لم تُدخل أسعاره بعد».
+- Each card has a «حذف» button (since v1.14.0). Any tender can be deleted, the last one too: «إعادة ضبط النظام» and deleting the last tender leave `projects` empty (stored as `[]`), and `App.tsx` shows a start screen (new tender / import backup) instead of creating a blank tender. The save effect is gated on `loaded`, not on `projects.length`, so an empty list persists. `handleCreateProject` and `handleImportBackup` sit above the start-screen early return for that reason.
+- «اعتماد المبلغ وتصحيح المفرد (علامة عشرية)» on a multiplication-error card is the ضوابط (4) خامساً/ب/2 exception: the committee adopts the bidder's amount and corrects the unit price to amount ÷ quantity. The bidder's digit goes to `originalUnitPrice`, so it counts as a committee correction in the export.
 - Clicking a card opens the tender. Clicking a bidder row also sets `activeBidderId`, without touching `updatedAt`.
 - Each tender is shown on its own, with no cross-tender totals or comparison: each tender is a separate committee decision (the user rejected a portfolio dashboard).
 

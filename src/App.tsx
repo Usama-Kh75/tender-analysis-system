@@ -50,6 +50,8 @@ import {
 export function App() {
   const [projects, setProjects] = useState<TenderProject[]>([]);
   const [activeProjectId, setActiveId] = useState<string>('');
+  // لا يُحفظ شيء قبل اكتمال التحميل الأول؛ وبعده تُحفظ القائمة حتى لو فرغت (حذف آخر مناقصة)
+  const [loaded, setLoaded] = useState(false);
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
   const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
@@ -73,18 +75,17 @@ export function App() {
 
   // Load from Storage
   useEffect(() => {
-    const loaded = getAllProjects();
-    setProjects(loaded);
+    const stored = getAllProjects();
+    setProjects(stored);
     const currId = getActiveProjectId();
-    setActiveId(currId || loaded[0]?.id || '');
+    setActiveId(currId || stored[0]?.id || '');
+    setLoaded(true);
   }, []);
 
   // Save projects whenever they change
   useEffect(() => {
-    if (projects.length > 0) {
-      saveAllProjects(projects);
-    }
-  }, [projects]);
+    if (loaded) saveAllProjects(projects);
+  }, [projects, loaded]);
 
   // استعادة موضع التمرير بعد «حفظ والتحديث»، مرة واحدة بعد أن تُرسم بيانات المشاريع
   const scrollRestored = useRef(false);
@@ -106,6 +107,100 @@ export function App() {
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
+
+  // Create New Project
+  // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
+  const handleCreateProject = ({ title, referenceNumber, contractType, bidderNames }: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => {
+    const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
+    const blank = createNewTenderProject({ title, referenceNumber: refNo, contractType, bidderNames });
+
+    const newProj: TenderProject = {
+      ...blank,
+      auditLogs: [{
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        userName: 'المهندس أسامة خليل هاشم',
+        action: 'إنشاء مناقصة جديدة',
+        details: `تم إنشاء المناقصة (${title}) بنجاح — نوع العقد: ${CONTRACT_TYPES[contractType].label}`
+          + ` — الشركات: ${blank.bidders.map(b => b.name).join('، ')}`
+      }]
+    };
+
+    setProjects(prev => [newProj, ...prev]);
+    setActiveId(newProj.id);
+    setActiveProjectId(newProj.id);
+  };
+
+  // Import Project Backup (JSON)
+  const handleImportBackup = async (file: File) => {
+    try {
+      const imported = await parseProjectBackupFile(file);
+
+      // تفادي تعارض المعرّف مع مشروع موجود مسبقاً بإعطائه معرفاً جديداً
+      const idConflict = projects.some(p => p.id === imported.id);
+      const restoredProject: TenderProject = {
+        ...imported,
+        id: idConflict ? `project-${Date.now()}` : imported.id,
+        updatedAt: new Date().toISOString()
+      };
+
+      const withLog = addAuditLog(
+        restoredProject,
+        'استعادة من نسخة احتياطية',
+        `تم استيراد هذا المشروع من ملف نسخة احتياطية (${file.name})`
+      );
+
+      setProjects(prev => {
+        const withoutOld = prev.filter(p => p.id !== withLog.id);
+        return [withLog, ...withoutOld];
+      });
+      setActiveId(withLog.id);
+      setActiveProjectId(withLog.id);
+      alert(`تم استيراد المشروع (${withLog.title}) بنجاح من النسخة الاحتياطية.`);
+    } catch (err: any) {
+      alert(`فشل استيراد النسخة الاحتياطية: ${err.message}`);
+    }
+  };
+
+  // لا مناقصة محفوظة (بعد «إعادة ضبط النظام» أو حذف آخر مناقصة): شاشة بداية بدل مناقصة فارغة تُنشأ تلقائياً
+  if (loaded && projects.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-8 max-w-md w-full text-center space-y-4">
+          <h1 className="text-lg font-black text-slate-900">نظام تحليل العطاءات</h1>
+          <p className="text-sm text-slate-500">لا توجد مناقصة محفوظة في هذا المتصفح.</p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <button
+              type="button"
+              onClick={() => setIsNewProjectOpen(true)}
+              className="flex items-center justify-center gap-1.5 text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl cursor-pointer transition"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              مناقصة جديدة
+            </button>
+            <label className="text-sm font-bold text-slate-700 border border-slate-300 hover:bg-slate-50 px-4 py-2 rounded-xl cursor-pointer transition">
+              استيراد نسخة احتياطية
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) handleImportBackup(f);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+        <NewProjectModal
+          isOpen={isNewProjectOpen}
+          onClose={() => setIsNewProjectOpen(false)}
+          onCreate={(data) => { handleCreateProject(data); setIsNewProjectOpen(false); }}
+        />
+      </div>
+    );
+  }
 
   if (!currentProject || !activeBidder) {
     return (
@@ -855,33 +950,37 @@ export function App() {
     setIsSettingsOpen(false);
   };
 
-  // Delete Entire Project (requires at least one other project to remain)
-  const handleDeleteProject = () => {
-    if (projects.length <= 1) {
-      alert('لا يمكن حذف آخر مناقصة/طلبية في النظام. إن أردت البدء من جديد بالكامل استخدم "إعادة ضبط النظام".');
+  // حذف مناقصة (أي مناقصة، بما فيها الأخيرة: يبقى النظام بلا مناقصات وتظهر شاشة البداية)
+  const handleDeleteProject = (projectId: string) => {
+    const target = projects.find(p => p.id === projectId);
+    if (!target) return;
+
+    if (!window.confirm(`⚠️ سيتم حذف مناقصة/طلبية (${target.title}) نهائياً بكل بياناتها (المجهزين والأسعار وسجل التدقيق).
+
+يُنصح بتنزيل نسخة احتياطية منها أولاً إن كانت مهمة. هل أنت متأكد؟`)) {
       return;
     }
 
-    if (!window.confirm(`⚠️ سيتم حذف مناقصة/طلبية (${currentProject.title}) نهائياً بكل بياناتها (المجهزين والأسعار وسجل التدقيق). هل أنت متأكد؟`)) {
-      return;
-    }
-
-    const remaining = projects.filter(p => p.id !== currentProject.id);
+    const remaining = projects.filter(p => p.id !== projectId);
     setProjects(remaining);
-    setActiveId(remaining[0].id);
-    setActiveProjectId(remaining[0].id);
+    if (projectId === currentProject?.id) {
+      const nextId = remaining[0]?.id ?? '';
+      setActiveId(nextId);
+      setActiveProjectId(nextId);
+    }
     setIsSettingsOpen(false);
+    if (remaining.length === 0) setIsProjectsOpen(false);
   };
 
-  // Full Factory Reset — Wipe All Local Data, Start From a Single Blank Project
+  // Full Factory Reset — Wipe All Local Data, Start With No Tenders
   const handleFactoryReset = () => {
     if (!window.confirm('⚠️ تحذير أخير: سيتم مسح جميع المناقصات والطلبيات وبياناتها المحفوظة محلياً في هذا المتصفح نهائياً بلا رجعة، والبدء بنظام فارغ تماماً. هل تريد المتابعة؟\n\nيُنصح بتنزيل نسخة احتياطية أولاً إن كانت البيانات الحالية مهمة.')) {
       return;
     }
 
-    const blank = resetAllData();
-    setProjects([blank]);
-    setActiveId(blank.id);
+    resetAllData();
+    setProjects([]);
+    setActiveId('');
     setIsSettingsOpen(false);
   };
 
@@ -944,29 +1043,6 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
-  // Create New Project
-  // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
-  const handleCreateProject = ({ title, referenceNumber, contractType, bidderNames }: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => {
-    const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
-    const blank = createNewTenderProject({ title, referenceNumber: refNo, contractType, bidderNames });
-
-    const newProj: TenderProject = {
-      ...blank,
-      auditLogs: [{
-        id: `log-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        userName: 'المهندس أسامة خليل هاشم',
-        action: 'إنشاء مناقصة جديدة',
-        details: `تم إنشاء المناقصة (${title}) بنجاح — نوع العقد: ${CONTRACT_TYPES[contractType].label}`
-          + ` — الشركات: ${blank.bidders.map(b => b.name).join('، ')}`
-      }]
-    };
-
-    setProjects(prev => [newProj, ...prev]);
-    setActiveId(newProj.id);
-    setActiveProjectId(newProj.id);
-  };
-
   // فتح مناقصة أو أحد عروضها من نافذة «المناقصات». اختيار المجهز لا يغيّر updatedAt، كقائمة المجهزين
   const handleOpenFromBrowser = (projectId: string, bidderId?: string) => {
     if (bidderId) {
@@ -975,37 +1051,6 @@ export function App() {
     setActiveId(projectId);
     setActiveProjectId(projectId);
     setIsProjectsOpen(false);
-  };
-
-  // Import Project Backup (JSON)
-  const handleImportBackup = async (file: File) => {
-    try {
-      const imported = await parseProjectBackupFile(file);
-
-      // تفادي تعارض المعرّف مع مشروع موجود مسبقاً بإعطائه معرفاً جديداً
-      const idConflict = projects.some(p => p.id === imported.id);
-      const restoredProject: TenderProject = {
-        ...imported,
-        id: idConflict ? `project-${Date.now()}` : imported.id,
-        updatedAt: new Date().toISOString()
-      };
-
-      const withLog = addAuditLog(
-        restoredProject,
-        'استعادة من نسخة احتياطية',
-        `تم استيراد هذا المشروع من ملف نسخة احتياطية (${file.name})`
-      );
-
-      setProjects(prev => {
-        const withoutOld = prev.filter(p => p.id !== withLog.id);
-        return [withLog, ...withoutOld];
-      });
-      setActiveId(withLog.id);
-      setActiveProjectId(withLog.id);
-      alert(`تم استيراد المشروع (${withLog.title}) بنجاح من النسخة الاحتياطية.`);
-    } catch (err: any) {
-      alert(`فشل استيراد النسخة الاحتياطية: ${err.message}`);
-    }
   };
 
   // Import All Projects Backup (JSON) — يستبدل كل المناقصات الحالية بالنسخة الشاملة المستوردة
@@ -1391,10 +1436,9 @@ export function App() {
         onImportBackup={handleImportBackup}
         onExportAllBackup={() => downloadAllProjectsBackup(projects)}
         onImportAllBackup={handleImportAllBackup}
-        onDeleteProject={handleDeleteProject}
+        onDeleteProject={() => handleDeleteProject(currentProject.id)}
         onFactoryReset={handleFactoryReset}
         onResetAllBidders={handleResetAllBidders}
-        canDeleteProject={projects.length > 1}
       />
 
       <UpdateNotice
@@ -1416,6 +1460,7 @@ export function App() {
         projects={projects}
         activeProjectId={currentProject.id}
         onOpenProject={handleOpenFromBrowser}
+        onDeleteProject={handleDeleteProject}
         onNewProject={() => {
           setIsProjectsOpen(false);
           setIsNewProjectOpen(true);

@@ -76,46 +76,6 @@ export function createDefaultProject(): TenderProject {
 }
 
 /**
- * مشروع فارغ تماماً بلا بيانات تجريبية (مجهز واحد فارغ، كلفة تخمينية صفرية)
- * يُستخدم عند إعادة ضبط النظام بالكامل استعداداً لتسليمه لجهاز/مستخدم جديد
- */
-export function createBlankProject(): TenderProject {
-  const blankItem: Partial<BOQItem> = { itemNo: 1, description: 'فقرة 1', quantity: 1, estimatedTotal: 0, bidderTotal: 0 };
-  const calc = calculateBOQMetrics([blankItem], 20);
-
-  const bidder: Bidder = {
-    id: `bidder-${Date.now()}`,
-    name: 'شركة جديدة',
-    submissionDate: new Date().toISOString().split('T')[0],
-    items: calc.items,
-    totals: calc.totals,
-    status: 'pending'
-  };
-
-  return {
-    id: `project-${Date.now()}`,
-    title: 'طلبية / مناقصة جديدة',
-    referenceNumber: '',
-    entityName: '',
-    committeeChairman: '',
-    committeeMembers: [],
-    currency: 'د.ع',
-    deviationThreshold: 20,
-    activeBidderId: bidder.id,
-    bidders: [bidder],
-    auditLogs: [{
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      userName: 'النظام',
-      action: 'إعادة ضبط النظام',
-      details: 'تم مسح كافة البيانات السابقة والبدء بمشروع فارغ جديد'
-    }],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-}
-
-/**
  * مناقصة جديدة يُنشئها المستخدم: فارغة تماماً (لا بيانات تجريبية ولا بيانات مناقصة أخرى)،
  * بشركة لكل اسم مُدخل وجدول مصفّر. كانت تُنشأ سابقاً من createDefaultProject فتحمل
  * شركتي العرض التجريبي وفقراته وأعضاء لجنته.
@@ -162,16 +122,12 @@ export function createNewTenderProject(opts: {
 }
 
 /**
- * إعادة ضبط النظام بالكامل: مسح كل المشاريع والمناقصات المخزنة محلياً
- * والبدء بمشروع فارغ واحد فقط (بلا بيانات تجريبية)
+ * إعادة ضبط النظام بالكامل: مسح كل المشاريع والمناقصات المخزنة محلياً. يبقى النظام بلا أي مناقصة
+ * (تظهر شاشة البداية) ولا تُنشأ مناقصة فارغة تلقائياً
  */
-export function resetAllData(): TenderProject {
-  localStorage.removeItem(STORAGE_KEY);
+export function resetAllData(): void {
   localStorage.removeItem(ACTIVE_PROJECT_KEY);
-  const blank = createBlankProject();
-  saveAllProjects([blank]);
-  setActiveProjectId(blank.id);
-  return blank;
+  saveAllProjects([]);
 }
 
 // حقول هوية الفقرة والكلفة التخمينية يجب أن تكون موحّدة بين كل مجهزي المشروع (راجع calculateBOQMetrics وApp.tsx)
