@@ -378,11 +378,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
-                <th className="p-3 min-w-[200px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
-                <th className="p-3 w-20 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
-                <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">سعر المفرد للمجهز ✏️</th>
-                <th className="p-3 w-36 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">مبلغ المجهز الإجمالي 💰</th>
-                <th className="p-3 w-32 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني ✏️</th>
+                <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
+                <th className="p-3 w-16 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
+                <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">سعر المفرد للمجهز ✏️</th>
+                <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">مبلغ المجهز الإجمالي 💰</th>
+                <th className="p-3 w-28 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني ✏️</th>
                 <th className="p-3 min-w-[180px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
                 {hasEstimate && (
                   <>
@@ -432,7 +432,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         type="text"
                         value={item.itemNo}
                         onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
-                        className="w-full min-w-[3.5rem] text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
+                        className="w-full min-w-[3rem] text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
                       />
                     </td>
 
@@ -452,7 +452,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         onChange={(v) => onCorrectReading(actualIndex, 'quantity', v || 1)}
                         label={`كمية الفقرة ${item.itemNo}`}
                         placeholder="1"
-                        className="w-16 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
+                        className="w-14 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
                       />
                     </td>
 
@@ -466,7 +466,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         onChange={(newUnit) => onCorrectReading(actualIndex, 'unitPrice', newUnit)}
                         label={`سعر المفرد للفقرة ${item.itemNo}`}
                         placeholder={derivedUnitPrice > 0 ? formatNumber(derivedUnitPrice, Number.isInteger(derivedUnitPrice) ? 0 : 2) : '0.00'}
-                        className="w-full min-w-[7rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                        className="w-full min-w-[6.5rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
@@ -476,7 +476,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         value={item.bidderTotal}
                         onChange={(v) => onCorrectReading(actualIndex, 'total', v)}
                         label={`مبلغ المجهز للفقرة ${item.itemNo}`}
-                        className="w-full min-w-[7rem] text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                        className="w-full min-w-[6.5rem] text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
 
@@ -487,7 +487,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         value={item.estimatedTotal}
                         onChange={(v) => onUpdateFields(actualIndex, { estimatedTotal: v, estimatedUnitPrice: 0 })}
                         label={`المبلغ التخميني للفقرة ${item.itemNo}`}
-                        className="w-full min-w-[7rem] text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
+                        className="w-full min-w-[6.5rem] text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
                       />
                     </td>
 
