@@ -188,6 +188,7 @@ export function calculateBOQMetrics(
       notes: item.notes || '',
       enteredUnitPrice: enteredUnit,
       originalUnitPrice: item.originalUnitPrice,
+      originalWrittenText: item.originalWrittenText,
       enteredBidderTotal: enteredTotal,
       writtenText: writtenTxt,
       hasMathError: isMathError,

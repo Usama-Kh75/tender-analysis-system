@@ -1,4 +1,4 @@
-import { parseArabicTextToNumber, writtenAmountTarget } from '../utils/bidderAuditEngine';
+import { parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus,
@@ -156,6 +156,8 @@ interface BOQTableProps {
   onUpdateFields: (index: number, patch: Partial<BOQItem>, logAction?: string) => void;
   // تعديل الكمية أو المفرد أو المبلغ أو التفقيط يدوياً = تصحيح قراءة يعيد فحص الفقرة (handleCorrectReading في App.tsx)
   onCorrectReading: (index: number, field: ReadingField, value: number | string) => void;
+  // تفقيط ناقص «آلاف»: تعتمده اللجنة بعد إضافتها دون أن يتغير رقم (handleAdoptTafqeetThousands في App.tsx)
+  onAdoptTafqeetThousands: (index: number, correctedText: string) => void;
   onAddItem: () => void;
   onDeleteItem: (index: number) => void;
   onDuplicateItem: (index: number) => void;
@@ -172,6 +174,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onUpdateItem,
   onUpdateFields,
   onCorrectReading,
+  onAdoptTafqeetThousands,
   onAddItem,
   onDeleteItem,
   onDuplicateItem,
@@ -608,6 +611,33 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                               'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة'));
                           const solid = 'bg-amber-700 hover:bg-amber-800 text-white';
                           const outline = 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-500';
+                          // «ثلاثة وخمسمائة» والأرقام 3,500: كلمة «آلاف» ناقصة من خطأ المجهز، لا تعارض بين رقمين
+                          const missing = readMissingThousands(item.writtenText, unit, enteredTotal);
+                          if (missing) {
+                            const matchesUnit = unit > 0 && Math.abs(missing.value - unit) <= 0.01;
+                            return (
+                            <div className="bg-amber-100 text-amber-950 border border-amber-400 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
+                              <div className="flex items-start gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                  <span className="font-black text-amber-900">⚠️ تفقيط ناقص «آلاف»:</span> المكتوب كتابةً ({item.writtenText})
+                                  والصواب ({missing.corrected}) = <bdi>{missing.value.toLocaleString()}</bdi> د.ع،
+                                  ويوافق {matchesUnit ? 'سعر المفرد' : 'مبلغ الفقرة'} المدون ({(matchesUnit ? unit : enteredTotal).toLocaleString()} د.ع)
+                                </div>
+                                <EditTextButton rowId={item.id} itemNo={item.itemNo} onClick={() => setEditingTextId(item.id)} />
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1 mr-5">
+                                <button
+                                  onClick={() => onAdoptTafqeetThousands(actualIndex, missing.corrected)}
+                                  className={`${solid} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
+                                  title="اعتماد التفقيط بعد إضافة «آلاف» الناقصة بقرار اللجنة؛ لا يتغير أي رقم، ويبقى ما كتبه المجهز مسجلاً"
+                                >
+                                  ⚖️ اعتماد التفقيط (<bdi>{missing.value.toLocaleString()}</bdi>)
+                                </button>
+                              </div>
+                            </div>
+                            );
+                          }
                           return (
                           <div className="bg-amber-100 text-amber-950 border border-amber-400 px-2.5 py-1.5 rounded-lg font-bold flex flex-col gap-1 shadow-2xs">
                             <div className="flex items-start gap-1.5">
@@ -656,7 +686,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         {item.writtenText && !item.hasTextDiscrepancy && editingTextId !== item.id && (
                           <div className="bg-emerald-50 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-lg text-[11px] font-semibold flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            <span className="flex-1"><strong className="text-emerald-950 font-bold">تفقيط مطابق:</strong> {item.writtenText}</span>
+                            <span className="flex-1">
+                              <strong className="text-emerald-950 font-bold">{item.originalWrittenText !== undefined ? 'تفقيط معتمد بقرار اللجنة:' : 'تفقيط مطابق:'}</strong> {item.writtenText}
+                              {item.originalWrittenText !== undefined && <span className="text-emerald-800"> — كتبه المجهز: ({item.originalWrittenText})</span>}
+                            </span>
                             <EditTextButton rowId={item.id} itemNo={item.itemNo} onClick={() => setEditingTextId(item.id)} />
                           </div>
                         )}

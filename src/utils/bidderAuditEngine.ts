@@ -6,7 +6,8 @@ import { BOQItem } from '../types/tender';
 // تصحيح القراءة يُبقي المبلغين متساويين
 export const isCommitteeCorrected = (item: BOQItem) =>
   ((item.enteredBidderTotal || 0) > 0 && Math.abs(item.bidderTotal - (item.enteredBidderTotal || 0)) > 0.01)
-  || item.originalUnitPrice !== undefined;
+  || item.originalUnitPrice !== undefined
+  || item.originalWrittenText !== undefined;
 
 export interface BidderRowAudit {
   itemNo: string | number;
@@ -189,22 +190,6 @@ const sumArabicWords = (rawTokens: string[]): number => {
 
   if (tokens.length === 0) return 0;
 
-  // العُرف التجاري العراقي: «ثلاثة وخمسمائة» تعني 3,500 (حُذفت «آلاف»). آحاد مفردة تسبق مئات وليس في النص
-  // ألف ولا مليون: ترتيب العدد الصحيح مئاته قبل آحاده («خمسمائة وثلاثة» = 503)، فلا تُقرأ 503. كانت الفقرة 98
-  // («ثلاثة وخمسمائة» والأرقام 3,500 و350,000) تُؤشَّر تعارض تفقيط وتُقترح 503
-  const baseOf = (t: string) => {
-    const n = normalizeArabicWord(t);
-    return normMap[n] === undefined && n.startsWith('و') && n.length > 2 ? n.substring(1) : n;
-  };
-  if (tokens.length >= 2 && !tokens.some(t => GROUP_RESET_WORDS.test(baseOf(t)))) {
-    const first = normMap[baseOf(tokens[0])];
-    const second = normMap[baseOf(tokens[1])];
-    const secondIsHundredsWord = second !== undefined && second >= 200 && second < 1000 && !HUNDRED_WORDS.has(baseOf(tokens[1]));
-    if (first !== undefined && first >= 1 && first <= 9 && secondIsHundredsWord) {
-      return first * 1000 + sumArabicWords(tokens.slice(1));
-    }
-  }
-
   let total = 0;
   let current = 0;
   let i = 0;
@@ -276,6 +261,44 @@ const sumArabicWords = (rawTokens: string[]): number => {
 export const writtenAmountTarget = (written: number, unitPrice: number, total: number): 'unit' | 'total' => {
   if (!(written > 0) || !(unitPrice > 0) || !(total > 0)) return 'total';
   return Math.abs(Math.log(written / unitPrice)) < Math.abs(Math.log(written / total)) ? 'unit' : 'total';
+};
+
+/**
+ * تفقيط ناقص كلمة «آلاف»: عدد دون المئة ثم مئات (200–900) بلا ألف ولا مليون، مثل «ثلاثة وخمسمائة» و«سبعة
+ * وعشرون وستمائة». ترتيب العدد الصحيح مئاته قبل آحاده، فالنص يعني 3,500 و27,600 لا 503 ولا 627، والصواب
+ * «ثلاثة آلاف وخمسمائة». لا يُعدّ ناقصاً إلا إن وافق ما بعد إضافة «آلاف» سعرَ المفرد أو مبلغ الفقرة المدونين
+ * ولم يوافقهما المكتوب حرفياً، فلا يُعاد تفسير «خمسمائة وثلاثة» ولا «ثلاثة وخمسون ومئة» (153). يُعيد القيمة
+ * والنص بعد إضافة الكلمة، أو null. الخطأ يبقى خطأ المجهز: التفقيط المدون لا يتغير إلا بقرار اللجنة
+ */
+export const readMissingThousands = (
+  text: string | undefined, unitPrice: number, total: number
+): { value: number; corrected: string } | null => {
+  if (!text || text.length <= 2) return null;
+  const baseOf = (t: string) => {
+    const n = normalizeArabicWord(t);
+    return normMap[n] === undefined && n.startsWith('و') && n.length > 2 ? n.substring(1) : n;
+  };
+  const tokens = text.replace(/[،,]/g, ' ').trim().split(/\s+/).filter(t => t.length > 0)
+    .filter(t => !stopWords.has(normalizeArabicWord(t)) && !stopWords.has(baseOf(t)));
+  if (tokens.length < 2 || tokens.some(t => GROUP_RESET_WORDS.test(baseOf(t)))) return null;
+
+  const at = tokens.findIndex(t => { const v = normMap[baseOf(t)]; return v !== undefined && v >= 200 && v < 1000; });
+  if (at < 1) return null; // المئات أولاً: الترتيب الصحيح
+  const head = tokens.slice(0, at);
+  const rest = tokens.slice(at);
+  const headValue = sumArabicWords(head);
+  if (!(headValue >= 1 && headValue <= 99)) return null;
+
+  const value = headValue * 1000 + sumArabicWords(rest);
+  const near = (a: number, b: number) => b > 0 && Math.abs(a - b) <= 0.01;
+  if (!(near(value, unitPrice) || near(value, total))) return null;
+  const literal = parseArabicTextToNumber(text);
+  if (literal !== null && (near(literal, unitPrice) || near(literal, total))) return null;
+
+  const restText = rest.map((t, i) => (i === 0 && !t.startsWith('و') ? 'و' + t : t)).join(' ');
+  const thousands = headValue === 1 ? 'ألف' : headValue === 2 ? 'ألفان'
+    : `${head.join(' ')} ${headValue <= 10 ? 'آلاف' : 'ألفاً'}`;
+  return { value, corrected: `${thousands} ${restText}` };
 };
 
 /**

@@ -2,7 +2,7 @@
 // التصدير بمواصفات «عرض_المجهز_..._مطابق_للأصل.xlsx» التي اعتمدتها اللجنة. الاستيراد يبقى على xlsx
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
-import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber } from './bidderAuditEngine';
+import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits } from './calculations';
 
 /**
@@ -24,6 +24,8 @@ const ADOPTIONS: Record<string, string> = {
     'اعتماد سعر المفرد المكتوب كتابةً (ضوابط رقم (4) خامساً/ب/1) والمبلغ حاصل ضربه في الكمية (خامساً/ب/2)',
   'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة':
     'اعتماد مبلغ الفقرة المكتوب كتابةً (ضوابط رقم (4) خامساً/ب/1)',
+  'اعتماد التفقيط بعد إضافة «آلاف» بقرار اللجنة':
+    'اعتماد التفقيط بعد إضافة كلمة «آلاف» الناقصة، فيوافق الأرقام المدونة (ضوابط رقم (4) خامساً/ب/3: تصحيح تبلّغه اللجنة للمجهز)',
   'اعتماد المبلغ وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية':
     'اعتماد مبلغ الفقرة كما دوّنه المجهز وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية (ضوابط رقم (4) خامساً/ب/2، الاستثناء)'
 };
@@ -150,7 +152,9 @@ interface RowAnalysis {
 function analyseRow(item: BOQItem, bidderId: string, logs: AuditLogEntry[]): RowAnalysis {
   const corrected = isCommitteeCorrected(item);
   const adoption = corrected ? findAdoption(item, bidderId, logs) : undefined;
-  const written = item.writtenText ? parseArabicTextToNumber(item.writtenText) : null;
+  // التفقيط كما كتبه المجهز: اعتماد اللجنة تفقيطاً بعد إضافة «آلاف» يحفظ الأصل في originalWrittenText
+  const asWritten = item.originalWrittenText ?? item.writtenText;
+  const written = asWritten ? parseArabicTextToNumber(asWritten) : null;
   const stated = item.enteredBidderTotal || item.bidderTotal;
   // اعتماد التفقيط سعراً للمفرد كان يكتب فوق المفرد المدون: إن لم يُحفظ الأصل فالمفرد الحالي هو التفقيط نفسه
   const unitLost = corrected && item.originalUnitPrice === undefined && !!adoption
@@ -170,16 +174,22 @@ function analyseRow(item: BOQItem, bidderId: string, logs: AuditLogEntry[]): Row
     defects.push('تعارض تفقيط');
     explanation.push(`اعتمدت اللجنة التفقيط «${item.writtenText}» سعراً للمفرد قبل أن يحفظ النظام سعر المفرد المدون رقماً؛ يُرجع إليه في العطاء الأصلي`);
   } else {
-    const flags = auditRowAmounts(qty, unit, stated, item.writtenText);
+    const flags = auditRowAmounts(qty, unit, stated, asWritten);
     if (flags.hasMathError) {
       defects.push('خطأ ضرب');
       explanation.push(`المبلغ المدون ${fmt(stated)} لا يساوي الكمية × المفرد (${fmt(qty)} × ${fmt(unit)} = ${fmt(qty * unit)})`);
     }
     if (flags.hasTextDiscrepancy && written !== null) {
       defects.push('تعارض تفقيط');
-      explanation.push(unit > 0 && qty !== 1
-        ? `التفقيط «${item.writtenText}» (${fmt(written)}) لا يساوي سعر المفرد المدون ${fmt(unit)} ولا مبلغ الفقرة ${fmt(stated)}`
-        : `التفقيط «${item.writtenText}» (${fmt(written)}) لا يساوي المبلغ المدون ${fmt(stated)}`);
+      const missing = readMissingThousands(asWritten, unit, stated);
+      if (missing) {
+        explanation.push(`التفقيط «${asWritten}» ناقص كلمة «آلاف»؛ والصواب «${missing.corrected}» (${fmt(missing.value)}) ويوافق `
+          + `${Math.abs(missing.value - unit) <= 0.01 ? `سعر المفرد المدون ${fmt(unit)}` : `مبلغ الفقرة المدون ${fmt(stated)}`}`);
+      } else {
+        explanation.push(unit > 0 && qty !== 1
+          ? `التفقيط «${asWritten}» (${fmt(written)}) لا يساوي سعر المفرد المدون ${fmt(unit)} ولا مبلغ الفقرة ${fmt(stated)}`
+          : `التفقيط «${asWritten}» (${fmt(written)}) لا يساوي المبلغ المدون ${fmt(stated)}`);
+      }
     }
   }
 
@@ -220,7 +230,7 @@ function buildAsIsSheet(project: TenderProject, bidder: Bidder, rows: RowAnalysi
       item.unit,
       input(item.quantity),
       unitLost ? 'غير محفوظ' : hasUnit ? input(unit) : '',
-      item.writtenText || '',
+      item.originalWrittenText ?? item.writtenText ?? '',
       stated > 0 ? input(stated) : item.unpriced ? '-' : '',
       hasUnit && stated > 0 ? formula(`D${n}*E${n}`, product) : '',
       hasUnit && stated > 0 ? formula(`G${n}-H${n}`, stated - product) : '',
@@ -282,7 +292,7 @@ function buildErrorsSheet(project: TenderProject, bidder: Bidder, rows: RowAnaly
         item.description,
         input(item.quantity),
         unitLost ? 'غير محفوظ' : hasUnit ? input(unit) : '',
-        item.writtenText || '',
+        item.originalWrittenText ?? item.writtenText ?? '',
         input(stated),
         hasUnit ? formula(`C${n}*D${n}`, product) : '',
         hasUnit ? formula(`F${n}-G${n}`, stated - product) : '',
@@ -336,6 +346,7 @@ function correctionText(row: RowAnalysis): string {
     const changes: string[] = [];
     if (Math.abs(item.bidderTotal - stated) > 0.01) changes.push(`المبلغ من ${fmt(stated)} إلى ${fmt(item.bidderTotal)}`);
     if (item.originalUnitPrice !== undefined) changes.push(`المفرد من ${fmt(item.originalUnitPrice)} إلى ${fmt(item.enteredUnitPrice || 0)}`);
+    if (item.originalWrittenText !== undefined) changes.push(`التفقيط من «${item.originalWrittenText}» إلى «${item.writtenText}»`);
     const rule = adoption ? ADOPTIONS[adoption.action] : 'تصحيح حسابي بقرار اللجنة';
     parts.push(changes.length ? `${rule}: ${changes.join('، و')}` : rule);
   }

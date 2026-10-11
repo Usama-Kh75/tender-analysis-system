@@ -419,14 +419,18 @@ export function App() {
     if (newValue === shownValue) return;
     const oldValue = field === 'unitPrice' ? ((before.originalUnitPrice ?? before.enteredUnitPrice) || undefined)
       : field === 'total' ? (before.enteredBidderTotal || before.bidderTotal)
+      : field === 'writtenText' ? (before.originalWrittenText ?? shownValue)
       : shownValue;
 
     const affected = currentProject.bidders.filter(b => b.items[index] && (isQuantity || b.id === activeBidder.id));
     const corrected = affected.filter(b => isCommitteeCorrected(b.items[index]));
     const fmt = (v: unknown) => v === undefined || v === '' ? '—' : typeof v === 'number' ? v.toLocaleString('en-US') : String(v);
     // اعتماد التفقيط سعراً للمفرد يغيّر المفرد أيضاً، فيُذكر ويعود مع المبلغ
-    const unitNote = (it: BOQItem) => it.originalUnitPrice !== undefined
-      ? `، وسعر المفرد المعتمد (${fmt(it.enteredUnitPrice)}) والذي دوّنه المجهز (${fmt(it.originalUnitPrice)})` : '';
+    const unitNote = (it: BOQItem) =>
+      (it.originalUnitPrice !== undefined
+        ? `، وسعر المفرد المعتمد (${fmt(it.enteredUnitPrice)}) والذي دوّنه المجهز (${fmt(it.originalUnitPrice)})` : '')
+      + (it.originalWrittenText !== undefined
+        ? `، والتفقيط المعتمد (${it.writtenText}) والذي كتبه المجهز (${it.originalWrittenText})` : '');
 
     if (corrected.length > 0) {
       const lines = corrected.map(b => {
@@ -446,7 +450,12 @@ export function App() {
       const item = b.items[index];
       const restoredUnit = item.originalUnitPrice ?? item.enteredUnitPrice;
       const base: BOQItem = isCommitteeCorrected(item)
-        ? { ...item, bidderTotal: item.enteredBidderTotal || 0, enteredUnitPrice: restoredUnit, bidderUnitPrice: restoredUnit || 0, originalUnitPrice: undefined }
+        ? {
+          ...item, bidderTotal: item.enteredBidderTotal || 0, enteredUnitPrice: restoredUnit, bidderUnitPrice: restoredUnit || 0,
+          originalUnitPrice: undefined,
+          // التفقيط المعتمد بعد إضافة «آلاف» يعود إلى ما كتبه المجهز
+          writtenText: item.originalWrittenText ?? item.writtenText, originalWrittenText: undefined
+        }
         : item;
       let patch: Partial<BOQItem>;
       if (field === 'quantity') {
@@ -497,6 +506,35 @@ export function App() {
       { itemNo: before.itemNo, oldValue, newValue }
     );
 
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
+
+  // تفقيط ناقص كلمة «آلاف» (readMissingThousands): تعتمد اللجنة التفقيط بعد إضافتها. الأرقام لا تتغير لأنها توافق
+  // التفقيط المعدَّل أصلاً، وما كتبه المجهز يُحفظ في originalWrittenText دليلاً، فيبقى الخطأ مؤشراً في «واقع الحال»
+  // ويعود إليه تصحيح القراءة. التصحيح قرار اللجنة ويُبلَّغ به المجهز (ضوابط رقم (4) خامساً/ب/3)
+  const handleAdoptTafqeetThousands = (index: number, correctedText: string) => {
+    const before = activeBidder.items[index];
+    if (!before?.writtenText || !correctedText) return;
+    const updatedRaw = [...activeBidder.items];
+    updatedRaw[index] = {
+      ...before,
+      originalWrittenText: before.originalWrittenText ?? before.writtenText,
+      writtenText: correctedText,
+      hasTextDiscrepancy: undefined // يُعاد حسابها بالتفقيط المعتمد
+    };
+    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: currentProject.bidders.map(b => b.id === activeBidder.id
+        ? { ...b, items: recalculation.items, totals: recalculation.totals } : b),
+      updatedAt: new Date().toISOString()
+    };
+    updatedProj = addAuditLog(
+      updatedProj,
+      'اعتماد التفقيط بعد إضافة «آلاف» بقرار اللجنة',
+      `اعتمدت اللجنة للفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) التفقيط (${correctedText}) بدل المكتوب (${before.originalWrittenText ?? before.writtenText}) بعد إضافة «آلاف» الناقصة؛ الأرقام المدونة لم تتغير`,
+      { itemNo: before.itemNo, bidderId: activeBidder.id, oldValue: before.originalWrittenText ?? before.writtenText, newValue: before.bidderTotal }
+    );
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
@@ -1334,6 +1372,7 @@ export function App() {
               onUpdateItem={handleUpdateItem}
               onUpdateFields={handleUpdateItemFields}
               onCorrectReading={handleCorrectReading}
+              onAdoptTafqeetThousands={handleAdoptTafqeetThousands}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}

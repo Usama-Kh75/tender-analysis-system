@@ -20,6 +20,8 @@ export interface BOQItem {
   // سعر المفرد كما دوّنه المجهز رقماً، يُحفظ حين تعتمد اللجنة التفقيط سعراً للمفرد فيحل محل enteredUnitPrice
   // (كان يُمحى فلا يبقى له أثر في جدول واقع الحال)، ويعود إليه السعر إن أُلغي التصحيح بتصحيح قراءة
   originalUnitPrice?: number;
+  // التفقيط كما كتبه المجهز، يُحفظ حين تعتمد اللجنة تفقيطاً بعد إضافة «آلاف» الناقصة فيحل المعتمد محل writtenText
+  originalWrittenText?: string;
   enteredBidderTotal?: number;     // المبلغ المدون رقماً
   writtenText?: string;            // المبلغ المكتوب كتابةً
   hasMathError?: boolean;          // خطأ ضرب حسابي
