@@ -97,6 +97,7 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 - A table row with no matching reading keeps its estimate. A number read more times than the table holds is applied nowhere. A number not in the table is appended at the end. A reading row without a number is not applied. Any of these asks for confirmation before insert.
 - The table's item number is kept as written («٢» matches «2»).
 - The estimate still sets quantity and description (user decision, 2026-10-12). The notice lists every quantity and every non-whitespace description it will change, so a misread quantity is visible before it creates false multiplication flags on the bidders.
+- A read quantity that differs from the table's is checked against the row's own amount (since v1.14.5, `quantityEvidence`). With a read unit price, the table's quantity is kept when unit price × table quantity equals the amount and unit price × read quantity does not. Without a unit price, the same test is a whole-number price. The notice lists these rows as kept. A read quantity that fits neither is still applied and flagged «لا يوافقها مبلغ الفقرة». Gemini reads the same scan differently each time, and 1,150 for 1,155 recurred on 2026-10-12.
 - It merges by position only when the table has no real rows (a new tender) or the reading has no item numbers. An Excel estimate without an item-number column leaves `itemNo` undefined instead of inventing one from the row index.
 - The bidder merges are still by position.
 

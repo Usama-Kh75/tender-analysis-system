@@ -14,7 +14,7 @@ const Nos: React.FC<{ nos: string[] }> = ({ nos }) => (
 export const EstimateMergeNotice: React.FC<{ plan: EstimateMergePlan | null }> = ({ plan }) => {
   const fmt = (n: string | number) => typeof n === 'number' ? n.toLocaleString('en-US') : n;
   const structural = !!plan && (plan.missing.length + plan.duplicates.length + plan.extras.length + plan.unnumbered) > 0;
-  const changes = !!plan && (plan.quantityChanges.length + plan.descriptionChanges.length) > 0;
+  const changes = !!plan && (plan.quantityChanges.length + plan.keptQuantities.length + plan.descriptionChanges.length) > 0;
   const heading = !plan || (!structural && !changes) ? ''
     : structural ? 'لم تتطابق القراءة مع فقرات الجدول كلها' : 'الإدراج سيغيّر كميات أو أوصافاً في الجدول';
   return (
@@ -41,9 +41,24 @@ export const EstimateMergeNotice: React.FC<{ plan: EstimateMergePlan | null }> =
               <div className="mt-0.5">الكمية مشتركة مع المجهزين ويُعاد فحص ضربهم بها. إن كانت القراءة هي الخاطئة فصحّح الكمية قبل الإدراج أو في الجدول بعده.</div>
               <ul className="mt-0.5 space-y-0.5 font-bold">
                 {plan.quantityChanges.slice(0, SHOWN).map((c, i) => (
-                  <li key={i}>الفقرة <bdi>{c.itemNo}</bdi>: <bdi>{fmt(c.from)}</bdi> في الجدول، و<bdi>{fmt(c.to)}</bdi> في الكلفة التخمينية</li>
+                  <li key={i}>
+                    الفقرة <bdi>{c.itemNo}</bdi>: <bdi>{fmt(c.from)}</bdi> في الجدول، و<bdi>{fmt(c.to)}</bdi> في الكلفة التخمينية
+                    {c.unfit && <span className="text-rose-800"> — لا يوافقها مبلغ الفقرة، فراجعها مع الأصل</span>}
+                  </li>
                 ))}
                 {plan.quantityChanges.length > SHOWN && <li>و({plan.quantityChanges.length - SHOWN}) فقرة غيرها.</li>}
+              </ul>
+            </div>
+          )}
+          {plan.keptQuantities.length > 0 && (
+            <div>
+              <div className="font-black">⚠️ ({plan.keptQuantities.length}) فقرة بقيت كمية الجدول فيها</div>
+              <div className="mt-0.5">الكمية المقروءة لا يوافقها مبلغ فقرتها في الكلفة التخمينية، وتوافقه كمية الجدول، فهي قراءة خاطئة على الأرجح.</div>
+              <ul className="mt-0.5 space-y-0.5 font-bold">
+                {plan.keptQuantities.slice(0, SHOWN).map((c, i) => (
+                  <li key={i}>الفقرة <bdi>{c.itemNo}</bdi>: بقيت <bdi>{fmt(c.table)}</bdi> وقُرئت <bdi>{fmt(c.read)}</bdi></li>
+                ))}
+                {plan.keptQuantities.length > SHOWN && <li>و({plan.keptQuantities.length - SHOWN}) فقرة غيرها.</li>}
               </ul>
             </div>
           )}

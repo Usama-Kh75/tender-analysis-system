@@ -4,7 +4,29 @@ import { toLatinDigits } from './calculations';
 /** فقرة الجدول القائم كما تُمرَّر لنوافذ الاستيراد: كمية الفقرة الفارغة («فقرة N» بلا مبالغ) صفر */
 export type EstimateTableRow = { itemNo: number | string; quantity: number; description?: string };
 
-type Change = { itemNo: number | string; from: string | number; to: string | number };
+/** unfit: الكمية المقروءة لا يوافقها مبلغ الفقرة ولا توافقه كمية الجدول أيضاً */
+type Change = { itemNo: number | string; from: string | number; to: string | number; unfit?: boolean };
+type KeptQuantity = { itemNo: number | string; read: number; table: number };
+
+/**
+ * أي الكميتين توافق مبلغ الفقرة المقروء معها: 'table' كمية الجدول وحدها، 'read' المقروءة وحدها، 'neither' لا واحدة
+ * منهما (والمفرد مقروء)، وnull لا دليل. مع المفرد: المفرد × الكمية = المبلغ. بلا مفرد مقروء: مبلغ يقبل القسمة
+ * على كمية واحدة قسمةً صحيحة دون الأخرى (سعر مفرد صحيح)
+ */
+const quantityEvidence = (ext: Partial<BOQItem>, readQty: number, tableQty: number): 'table' | 'read' | 'neither' | null => {
+  const total = (ext.estimatedTotal || 0) > 0 ? ext.estimatedTotal! : (ext.bidderTotal || 0);
+  if (!(total > 0)) return null;
+  const unit = ext.enteredUnitPrice || 0;
+  if (unit > 0) {
+    const fits = (q: number) => Math.abs(unit * q - total) <= 1;
+    if (fits(tableQty) && !fits(readQty)) return 'table';
+    if (fits(readQty) && !fits(tableQty)) return 'read';
+    return fits(readQty) ? null : 'neither';
+  }
+  const whole = (q: number) => Math.abs(total / q - Math.round(total / q)) < 1e-9;
+  if (whole(tableQty) && !whole(readQty)) return 'table';
+  return null;
+};
 
 export interface EstimateMergePlan {
   /** طوبقت القراءة برقم الفقرة؛ false: بالترتيب (جدول فارغ تبنيه الكلفة التخمينية، أو قراءة بلا أرقام) */
@@ -17,6 +39,7 @@ export interface EstimateMergePlan {
   extras: string[];     // أرقام ليست في الجدول: تُضاف فقرات جديدة في آخره
   unnumbered: number;   // صفوف بلا رقم فقرة: لا تُدرج
   quantityChanges: Change[];
+  keptQuantities: KeptQuantity[]; // كمية مقروءة خاطئة بدليل مبلغها: تبقى كمية الجدول
   descriptionChanges: Change[];
 }
 
@@ -39,7 +62,7 @@ export const planEstimateMerge = (extracted: Partial<BOQItem>[], table: Estimate
   const numbered = extracted.filter(e => itemKey(e.itemNo) !== '');
   const tableHasItems = table.some(r => r.quantity > 0);
 
-  let plan: Omit<EstimateMergePlan, 'quantityChanges' | 'descriptionChanges'>;
+  let plan: Omit<EstimateMergePlan, 'quantityChanges' | 'keptQuantities' | 'descriptionChanges'>;
   if (!tableHasItems || numbered.length === 0) {
     plan = { byItemNo: false, rows: [...extracted], matched: Math.min(extracted.length, table.length), ...empty };
   } else {
@@ -79,12 +102,22 @@ export const planEstimateMerge = (extracted: Partial<BOQItem>[], table: Estimate
   }
 
   const quantityChanges: Change[] = [];
+  const keptQuantities: KeptQuantity[] = [];
   const descriptionChanges: Change[] = [];
+  const rows = [...plan.rows];
   table.forEach((r, i) => {
-    const ext = plan.rows[i];
+    const ext = rows[i];
     if (!ext || r.quantity <= 0) return; // فقرة فارغة: لا كمية ولا وصف قائمان
     if ((ext.quantity || 0) > 0 && Math.abs(ext.quantity! - r.quantity) > 1e-9) {
-      quantityChanges.push({ itemNo: r.itemNo, from: r.quantity, to: ext.quantity! });
+      const verdict = quantityEvidence(ext, ext.quantity!, r.quantity);
+      if (verdict === 'table') {
+        // الكلفة التخمينية تضع كميتها، إلا أن كمية مقروءة لا يوافقها مبلغ فقرتها وتوافقه كمية الجدول قراءةٌ
+        // خاطئة لا كميةُ التخميني (1150 بدل 1155 في 2026-10-11): تبقى كمية الجدول، وتُعرض الفقرة
+        keptQuantities.push({ itemNo: r.itemNo, read: ext.quantity!, table: r.quantity });
+        rows[i] = { ...ext, quantity: undefined };
+      } else {
+        quantityChanges.push({ itemNo: r.itemNo, from: r.quantity, to: ext.quantity!, unfit: verdict === 'neither' });
+      }
     }
     // فروق المسافات لا تُعرض
     if (realDesc(ext.description) && realDesc(r.description) && squash(ext.description) !== squash(r.description)) {
@@ -92,7 +125,7 @@ export const planEstimateMerge = (extracted: Partial<BOQItem>[], table: Estimate
     }
   });
 
-  return { ...plan, quantityChanges, descriptionChanges };
+  return { ...plan, rows, quantityChanges, keptQuantities, descriptionChanges };
 };
 
 const listNos = (nos: string[], max = 15) =>
@@ -121,6 +154,7 @@ export const estimateMergeLogNote = (plan: EstimateMergePlan): string => {
     plan.extras.length > 0 && `أضيفت: ${listNos(plan.extras)}`,
     plan.unnumbered > 0 && `(${plan.unnumbered}) صف بلا رقم لم يُدرج`,
     plan.quantityChanges.length > 0 && `تغيرت كمية (${plan.quantityChanges.length}) فقرة: ${plan.quantityChanges.slice(0, 15).map(c => `${c.itemNo} من ${c.from} إلى ${c.to}`).join('، ')}${plan.quantityChanges.length > 15 ? '…' : ''}`,
+    plan.keptQuantities.length > 0 && `بقيت كمية الجدول في (${plan.keptQuantities.length}) فقرة لأن الكمية المقروءة لا يوافقها مبلغ الفقرة: ${plan.keptQuantities.slice(0, 15).map(c => `${c.itemNo} (${c.table} لا ${c.read})`).join('، ')}${plan.keptQuantities.length > 15 ? '…' : ''}`,
     plan.descriptionChanges.length > 0 && `تغير وصف (${plan.descriptionChanges.length}) فقرة`
   ].filter(Boolean);
   return ' — ' + parts.join('؛ ');
