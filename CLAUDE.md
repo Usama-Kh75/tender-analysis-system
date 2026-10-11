@@ -92,6 +92,14 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
 
 **Multi-bidder / multi-page merge logic** (in `App.tsx`'s `handleApplyExtractedItems` and `ImageOcrModal`'s `processAllImages`) is intentionally conservative: imports merge row-by-row by array index, preserving whichever side (existing table vs. newly extracted) already has real data rather than blindly overwriting — e.g. importing bidder prices never touches `estimatedTotal`, and vice versa. Preserve this merge discipline when touching import/OCR code; it's what prevents an OCR misread from silently clobbering already-verified figures.
 
+**The estimate merge goes by item number** (since v1.14.4), through `planEstimateMerge` (`src/utils/estimateMerge.ts`). The preview notice (`EstimateMergeNotice`) and the insert both use it.
+- Merging by position let one dropped row move every later estimate up a row (item 176 on 2026-10-12).
+- A table row with no matching reading keeps its estimate. A number read more times than the table holds is applied nowhere. A number not in the table is appended at the end. A reading row without a number is not applied. Any of these asks for confirmation before insert.
+- The table's item number is kept as written («٢» matches «2»).
+- The estimate still sets quantity and description (user decision, 2026-10-12). The notice lists every quantity and every non-whitespace description it will change, so a misread quantity is visible before it creates false multiplication flags on the bidders.
+- It merges by position only when the table has no real rows (a new tender) or the reading has no item numbers. An Excel estimate without an item-number column leaves `itemNo` undefined instead of inventing one from the row index.
+- The bidder merges are still by position.
+
 **Quantity is shared, and a bidder import keeps the table's quantity** (user decision, v1.11.10):
 - Both `bidder_only` and `new_bidder` keep the table's quantity. They clear the extracted flags so `calculateBOQMetrics` rechecks the row with that quantity.
 - Both previews list rows whose quantity differs (`quantityMismatches` + `QuantityMismatchNotice`), so the committee can fix the table quantity by hand if it is the wrong one.

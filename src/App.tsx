@@ -17,6 +17,7 @@ import { hasBidAmounts } from './utils/recommendation';
 import { exportTenderToExcel } from './utils/excelService';
 import { exportBidderAuditToExcel } from './utils/bidderAuditExcel';
 import { isCommitteeCorrected } from './utils/bidderAuditEngine';
+import { estimateMergeLogNote, planEstimateMerge } from './utils/estimateMerge';
 import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './types/tender';
 
 import { Navbar } from './components/Navbar';
@@ -292,7 +293,7 @@ export function App() {
   const referenceQuantity = (index: number) =>
     activeBidder.items[index] && !isBlankRow(index) ? activeBidder.items[index].quantity : undefined;
   // فقرات الجدول كما تُعرض لنافذتي الاستيراد لمقارنة الكمية: الفارغة بلا كمية مرجعية
-  const referenceRows = activeBidder.items.map((item, i) => ({ itemNo: item.itemNo, quantity: referenceQuantity(i) || 0 }));
+  const referenceRows = activeBidder.items.map((item, i) => ({ itemNo: item.itemNo, quantity: referenceQuantity(i) || 0, description: item.description }));
   // هوية الفقرة (الرقم والوصف والوحدة) مشتركة كالكمية: تبقى من الجدول القائم، وتؤخذ من الملف لفقرة جديدة أو
   // فارغة. كان المجهز الجديد يكتب أوصافه فوق أوصاف الجدول لدى كل المجهزين، وكان استيراد العطاء يُسقط الوحدة
   // فيعيدها calculateBOQMetrics «عدد» ثم تُوحَّد على الجميع
@@ -694,17 +695,20 @@ export function App() {
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
 
     } else if (isEstimatedOnly) {
-      // 2. تحديث الكلفة التخمينية فقط للمشروع عبر كافة المجهزين بسطر بسطر
-      const maxLen = Math.max(extracted.length, ...currentProject.bidders.map(b => b.items.length));
+      // 2. تحديث الكلفة التخمينية فقط للمشروع عبر كافة المجهزين، مطابَقةً برقم الفقرة (planEstimateMerge):
+      // فقرة لم تُقرأ يبقى صفها كما هو، والفقرات الجديدة في آخر الجدول
+      const plan = planEstimateMerge(extracted, referenceRows);
+      const maxLen = Math.max(plan.rows.length, ...currentProject.bidders.map(b => b.items.length));
 
       const updatedBidders = currentProject.bidders.map(b => {
         const mergedItems: Partial<BOQItem>[] = [];
 
         for (let i = 0; i < maxLen; i++) {
-          const ext = extracted[i];
+          const ext = plan.rows[i];
           const existing = b.items[i];
 
-          const itemNo = ext?.itemNo || existing?.itemNo || String(i + 1);
+          // المطابقة بالرقم تُبقي رقم الجدول كما كُتب
+          const itemNo = (plan.byItemNo && existing?.itemNo) || ext?.itemNo || existing?.itemNo || String(i + 1);
           const desc = ext?.description && !ext.description.startsWith('فقرة ')
             ? ext.description
             : (existing?.description || `فقرة ${itemNo}`);
@@ -747,7 +751,7 @@ export function App() {
       updatedProj = addAuditLog(
         updatedProj,
         'تحديث الكلفة التخمينية للمشروع',
-        `تم استيراد وتحديث جدول الكلفة التخمينية للمشروع (${extracted.length} فقرة)`
+        `تم استيراد وتحديث جدول الكلفة التخمينية للمشروع (${extracted.length} فقرة)${estimateMergeLogNote(plan)}`
       );
 
       setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));

@@ -18,6 +18,8 @@ import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, comp
 import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
+import { EstimateMergeNotice } from '../EstimateMergeNotice';
+import { estimateMergeConfirmText, planEstimateMerge, EstimateTableRow } from '../../utils/estimateMerge';
 
 /**
  * ملفات PDF أو صور سلّمتها نافذة الاستيراد الموحّدة مع وجهتها (جدول المجهز أو الكلفة التخمينية):
@@ -39,8 +41,9 @@ interface ImageOcrModalProps {
     statedTotal?: number
   ) => void;
   handoff?: OcrHandoff | null;
-  // فقرات الجدول الحالية: إدراج عطاء مجهز يُبقي كميتها ويُفحص بها، فتُقارن بها الكمية المقروءة قبل الإدراج
-  tableRows?: Pick<BOQItem, 'itemNo' | 'quantity'>[];
+  // فقرات الجدول الحالية: إدراج عطاء مجهز يُبقي كميتها ويُفحص بها، فتُقارن بها الكمية المقروءة قبل الإدراج،
+  // وجدول الكلفة التخمينية يُطابَق معها برقم الفقرة
+  tableRows?: EstimateTableRow[];
 }
 
 export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
@@ -472,6 +475,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // عطاء مجهز (الحالي أو جديد): تبقى كمية الجدول ويُفحص بها الضرب بعد الإدراج، فتُعرض الفقرات المخالفة.
   // جدول الكلفة التخمينية يضع كميته فلا يُقارن
   const qtyMismatchList = toEstimateDoc ? [] : quantityMismatches(extractedItems, tableRows);
+  // جدول الكلفة التخمينية يُطابَق مع الجدول برقم الفقرة (planEstimateMerge)، كما في الإدراج
+  const estimatePlan = toEstimateDoc && extractedItems.length > 0 ? planEstimateMerge(extractedItems, tableRows) : null;
 
   const handleApply = () => {
     if (extractedItems.length === 0) return;
@@ -488,6 +493,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         : 'بعد الإدراج يؤشر النظام أخطاء الضرب والتفقيط، لكنه ') +
       'لا يكتشف فقرة سقطت عند القراءة.\n\nهل طابقت عدد الفقرات ومبالغها مع الأصل وتريد إدراجها؟'
     )) return;
+    const mergeText = estimatePlan && estimateMergeConfirmText(estimatePlan);
+    if (mergeText && !window.confirm(mergeText)) return;
     // المبالغ المقروءة توضع في bidderTotal؛ عند «تعبئة الكلفة التخمينية» تُنقل إلى estimatedTotal
     // (كانت تصل صفراً فتُمسح الكلفة التخمينية في الجدول). مبلغ غير مقروء لا يمس التخميني القائم
     const toEstimate = destinationMode === 'estimated_only';
@@ -914,6 +921,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
                 {/* مركّب دائماً (فارغ أثناء القراءة): منطقة الإعلان فيه يجب أن تسبق محتواها ليُعلن عنه */}
                 <QuantityMismatchNotice mismatches={isLoading ? [] : qtyMismatchList} source="العطاء المقروء" />
+                <EstimateMergeNotice plan={isLoading ? null : estimatePlan} />
 
                 {/* Progress / Loading State */}
                 {isLoading ? (

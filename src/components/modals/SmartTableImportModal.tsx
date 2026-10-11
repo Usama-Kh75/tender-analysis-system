@@ -18,6 +18,8 @@ import { normalizeItemNo, parseArabicNumber } from '../../utils/calculations';
 import { auditBidderRows, auditRowAmounts, BidderAuditReport, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
+import { EstimateMergeNotice } from '../EstimateMergeNotice';
+import { estimateMergeConfirmText, planEstimateMerge, EstimateTableRow } from '../../utils/estimateMerge';
 
 // «مجموع» أو «إجمالي» كلمةً مستقلة: لا يطابق «مجموعة» (حرف عربي بعدها) ولا «بالمجموع»
 const SUMMARY_WORD = /(^|\P{Script=Arabic})(ال)?(مجموع|إجمالي|اجمالي)(?!\p{Script=Arabic})|\b(sub)?total\b/iu;
@@ -39,8 +41,9 @@ interface SmartTableImportModalProps {
   initialDocType?: ImportDocType;
   // مدخل استيراد واحد لكل أنواع الملفات: PDF والصور تُسلَّم لنافذة القراءة بالذكاء الاصطناعي بنوع الجدول المختار
   onReadWithAi?: (files: File[], docType: 'bidder' | 'estimated') => void;
-  // فقرات الجدول الحالية: استيراد عطاء المجهز يُبقي كميتها ويُفحص بها، فتُقارن بها كمية الملف في المعاينة
-  tableRows?: Pick<BOQItem, 'itemNo' | 'quantity'>[];
+  // فقرات الجدول الحالية: استيراد عطاء المجهز يُبقي كميتها ويُفحص بها، فتُقارن بها كمية الملف في المعاينة،
+  // وجدول الكلفة التخمينية يُطابَق معها برقم الفقرة
+  tableRows?: EstimateTableRow[];
 }
 
 // PDF أو صورة: تُقرأ بالذكاء الاصطناعي لا بمطابقة الأعمدة
@@ -233,7 +236,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     let keptCount = 0;
 
     return rows.map((row, idx) => {
-      const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? normalizeItemNo(row[itemNoIdx]) : String(idx + 1);
+      const itemNoCell = itemNoIdx !== -1 && row[itemNoIdx] ? normalizeItemNo(row[itemNoIdx]) : undefined;
+      const itemNoVal = itemNoCell ?? String(idx + 1);
       const estVal = estIdx !== -1 ? parseArabicNumber(row[estIdx]) : 0;
       const unitPriceVal = unitPriceIdx !== -1 ? parseArabicNumber(row[unitPriceIdx]) : 0;
       const fileQty = qtyIdx !== -1 ? parseArabicNumber(row[qtyIdx]) : 0; // 0: لا كمية في الملف
@@ -264,7 +268,8 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
         auditRowAmounts(checkQty, unitPriceVal, enteredBidVal, writtenVal);
 
       const item: Partial<BOQItem> = {
-        itemNo: itemNoVal,
+        // الكلفة التخمينية تُطابَق برقم الفقرة، فلا يُختلق لها رقم من موضع الصف في الملف
+        itemNo: selectedDoc === 'estimated' ? itemNoCell : itemNoVal,
         description: descVal,
         // بلا كمية في الملف (عمود مبالغ ملصوق مثلاً) تبقى كمية الجدول: كانت 1 تحل محلها في كل الفقرات.
         // الجدول المتكامل يستبدل الجدول كله فيبقى 1 فيه
@@ -459,7 +464,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
       return;
     }
 
-    const finalMode: ImportMode = 
+    const mergeText = docType === 'estimated' && estimateMergeConfirmText(planEstimateMerge(extractedItems, tableRows));
+    if (mergeText && !window.confirm(mergeText)) return;
+
+    const finalMode: ImportMode =
       docType === 'estimated' ? 'estimated_only' :
       docType === 'bidder' ? 'bidder_only' : 'full_replace';
 
@@ -478,6 +486,10 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   const qtyMismatchList = docType === 'bidder'
     ? quantityMismatches(mappedRows.filter(r => r.kept).map(r => ({ quantity: r.fileQty })), tableRows)
     : [];
+  // جدول الكلفة التخمينية يُطابَق مع الجدول برقم الفقرة (planEstimateMerge)، كما في الإدراج
+  const estimatePlan = docType === 'estimated' && mappedRows.some(r => r.kept)
+    ? planEstimateMerge(mappedRows.filter(r => r.kept).map(r => r.item), tableRows)
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -683,6 +695,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
           </div>
 
           <QuantityMismatchNotice mismatches={qtyMismatchList} source="الملف" />
+          <EstimateMergeNotice plan={estimatePlan} />
 
           {/* Step 2: Audit Results Dashboard (When Errors are Detected) */}
           {auditReport && auditReport.itemsWithErrorsCount > 0 && (
