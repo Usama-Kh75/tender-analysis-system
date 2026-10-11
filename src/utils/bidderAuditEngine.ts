@@ -104,14 +104,76 @@ const stopWords = new Set([
   'دينار', 'دینار', 'عراقي', 'فقط', 'لا', 'غير', 'مبلغ', 'وقدره', 'قدره', 'سعر', 'المجموع'
 ].map(normalizeArabicWord));
 
+// الدينار العراقي ألف فلس: «422.100» تُكتب «أربعمائة واثنان وعشرون ديناراً ومئة فلس» أو دون كلمتي
+// دينار وفلس، والمئة الثانية فيها فلوس لا مئة دينار (كانت تُقرأ 522 فيُعلَّم الصف ويُقترح رقم لا صلة له به)
+const FILS_PER_DINAR = 1000;
+
+const wordMatches = (token: string, pattern: RegExp) => {
+  const n = normalizeArabicWord(token);
+  return pattern.test(n) || (n.startsWith('و') && pattern.test(n.substring(1)));
+};
+const isDinarWord = (token: string) => wordMatches(token, /^(دينار|دینار|دنانير)/);
+const isFilsWord = (token: string) => wordMatches(token, /^(فلس|فلوس)/);
+
+const GROUP_RESET_WORDS = /^(الف|الفا|الاف|الافا|الفان|الفين|مليون|مليونا|مليونان|مليونين|ملايين|مليار|مليارا|مليارات)$/;
+
+// موضع المئة الثانية داخل المجموعة الواحدة (دون الألف)، فالعدد الصحيح لا يحمل مئتين في مجموعته،
+// وما بعدها فلوس. -1 إن لم توجد
+const secondHundredsAt = (tokens: string[]): number => {
+  let hasHundreds = false;
+  for (let i = 0; i < tokens.length; i++) {
+    const n = normalizeArabicWord(tokens[i]);
+    const base = normMap[n] === undefined && n.startsWith('و') ? n.substring(1) : n;
+    if (GROUP_RESET_WORDS.test(base)) { hasHundreds = false; continue; }
+    const v = normMap[base];
+    if (v !== undefined && v >= 100 && v < 1000) {
+      if (hasHundreds) return i;
+      hasHundreds = true;
+    }
+  }
+  return -1;
+};
+
+const splitDinarsAndFils = (tokens: string[]): { dinars: string[]; fils: string[] } => {
+  const filsAt = tokens.findIndex(isFilsWord);
+  if (filsAt >= 0) {
+    // «… ديناراً ومئة فلس»: الفلوس ما بين كلمة الدينار وكلمة الفلس
+    const before = tokens.slice(0, filsAt);
+    const dinarAt = before.map(isDinarWord).lastIndexOf(true);
+    if (dinarAt >= 0) return { dinars: before.slice(0, dinarAt), fils: before.slice(dinarAt + 1) };
+    const cut = secondHundredsAt(before);
+    return cut > 0
+      ? { dinars: before.slice(0, cut), fils: before.slice(cut) }
+      : { dinars: [], fils: before };
+  }
+  const dinarAt = tokens.findIndex(isDinarWord);
+  if (dinarAt > 0) return { dinars: tokens.slice(0, dinarAt), fils: tokens.slice(dinarAt + 1) };
+  const cut = secondHundredsAt(tokens);
+  return cut > 0 ? { dinars: tokens.slice(0, cut), fils: tokens.slice(cut) } : { dinars: tokens, fils: [] };
+};
+
 /**
  * دالة متقدمة لتحويل التفقيط المكتوب باللغة العربية إلى أرقام بدقة 100%
  */
 export const parseArabicTextToNumber = (text: string): number | null => {
   if (!text || typeof text !== 'string') return null;
 
-  const clean = text.replace(/[،,]/g, ' ').trim();
-  const rawTokens = clean.split(/\s+/).filter(t => t.trim().length > 0);
+  const rawTokens = text.replace(/[،,]/g, ' ').trim().split(/\s+/).filter(t => t.length > 0);
+  const { dinars, fils } = splitDinarsAndFils(rawTokens);
+  if (fils.length > 0) {
+    const filsValue = sumArabicWords(fils);
+    if (filsValue > 0 && filsValue < FILS_PER_DINAR) {
+      const value = Math.round((sumArabicWords(dinars) + filsValue / FILS_PER_DINAR) * 1000) / 1000;
+      return value > 0 ? value : null;
+    }
+  }
+  const total = sumArabicWords(rawTokens);
+  return total > 0 ? total : null;
+};
+
+// مجموع الكلمات العددية في قائمة كلمات (0 إن لم تكن فيها كلمة عددية)
+const sumArabicWords = (rawTokens: string[]): number => {
+  if (rawTokens.length === 0) return 0;
 
   // تصفية الكلمات الزائدة ككلمات كاملة حصراً لمنع تشويه الحروف
   const tokens: string[] = [];
@@ -123,7 +185,7 @@ export const parseArabicTextToNumber = (text: string): number | null => {
     }
   }
 
-  if (tokens.length === 0) return null;
+  if (tokens.length === 0) return 0;
 
   let total = 0;
   let current = 0;
@@ -178,8 +240,7 @@ export const parseArabicTextToNumber = (text: string): number | null => {
     i++;
   }
 
-  total += current;
-  return total > 0 ? total : null;
+  return total + current;
 };
 
 /**

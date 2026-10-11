@@ -20,7 +20,14 @@ import { formatNumber, parseArabicNumber } from '../utils/calculations';
 // 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber.
 // يُعتمد الرقم عند مغادرة الحقل أو Enter (وEscape يلغي)، لا مع كل حرف: كل اعتماد يُعيد فحص الفقرة
 // ويُسجَّل، وقد يطلب تأكيداً، وكان كل حرف يُسجَّل تعديلاً مستقلاً
-const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string }> = ({ value, onChange, className, label, placeholder = '0.00' }) => {
+// المبالغ تُعرض بثلاث منازل (الفلس): «422.100» كانت تظهر «422.10». يُقرَّب إلى الفلس قبل فحص العدد الصحيح
+// لئلا يظهر حاصل ضرب مثل 19.99 × 100 = 1998.9999999999998 بصيغة «1,999.000»
+const displayAmount = (v: number, fractionDigits = 3) => {
+  const rounded = Math.round(v * 1000) / 1000;
+  return formatNumber(rounded, Number.isInteger(rounded) ? 0 : fractionDigits);
+};
+
+const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string; fractionDigits?: number }> = ({ value, onChange, className, label, placeholder = '0.00', fractionDigits }) => {
   const [draft, setDraft] = useState<string | null>(null);
   const cancelled = useRef(false);
   return (
@@ -29,7 +36,7 @@ const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; clas
       inputMode="decimal"
       dir="ltr"
       aria-label={label}
-      value={draft ?? (value ? formatNumber(value, Number.isInteger(value) ? 0 : 2) : '')}
+      value={draft ?? (value ? displayAmount(value, fractionDigits) : '')}
       onFocus={() => { cancelled.current = false; setDraft(value ? String(value) : ''); }}
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
@@ -452,6 +459,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         onChange={(v) => onCorrectReading(actualIndex, 'quantity', v || 1)}
                         label={`كمية الفقرة ${item.itemNo}`}
                         placeholder="1"
+                        fractionDigits={2}
                         className="w-14 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
                       />
                     </td>
@@ -465,7 +473,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         value={recordedUnitPrice}
                         onChange={(newUnit) => onCorrectReading(actualIndex, 'unitPrice', newUnit)}
                         label={`سعر المفرد للفقرة ${item.itemNo}`}
-                        placeholder={derivedUnitPrice > 0 ? formatNumber(derivedUnitPrice, Number.isInteger(derivedUnitPrice) ? 0 : 2) : '0.00'}
+                        placeholder={derivedUnitPrice > 0 ? displayAmount(derivedUnitPrice) : '0.00'}
                         className="w-full min-w-[6rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                       />
                     </td>
