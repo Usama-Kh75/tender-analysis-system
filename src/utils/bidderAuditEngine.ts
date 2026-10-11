@@ -189,6 +189,22 @@ const sumArabicWords = (rawTokens: string[]): number => {
 
   if (tokens.length === 0) return 0;
 
+  // العُرف التجاري العراقي: «ثلاثة وخمسمائة» تعني 3,500 (حُذفت «آلاف»). آحاد مفردة تسبق مئات وليس في النص
+  // ألف ولا مليون: ترتيب العدد الصحيح مئاته قبل آحاده («خمسمائة وثلاثة» = 503)، فلا تُقرأ 503. كانت الفقرة 98
+  // («ثلاثة وخمسمائة» والأرقام 3,500 و350,000) تُؤشَّر تعارض تفقيط وتُقترح 503
+  const baseOf = (t: string) => {
+    const n = normalizeArabicWord(t);
+    return normMap[n] === undefined && n.startsWith('و') && n.length > 2 ? n.substring(1) : n;
+  };
+  if (tokens.length >= 2 && !tokens.some(t => GROUP_RESET_WORDS.test(baseOf(t)))) {
+    const first = normMap[baseOf(tokens[0])];
+    const second = normMap[baseOf(tokens[1])];
+    const secondIsHundredsWord = second !== undefined && second >= 200 && second < 1000 && !HUNDRED_WORDS.has(baseOf(tokens[1]));
+    if (first !== undefined && first >= 1 && first <= 9 && secondIsHundredsWord) {
+      return first * 1000 + sumArabicWords(tokens.slice(1));
+    }
+  }
+
   let total = 0;
   let current = 0;
   let i = 0;
