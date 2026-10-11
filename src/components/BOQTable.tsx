@@ -519,7 +519,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                             <div className="flex items-start gap-1.5">
                               <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
                               <div>
-                                <span className="font-black text-rose-900">🚨 خطأ ضرب:</span> المدون في العطاء ({item.enteredBidderTotal?.toLocaleString() || item.bidderTotal.toLocaleString()} د.ع) ≠ حاصل (المفرد {item.enteredUnitPrice?.toLocaleString()} × {item.quantity} = {((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()} د.ع)
+                                <span className="font-black text-rose-900">🚨 خطأ ضرب:</span> المدون في العطاء ({item.enteredBidderTotal?.toLocaleString() || item.bidderTotal.toLocaleString()} د.ع) ≠ حاصل (المفرد <bdi dir="ltr" className="whitespace-nowrap">{item.enteredUnitPrice?.toLocaleString()} × {item.quantity.toLocaleString()} = {((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()}</bdi> د.ع)
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 mt-1 mr-5">
@@ -627,7 +627,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                                   className={`${likelyUnit ? solid : outline} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
                                   title="التفقيط لسعر المفرد: يُعتمد مفرداً ويُضرب بالكمية، بقرار اللجنة"
                                 >
-                                  ⚖️ اعتماده سعراً للمفرد ({written.toLocaleString()} × {qty} = {(written * qty).toLocaleString()})
+                                  {/* المعادلة باتجاه اليسار ومتصلة: في سياق عربي كانت تنقلب «= 50,300» إلى أول السطر */}
+                                  ⚖️ اعتماده سعراً للمفرد (<bdi dir="ltr" className="whitespace-nowrap">{written.toLocaleString()} × {qty.toLocaleString()} = {(written * qty).toLocaleString()}</bdi>)
                                 </button>
                                 <button
                                   onClick={adoptAsTotal}
