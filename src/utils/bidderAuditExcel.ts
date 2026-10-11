@@ -3,6 +3,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber } from './bidderAuditEngine';
+import { toLatinDigits } from './calculations';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -132,7 +133,7 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
 // قبل 1.12.0 بلا مجهز تُطابق بالرقم والمبلغ وحدهما، وإلا التبس تصحيح مجهزين انتهيا إلى المبلغ نفسه
 const findAdoption = (item: BOQItem, bidderId: string, logs: AuditLogEntry[]) =>
   logs.find(l => ADOPTIONS[l.action] && (!l.bidderId || l.bidderId === bidderId)
-    && String(l.itemNo) === String(item.itemNo) && Math.abs(Number(l.newValue) - item.bidderTotal) < 0.01);
+    && toLatinDigits(String(l.itemNo)) === toLatinDigits(String(item.itemNo)) && Math.abs(Number(l.newValue) - item.bidderTotal) < 0.01);
 
 interface RowAnalysis {
   item: BOQItem;

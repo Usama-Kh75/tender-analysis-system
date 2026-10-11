@@ -1,6 +1,18 @@
 import { auditRowAmounts } from './bidderAuditEngine';
 import { BOQItem, TenderTotals } from '../types/tender';
 
+/** الأرقام المشرقية (٠-٩) والفارسية (۰-۹) والفاصلة العشرية العربية (٫) إلى 0-9 و«.» */
+export const toLatinDigits = (text: string): string =>
+  text
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0))
+    .replace(/٫/g, '.');
+
+// رقم الفقرة يُكتب في العطاء بالأرقام المشرقية في صفحات وبالإنجليزية في أخرى، فيُوحَّد بالإنجليزية
+// كباقي أرقام النظام: كان الجدول يعرض «193» ثم «١٩٧»، ولا يجد البحث بـ197 الفقرة ١٩٧
+export const normalizeItemNo = <T extends string | number>(itemNo: T): T =>
+  (typeof itemNo === 'string' ? toLatinDigits(itemNo) : itemNo) as T;
+
 /**
  * تحويل الأرقام المكتوبة بالأرقام المشرقية/الهندية (٠١٢٣٤٥٦٧٨٩) والفارسية إلى أرقام قياسية
  * وإزالة الفواصل والرموز النصية والعملات لتجهيزها للحسابات الرياضية
@@ -12,14 +24,7 @@ export function parseArabicNumber(input: string | number | null | undefined): nu
   let str = String(input).trim();
   if (!str) return 0;
 
-  // خريطة تحويل الأرقام الهندية/المشرقية والفارسية
-  const arabicHindiDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-
-  for (let i = 0; i < 10; i++) {
-    str = str.split(arabicHindiDigits[i]).join(String(i));
-    str = str.split(persianDigits[i]).join(String(i));
-  }
+  str = toLatinDigits(str);
 
   // استبدال فواصل الكسور العشرية العربية والأجنبية
   str = str.replace(/٫/g, '.');

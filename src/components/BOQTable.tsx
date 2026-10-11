@@ -14,7 +14,7 @@ import {
   Download
 } from 'lucide-react';
 import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
-import { formatNumber, parseArabicNumber } from '../utils/calculations';
+import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
 
 // حقل مبلغ يعرض فواصل الآلاف (60,000,000) خارج التعديل والرقم المجرد أثناء الكتابة: بلا فواصل كان
 // 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber.
@@ -25,6 +25,19 @@ import { formatNumber, parseArabicNumber } from '../utils/calculations';
 const displayAmount = (v: number, fractionDigits = 3) => {
   const rounded = Math.round(v * 1000) / 1000;
   return formatNumber(rounded, Number.isInteger(rounded) ? 0 : fractionDigits);
+};
+
+const useMeasuredHeight = (initial: number) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(initial);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setHeight(Math.round(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, height] as const;
 };
 
 const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string; fractionDigits?: number }> = ({ value, onChange, className, label, placeholder = '0.00', fractionDigits }) => {
@@ -171,17 +184,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
 
-  // ارتفاع شريط الشركة المثبت يُقاس فعلياً (قد يلتف اسم شركة طويل إلى سطرين)، لتثبت
-  // عناوين الأعمدة تحته مباشرة على الشاشات العريضة دون أن تختفي خلفه
-  const barRef = useRef<HTMLDivElement>(null);
-  const [barHeight, setBarHeight] = useState(76);
-  useEffect(() => {
-    const bar = barRef.current;
-    if (!bar || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setBarHeight(Math.round(bar.getBoundingClientRect().height)));
-    ro.observe(bar);
-    return () => ro.disconnect();
-  }, []);
+  // ارتفاع شريط الشركة وشريط البحث المثبتين يُقاس فعلياً (قد يلتف اسم شركة طويل أو تلتف المرشِّحات)،
+  // لتثبت العناصر تحتهما مباشرة على الشاشات العريضة دون أن تختفي خلفهما
+  const [barRef, barHeight] = useMeasuredHeight(76);
+  const [toolbarRef, toolbarHeight] = useMeasuredHeight(64);
 
   // أعمدة الانحراف والمفرد الموزون والتقييم لا معنى لها قبل إدخال الكلفة التخمينية (كانت تكرر «-»
   // و«بانتظار التخميني» في كل صف)، فتُخفى ويُعرض بدلها تنبيه واحد فوق الجدول
@@ -192,12 +198,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   const mathErrorsCount = items.filter(i => i.hasMathError).length;
   const textErrorsCount = items.filter(i => i.hasTextDiscrepancy).length;
 
-  // فلترة الأسطر
+  // فلترة الأسطر. الأرقام المشرقية والإنجليزية سيّان في البحث: «24» تجد «كيك ٢٤ قطعة»
+  const term = toLatinDigits(searchTerm.toLowerCase());
+  const matches = (text: string) => toLatinDigits(text.toLowerCase()).includes(term);
   const filteredItems = items.filter(item => {
-    const matchSearch = 
-      String(item.itemNo).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.writtenText && item.writtenText.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchSearch =
+      matches(String(item.itemNo)) ||
+      matches(item.description) ||
+      (!!item.writtenText && matches(item.writtenText));
 
     if (!matchSearch) return false;
 
@@ -208,7 +216,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   });
 
   return (
-    <div className="space-y-4" style={{ '--bidder-bar-h': `${barHeight}px` } as React.CSSProperties}>
+    <div className="space-y-4" style={{ '--bidder-bar-h': `${barHeight}px`, '--toolbar-h': `${toolbarHeight}px` } as React.CSSProperties}>
 
       {/* Top Banner: Active Bidder Label & Actions Bar
           مثبت تحت الشريط العلوي (ارتفاعه 81px) أثناء التمرير في الجدول، فيبقى اسم الشركة وأدوات
@@ -302,8 +310,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
       {/* Main Table Container */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden xl:overflow-clip" id="boq-table-container">
         
-        {/* Table Toolbar */}
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        {/* Table Toolbar
+            على الشاشات العريضة (xl) يثبت تحت شريط الشركة، فيبقى البحث والمرشِّحات في متناول اليد أثناء التمرير
+            وتثبت عناوين الأعمدة تحته. على الأضيق يلتف فيطول، فيبقى غير مثبت كشريط الشركة */}
+        <div ref={toolbarRef} className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 xl:sticky xl:top-[calc(81px+var(--bidder-bar-h))] z-30">
           
           {/* Search Box */}
           <div className="relative w-full sm:w-72">
@@ -382,7 +392,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
         <div className="overflow-x-auto max-h-[640px] relative xl:overflow-visible xl:max-h-none">
           <table className="w-full text-xs sm:text-sm text-right border-collapse">
             
-            <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h))] z-20 shadow-xs select-none">
+            <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h)+var(--toolbar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
                 <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
@@ -438,7 +448,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       <input
                         type="text"
                         value={item.itemNo}
-                        onChange={(e) => onUpdateItem(actualIndex, 'itemNo', e.target.value)}
+                        onChange={(e) => onUpdateItem(actualIndex, 'itemNo', toLatinDigits(e.target.value))}
                         className="w-full min-w-[3rem] text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
                       />
                     </td>

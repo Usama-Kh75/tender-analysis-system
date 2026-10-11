@@ -1,6 +1,6 @@
 import { createWorker } from 'tesseract.js';
 import { BOQItem } from '../types/tender';
-import { parseArabicNumber } from './calculations';
+import { normalizeItemNo, parseArabicNumber } from './calculations';
 import { auditRowAmounts } from './bidderAuditEngine';
 
 export interface ExtractedTableData {
@@ -283,7 +283,7 @@ export function mergeContinuationRows(rows: any[]): any[] {
 }
 
 function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
-  const itemNo = isBlank(r?.itemNo) ? idx + 1 : String(r.itemNo).trim();
+  const itemNo = isBlank(r?.itemNo) ? idx + 1 : normalizeItemNo(String(r.itemNo).trim());
   const description = isBlank(r?.description) ? `فقرة ${itemNo}` : String(r.description).trim();
   const unit = isBlank(r?.unit) ? 'عدد' : String(r.unit).trim();
   const unpriced = r?.unpriced === true || isDash(r?.unitPrice) || isDash(r?.total);

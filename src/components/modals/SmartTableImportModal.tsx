@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style'; // SheetJS 0.18.5 نفسها، ومعها كتابة التنسيق (bidderAuditExcel)
 import { BOQItem } from '../../types/tender';
-import { parseArabicNumber } from '../../utils/calculations';
+import { normalizeItemNo, parseArabicNumber } from '../../utils/calculations';
 import { auditBidderRows, auditRowAmounts, BidderAuditReport, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
@@ -233,7 +233,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
     let keptCount = 0;
 
     return rows.map((row, idx) => {
-      const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? row[itemNoIdx] : String(idx + 1);
+      const itemNoVal = itemNoIdx !== -1 && row[itemNoIdx] ? normalizeItemNo(row[itemNoIdx]) : String(idx + 1);
       const estVal = estIdx !== -1 ? parseArabicNumber(row[estIdx]) : 0;
       const unitPriceVal = unitPriceIdx !== -1 ? parseArabicNumber(row[unitPriceIdx]) : 0;
       const fileQty = qtyIdx !== -1 ? parseArabicNumber(row[qtyIdx]) : 0; // 0: لا كمية في الملف

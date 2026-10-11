@@ -1,5 +1,5 @@
 import { TenderProject, Bidder, AuditLogEntry, BOQItem } from '../types/tender';
-import { calculateBOQMetrics } from './calculations';
+import { calculateBOQMetrics, normalizeItemNo } from './calculations';
 import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
@@ -219,8 +219,34 @@ function recheckStoredFlags(project: TenderProject): TenderProject {
   ), { ...project, bidders, updatedAt: new Date().toISOString() });
 }
 
-// كل مشروع يُحمَّل أو يُستعاد: توحيد الحقول المشتركة ثم إعادة فحص العلامات المخزنة
-const normalizeLoadedProject = (project: TenderProject) => recheckStoredFlags(reconcileProjectSharedFields(project));
+// أرقام فقرات قُرئت قبل توحيدها (normalizeItemNo) بالأرقام المشرقية في صفحات وبالإنجليزية في أخرى.
+// يمس رقم الفقرة وحده لا أي مبلغ، ويسبق توحيد الحقول المشتركة فلا يُعدّ «١٩٧» و«197» تباعداً بين المجهزين.
+// السجل يبقى بأرقامه كما كُتب، ويطابقه التصدير بعد توحيد الطرفين (findAdoption)
+function latinizeItemNumbers(project: TenderProject): TenderProject {
+  const rows = new Set<number>(); // الفقرة مشتركة بين المجهزين فتُعد مرة واحدة
+  const bidders = project.bidders.map(b => {
+    let changed = false;
+    const items = b.items.map((item, i) => {
+      const itemNo = normalizeItemNo(item.itemNo);
+      if (itemNo === item.itemNo) return item;
+      changed = true;
+      rows.add(i);
+      return { ...item, itemNo };
+    });
+    return changed ? { ...b, items } : b;
+  });
+  if (rows.size === 0) return project;
+
+  return addAuditLog(
+    { ...project, bidders, updatedAt: new Date().toISOString() },
+    'توحيد أرقام الفقرات',
+    `كُتبت أرقام (${rows.size}) فقرة بالأرقام الإنجليزية بدل المشرقية كباقي الجدول، دون المساس بأي مبلغ`
+  );
+}
+
+// كل مشروع يُحمَّل أو يُستعاد: توحيد أرقام الفقرات والحقول المشتركة ثم إعادة فحص العلامات المخزنة
+const normalizeLoadedProject = (project: TenderProject) =>
+  recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project)));
 
 export function getAllProjects(): TenderProject[] {
   const data = localStorage.getItem(STORAGE_KEY);
