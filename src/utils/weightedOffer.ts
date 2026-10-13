@@ -1,4 +1,5 @@
-import type { BOQItem } from '../types/tender';
+import type { BOQItem, Bidder, TenderProject } from '../types/tender';
+import { hasBidAmounts } from './recommendation';
 
 /**
  * اختبار توازن العطاء — ضوابط رقم (4) سادساً/5 (ص69): «...وفي حالة ورود عطاء مستجيب والأنسب سعراً مع وجود نسبة
@@ -56,3 +57,70 @@ export const correctedBalanceRows = (items: BOQItem[]): BalanceRow[] =>
 
 export const offerBalanceRows = (items: BOQItem[]): BalanceRow[] =>
   items.map(i => ({ description: i.description, estimatedTotal: i.estimatedTotal, amount: i.offerTotal ?? i.bidderTotal }));
+
+// العرض الفعّال أو المعتمد يقفل أرقام عطائه والتعديلات المشتركة؛ الموقوف لا يقفل (أُوقف لتصحيح قراءة)
+export const isOfferLocked = (b: Bidder) => b.weightedOffer?.status === 'active' || b.weightedOffer?.status === 'adopted';
+
+/** سبب منع بدء العرض الموزون، أو null إن جاز */
+export function startOfferBlocker(b: Bidder, threshold: number): string | null {
+  if (!hasBidAmounts(b)) return 'لا مبالغ في هذا العطاء بعد.';
+  if (!(b.totals.totalEstimatedAmount > 0)) return 'لم تُدخل الكلفة التخمينية بعد، فلا نسبة سعرية ولا انحراف.';
+  if (Math.abs(b.totals.totalDeviationPercent) > threshold) {
+    return `العطاء منحرف بمبلغه الكلي (${b.totals.totalDeviationPercent.toFixed(2)}%) عن الكلفة التخمينية فيُستبعد، ولا يُعدّ له عرض موزون (سادساً/5).`;
+  }
+  const pending = b.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length;
+  if (pending > 0) return `(${pending}) فقرة بانتظار قرار اللجنة في التصحيح الحسابي؛ يُعدّ العرض الموزون بعد اكتماله.`;
+  return null;
+}
+
+/** نقطة انطلاق: أسعار العطاء بعد التصحيح كما هي، ثم تُعدَّل الفقرات التي غيّرها المجهز */
+export const offerFieldsFromCorrected = (items: BOQItem[]) =>
+  items.map(i => ({ offerUnitPrice: i.quantity > 0 ? i.bidderTotal / i.quantity : i.bidderTotal, offerTotal: i.bidderTotal }));
+
+/** نقطة انطلاق: المعادلة (التخميني × النسبة)، وهي الأسعار الموزونة المسوّاة التي حسبها calculateBOQMetrics */
+export const offerFieldsFromFormula = (items: BOQItem[]) =>
+  items.map(i => ({ offerUnitPrice: i.weightedUnitPrice, offerTotal: i.newPrice }));
+
+/** تعديل مفرد فقرة في العرض: المبلغ = الكمية × المفرد مقرّباً لمنزلتين، فلا يتولد خطأ ضرب */
+export const offerUnitPatch = (item: BOQItem, unit: number) =>
+  ({ offerUnitPrice: unit, offerTotal: Math.round((item.quantity > 0 ? item.quantity : 1) * unit * 100) / 100 });
+
+export const isOfferEdited = (i: BOQItem) => i.offerTotal !== undefined && Math.abs(i.offerTotal - i.bidderTotal) >= 0.005;
+
+export interface OfferStatus {
+  offerSum: number;
+  bidTotal: number;
+  diff: number;             // مجموع العرض − مبلغ العطاء؛ يجب أن يكون صفراً للاعتماد
+  editedCount: number;
+  markedNotEdited: number;  // مؤشرة «سعر غير معقول» ولم يُعدَّل سعرها في العرض
+  stale: boolean;           // تغيّر مبلغ العطاء بعد البدء أو الاستئناف
+  canAdopt: boolean;
+}
+
+export function offerStatus(b: Bidder): OfferStatus | null {
+  if (!b.weightedOffer) return null;
+  const offerSum = round2(b.items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0));
+  const bidTotal = b.totals.totalBidderAmount;
+  const diff = round2(offerSum - bidTotal);
+  const stale = Math.abs(b.weightedOffer.bidTotal - bidTotal) >= 0.005;
+  return {
+    offerSum, bidTotal, diff,
+    editedCount: b.items.filter(isOfferEdited).length,
+    markedNotEdited: b.items.filter(i => i.unreasonablePrice && !isOfferEdited(i)).length,
+    stale,
+    canAdopt: !stale && Math.abs(diff) < 0.005
+  };
+}
+
+/**
+ * سبب رفض تعديل يغيّر أرقام عطاء له عرض موزون فعّال أو معتمد. shared: التعديل مشترك بين العطاءات كلها
+ * (الكمية، التخميني، إضافة فقرة أو حذفها، الاستيراد)، فيقفله عرض أي مجهز
+ */
+export function offerLockReason(project: TenderProject, scope: { bidderId?: string; shared?: boolean }): string | null {
+  const locked = project.bidders.filter(b => isOfferLocked(b) && (scope.shared || b.id === scope.bidderId));
+  if (locked.length === 0) return null;
+  const names = locked.map(b => b.name).join('، ');
+  return `أرقام العطاء مقفلة أثناء العرض الموزون (${names})${scope.shared ? '، وهذا التعديل مشترك بين كل العطاءات' : ''}.
+`
+    + 'أوقف مرحلة العرض الموزون أولاً (تُحفظ تعديلاتها وتعود عند الاستئناف).';
+}
