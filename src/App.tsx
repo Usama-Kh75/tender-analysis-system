@@ -29,6 +29,7 @@ import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './ty
 import { Navbar } from './components/Navbar';
 import { KPIStatsCards } from './components/KPIStatsCards';
 import { BOQTable } from './components/BOQTable';
+import { WeightedOfferBar } from './components/WeightedOfferBar';
 import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
 
@@ -1523,6 +1524,13 @@ export function App() {
         {/* Content based on Tab */}
         <div id="boq-table-container">
           {activeTab === 'table' ? (
+            <>
+            {hasBidAmounts(activeBidder) && (
+              <div className="mb-4">
+                <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold}
+                  onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
+              </div>
+            )}
             <BOQTable
               items={activeBidder.items}
               totals={activeBidder.totals}
@@ -1542,7 +1550,14 @@ export function App() {
                 setSmartImportDocType('bidder');
                 setIsSmartImportOpen(true);
               }}
+              offerMode={activeBidder.weightedOffer?.status === 'active' ? 'active' : activeBidder.weightedOffer?.status === 'adopted' ? 'adopted' : 'none'}
+              sharedLocked={currentProject.bidders.some(isOfferLocked)}
+              onEditOfferUnit={handleEditOfferUnit}
+              onMarkUnreasonable={handleMarkUnreasonable}
+              onSetItemPage={handleSetItemPage}
+              onOpenPageBreaks={() => setIsPageBreaksOpen(true)}
             />
+            </>
           ) : activeTab === 'summary' ? (
             <ExecutiveSummaryView
               project={currentProject}

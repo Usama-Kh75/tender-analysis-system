@@ -11,10 +11,13 @@ import {
   FileSpreadsheet,
   Search,
   Pencil,
-  Download
+  Download,
+  Flag,
+  FileStack
 } from 'lucide-react';
 import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
+import { isOfferEdited } from '../utils/weightedOffer';
 
 // حقل مبلغ يعرض فواصل الآلاف (60,000,000) خارج التعديل والرقم المجرد أثناء الكتابة: بلا فواصل كان
 // 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber.
@@ -40,7 +43,7 @@ const useMeasuredHeight = (initial: number) => {
   return [ref, height] as const;
 };
 
-const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string; fractionDigits?: number }> = ({ value, onChange, className, label, placeholder = '0.00', fractionDigits }) => {
+const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string; fractionDigits?: number; readOnly?: boolean }> = ({ value, onChange, className, label, placeholder = '0.00', fractionDigits, readOnly }) => {
   const [draft, setDraft] = useState<string | null>(null);
   const cancelled = useRef(false);
   return (
@@ -49,8 +52,10 @@ const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; clas
       inputMode="decimal"
       dir="ltr"
       aria-label={label}
+      readOnly={readOnly}
+      title={readOnly ? 'مقفل أثناء العرض الموزون' : undefined}
       value={draft ?? (value ? displayAmount(value, fractionDigits) : '')}
-      onFocus={() => { cancelled.current = false; setDraft(value ? String(value) : ''); }}
+      onFocus={() => { if (readOnly) return; cancelled.current = false; setDraft(value ? String(value) : ''); }}
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
@@ -62,7 +67,7 @@ const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; clas
         if (!cancelled.current && next !== value) onChange(next);
       }}
       placeholder={placeholder}
-      className={className}
+      className={readOnly ? `${className} opacity-60 cursor-not-allowed` : className}
     />
   );
 };
@@ -145,6 +150,36 @@ const DescriptionCell: React.FC<{ value: string; onChange: (v: string) => void }
   );
 };
 
+// مفرد الفقرة في العرض الموزون: الجديد بارزاً بشارة، وتحته مفرد ما بعد التصحيح مشطوباً
+const OfferUnitCell: React.FC<{ item: BOQItem; editable: boolean; onChange: (v: number) => void }> = ({ item, editable, onChange }) => {
+  const correctedUnit = item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal;
+  const unit = item.offerUnitPrice ?? correctedUnit;
+  const edited = isOfferEdited(item);
+  const show = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 2);
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <AmountInput value={unit} onChange={onChange} readOnly={!editable} label={`سعر المفرد في العرض الموزون للفقرة ${item.itemNo}`}
+        className={`w-full min-w-[7rem] text-center rounded-lg p-1.5 font-mono font-black text-xs shadow-2xs border ${edited ? 'bg-purple-50 border-purple-400 text-purple-950' : 'bg-white border-indigo-200 text-indigo-950'}`} />
+      {edited && (<>
+        <span className="text-[10px] font-black text-purple-800 bg-purple-100 px-1.5 rounded">معدّل بالعرض الموزون</span>
+        <span className="text-[10px] text-slate-500 line-through font-mono">{show(correctedUnit)}</span>
+      </>)}
+    </div>
+  );
+};
+
+const OfferAmountCell: React.FC<{ item: BOQItem }> = ({ item }) => {
+  const edited = isOfferEdited(item);
+  const total = item.offerTotal ?? item.bidderTotal;
+  const show = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 2);
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className={`font-mono font-black text-xs ${edited ? 'text-purple-950' : 'text-indigo-950'}`}>{show(total)}</span>
+      {edited && <span className="text-[10px] text-slate-500 line-through font-mono">{show(item.bidderTotal)}</span>}
+    </div>
+  );
+};
+
 interface BOQTableProps {
   items: BOQItem[];
   totals?: TenderTotals;
@@ -165,6 +200,14 @@ interface BOQTableProps {
   onOpenSmartImport?: () => void;
   // جدول واقع الحال والجدول المعدل لهذا المجهز في ملف Excel (exportBidderAuditToExcel)
   onExportAudit?: () => void;
+  // العرض الموزون للعطاء النشط: active يُعدَّل فيه المفرد، adopted للعرض فقط، none الجدول العادي
+  offerMode?: 'none' | 'active' | 'adopted';
+  // عطاء آخر في المناقصة عرضه الموزون فعّال: الكمية والتخميني مقفلان (مشتركان)
+  sharedLocked?: boolean;
+  onEditOfferUnit?: (index: number, unit: number) => void;
+  onMarkUnreasonable?: (index: number, note: string | null) => void;
+  onSetItemPage?: (index: number, page: number | undefined) => void;
+  onOpenPageBreaks?: () => void;
 }
 
 export const BOQTable: React.FC<BOQTableProps> = ({
@@ -180,12 +223,20 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onDuplicateItem,
   onClearBidderPrices,
   onOpenSmartImport,
-  onExportAudit
+  onExportAudit,
+  offerMode = 'none',
+  sharedLocked = false,
+  onEditOfferUnit,
+  onMarkUnreasonable,
+  onSetItemPage,
+  onOpenPageBreaks
 }) => {
+  const locked = offerMode !== 'none';
+  const sharedReadOnly = locked || sharedLocked;
   const [searchTerm, setSearchTerm] = useState('');
   // الفقرة التي يُصحَّح نص تفقيطها الآن (بمعرّفها)
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors' | 'notify'>('all');
 
   // ارتفاع شريط الشركة وشريط البحث المثبتين يُقاس فعلياً (قد يلتف اسم شركة طويل أو تلتف المرشِّحات)،
   // لتثبت العناصر تحتهما مباشرة على الشاشات العريضة دون أن تختفي خلفهما
@@ -201,6 +252,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   const mathErrorsCount = items.filter(i => i.hasMathError).length;
   const textErrorsCount = items.filter(i => i.hasTextDiscrepancy).length;
 
+  // فقرات يُبلَّغ بها المجهز: المنحرفة (بالاتجاهين) والمؤشرة «سعر غير معقول» — لمراجعة عطاء كبير بلا تمرير كله
+  const isNotify = (i: BOQItem) => (i.estimatedTotal > 0 && i.isDeviated) || !!i.unreasonablePrice;
+  const notifyCount = items.filter(isNotify).length;
+
   // فلترة الأسطر. الأرقام المشرقية والإنجليزية سيّان في البحث: «24» تجد «كيك ٢٤ قطعة»
   const term = toLatinDigits(searchTerm.toLowerCase());
   const matches = (text: string) => toLatinDigits(text.toLowerCase()).includes(term);
@@ -215,6 +270,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
     if (filterMode === 'deviated') return item.isDeviated;
     if (filterMode === 'savings') return item.diffAmount < 0;
     if (filterMode === 'errors') return item.hasMathError || item.hasTextDiscrepancy;
+    if (filterMode === 'notify') return isNotify(item);
     return true;
   });
 
@@ -238,7 +294,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           {/* مدخل استيراد واحد لكل أنواع الملفات (كان زرّين: Excel/Word، وصورة/PDF): تُختار فيه نوع الجدول
               (المجهز أو الكلفة التخمينية) أولاً، ثم يُوجَّه الملف لمطابقة الأعمدة أو للقراءة بالذكاء الاصطناعي */}
-          {onOpenSmartImport && (
+          {onOpenSmartImport && !locked && (
             <button
               onClick={onOpenSmartImport}
               className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-600 hover:to-blue-600 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-indigo-400/30"
@@ -259,7 +315,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               <span>تصدير الجدول <bdi dir="ltr">(Excel)</bdi></span>
             </button>
           )}
-          {onClearBidderPrices && (
+          {onClearBidderPrices && !locked && (
             <button
               onClick={onClearBidderPrices}
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold px-3.5 py-2 rounded-xl border border-amber-400/30 transition cursor-pointer"
@@ -267,6 +323,13 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>تصفير مبالغ المجهز</span>
+            </button>
+          )}
+          {onOpenPageBreaks && (
+            <button type="button" onClick={onOpenPageBreaks}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-600 transition cursor-pointer"
+              title="إسناد الفقرات إلى صفحات عطاء المجهز كما قدّمه، برقم أول فقرة في كل صفحة">
+              <FileStack className="w-3.5 h-3.5" /> فواصل الصفحات
             </button>
           )}
         </div>
@@ -363,6 +426,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             </button>
 
             <button
+              onClick={() => setFilterMode('notify')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${filterMode === 'notify' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white text-orange-800 border border-orange-200 hover:bg-orange-50'}`}>
+              للتبليغ ({notifyCount})
+            </button>
+
+            <button
               onClick={() => setFilterMode('savings')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                 filterMode === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
@@ -375,7 +444,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           {/* Add Row Button */}
           <button
             onClick={onAddItem}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-4 py-2 rounded-xl shadow-xs transition transform active:scale-95 cursor-pointer"
+            disabled={sharedReadOnly}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-4 py-2 rounded-xl shadow-xs transition transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             <span>+ إضافة فقرة</span>
@@ -398,10 +468,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h)+var(--toolbar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
+                <th className="p-3 w-14 text-center border-l border-slate-800" title="رقم صفحة الفقرة في عطاء المجهز كما قدّمه">ص</th>
                 <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
                 <th className="p-3 w-16 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
-                <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">سعر المفرد للمجهز ✏️</th>
-                <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">مبلغ المجهز الإجمالي 💰</th>
+                <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">{locked ? 'سعر المفرد — العرض الموزون' : 'سعر المفرد للمجهز ✏️'}</th>
+                <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">{locked ? 'مبلغ العرض الموزون' : 'مبلغ المجهز الإجمالي 💰'}</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني ✏️</th>
                 <th className="p-3 min-w-[180px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
                 {hasEstimate && (
@@ -418,7 +489,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <tbody className="divide-y divide-slate-200 bg-white font-medium">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={hasEstimate ? 11 : 8} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
+                  <td colSpan={hasEstimate ? 12 : 9} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
                     <div className="max-w-md mx-auto space-y-2">
                       <p className="text-base text-slate-700 font-black">الجدول فارغ حالياً</p>
                       <p className="text-xs text-slate-500">
@@ -456,6 +527,13 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       />
                     </td>
 
+                    {/* رقم صفحة الفقرة في عطاء المجهز */}
+                    <td className="p-2 text-center border-l border-slate-200 bg-slate-50/50">
+                      <AmountInput value={item.pageNo ?? 0} onChange={(v) => onSetItemPage?.(actualIndex, v > 0 ? Math.round(v) : undefined)}
+                        label={`صفحة الفقرة ${item.itemNo} في العطاء`} placeholder="—"
+                        className="w-12 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-bold text-slate-700 text-xs" />
+                    </td>
+
                     {/* Description */}
                     <td className="p-2 border-l border-slate-200">
                       <DescriptionCell
@@ -473,6 +551,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         label={`كمية الفقرة ${item.itemNo}`}
                         placeholder="1"
                         fractionDigits={2}
+                        readOnly={sharedReadOnly}
                         className="w-14 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
                       />
                     </td>
@@ -482,23 +561,29 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         فيُقص أول الرقم (60000000 كان يظهر 0000) ويبدو كأن القراءة خاطئة.
                         تعديل المفرد تصحيح قراءة لا يمس المبلغ المدون إلا إن كان فارغاً (handleCorrectReading) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/30">
-                      <AmountInput
-                        value={recordedUnitPrice}
-                        onChange={(newUnit) => onCorrectReading(actualIndex, 'unitPrice', newUnit)}
-                        label={`سعر المفرد للفقرة ${item.itemNo}`}
-                        placeholder={derivedUnitPrice > 0 ? displayAmount(derivedUnitPrice) : '0.00'}
-                        className="w-full min-w-[6rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
-                      />
+                      {locked ? (
+                        <OfferUnitCell item={item} editable={offerMode === 'active'} onChange={(v) => onEditOfferUnit?.(actualIndex, v)} />
+                      ) : (
+                        <AmountInput
+                          value={recordedUnitPrice}
+                          onChange={(newUnit) => onCorrectReading(actualIndex, 'unitPrice', newUnit)}
+                          label={`سعر المفرد للفقرة ${item.itemNo}`}
+                          placeholder={derivedUnitPrice > 0 ? displayAmount(derivedUnitPrice) : '0.00'}
+                          className="w-full min-w-[6rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                        />
+                      )}
                     </td>
 
                     {/* Bidder Total Amount (مبلغ المجهز الإجمالي) — تصحيح قراءة؛ مسحه يمسح سعر المفرد معه */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/60 font-mono font-black text-indigo-950 text-xs">
-                      <AmountInput
-                        value={item.bidderTotal}
-                        onChange={(v) => onCorrectReading(actualIndex, 'total', v)}
-                        label={`مبلغ المجهز للفقرة ${item.itemNo}`}
-                        className="w-full min-w-[6rem] text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
-                      />
+                      {locked ? <OfferAmountCell item={item} /> : (
+                        <AmountInput
+                          value={item.bidderTotal}
+                          onChange={(v) => onCorrectReading(actualIndex, 'total', v)}
+                          label={`مبلغ المجهز للفقرة ${item.itemNo}`}
+                          className="w-full min-w-[6rem] text-center bg-white border border-indigo-300 focus:ring-2 focus:ring-indigo-500 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
+                        />
+                      )}
                     </td>
 
                     {/* Estimated Total (المبلغ التخميني) — يُصفَّر المفرد التخميني معه فيعيد calculateBOQMetrics اشتقاقه
@@ -508,6 +593,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         value={item.estimatedTotal}
                         onChange={(v) => onUpdateFields(actualIndex, { estimatedTotal: v, estimatedUnitPrice: 0 })}
                         label={`المبلغ التخميني للفقرة ${item.itemNo}`}
+                        readOnly={sharedReadOnly}
                         className="w-full min-w-[6rem] text-center bg-white border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 rounded-lg p-1.5 font-mono font-black text-blue-900 text-xs shadow-2xs"
                       />
                     </td>
@@ -721,6 +807,25 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           </div>
                         )}
 
+                        {/* تأشير سعر غير معقول: خطأ تسعير لا حسابي، للإحاطة والتبليغ فقط */}
+                        {onMarkUnreasonable && (item.unreasonablePrice ? (
+                          <div className="bg-orange-50 text-orange-900 border border-orange-300 px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-start gap-1">
+                            <Flag className="w-3 h-3 text-orange-600 shrink-0 mt-0.5" />
+                            <span className="flex-1"><strong>سعر غير معقول:</strong> {item.unreasonablePrice.note}</span>
+                            <button type="button" onClick={() => onMarkUnreasonable(actualIndex, null)}
+                              className="shrink-0 px-1 rounded text-orange-700 hover:bg-white cursor-pointer" aria-label={`إزالة تأشير السعر غير المعقول عن الفقرة ${item.itemNo}`}>✕</button>
+                          </div>
+                        ) : (
+                          <button type="button"
+                            onClick={() => {
+                              const note = window.prompt(`ملاحظة اللجنة على سعر الفقرة رقم (${item.itemNo})، مثل: «سعر 10 كغم يساوي سعر 350 غم»`);
+                              if (note && note.trim()) onMarkUnreasonable(actualIndex, note.trim());
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-orange-700 cursor-pointer">
+                            <Flag className="w-3 h-3" /> تأشير سعر غير معقول
+                          </button>
+                        ))}
+
                       </div>
                     </td>
 
@@ -743,6 +848,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     {/* Weighted Unit Price */}
                     <td className="p-2 text-center font-black text-purple-950 border-l border-slate-200 bg-purple-50/20 text-xs font-mono">
                       {item.estimatedTotal > 0 ? formatNumber(item.weightedUnitPrice) : '-'}
+                      {item.weightedAdjustment ? <div className="text-[10px] text-purple-700" title="سُوّي التقريب ليساوي مجموع الأسعار الموزونة مبلغ العطاء">سُوّي التقريب ({item.weightedAdjustment > 0 ? '+' : ''}{item.weightedAdjustment})</div> : null}
                     </td>
 
                     {/* Evaluation Badge */}
@@ -803,14 +909,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             {/* Table Footer Totals */}
             <tfoot className="bg-slate-900 text-white font-black text-xs sticky bottom-0 z-10 shadow-lg">
               <tr>
-                <td colSpan={3} className="p-3 text-center border-l border-slate-800">
+                <td colSpan={4} className="p-3 text-center border-l border-slate-800">
                   المجموع الكلي ({items.length} فقرة)
                 </td>
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-slate-400">
                   -
                 </td>
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-indigo-300 text-xs">
-                  {items.reduce((s, i) => s + i.bidderTotal, 0).toLocaleString()} د.ع
+                  {(locked ? items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0) : items.reduce((s, i) => s + i.bidderTotal, 0)).toLocaleString()} د.ع
                 </td>
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-blue-300 text-xs">
                   {items.reduce((s, i) => s + i.estimatedTotal, 0).toLocaleString()} د.ع
