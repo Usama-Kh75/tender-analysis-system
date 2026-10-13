@@ -76,3 +76,10 @@ test('calculateBOQMetrics: مجموع الأسعار الموزونة = مبلغ
   assert.equal(items[1].weightedAdjustment, 0.01);
   assert.equal(items[0].weightedAdjustment, undefined);
 });
+
+test('فرق كبير تمتصه فقرة كميتها 1 يُغلق ولو تجاوز عدد الجولات', () => {
+  const r = settleWeightedPrices([{ quantity: 10000, estimatedTotal: 50 }, { quantity: 1, estimatedTotal: 100 }], 1, 150);
+  assert.equal(r.residual, 0);
+  assert.equal(r.total, 150);
+  r.rows.forEach((row, k) => assert.equal(cents(row.amount), Math.round([10000, 1][k] * cents(row.unitPrice))));
+});

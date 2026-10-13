@@ -39,6 +39,24 @@ export function settleWeightedPrices(items: WeightedInput[], ratio: number, targ
     if (!progressed) break;
   }
 
+  // جولات الفلس الواحد لا تصل إلى فرق كبير تمتصه فقرات صغيرة الكمية وحدها، فيُمسح الباقي بخطوات أكبر:
+  // كل فقرة تُحرَّك بأكبر عدد من الفلوس لا يتجاوز أثره الباقي (الأكبر كمية أولاً)
+  for (const k of order) {
+    if (residual === 0) break;
+    const step = Math.sign(residual);
+    // النقصان لا يتجاوز المفرد القائم (لا يُنزَّل تحت الصفر)، فلا تطول الحلقة بكميات كسرية صغيرة
+    const most = Math.max(1, Math.floor(Math.abs(residual) / items[k].quantity));
+    for (let take = step < 0 ? Math.min(most, unit[k]) : most; take >= 1; take--) {
+      const delta = Math.round(items[k].quantity * (unit[k] + step * take)) - amount[k];
+      if (delta === 0 || Math.sign(delta) !== step || Math.abs(delta) > Math.abs(residual)) continue;
+      unit[k] += step * take;
+      amount[k] += delta;
+      moved[k] += step * take;
+      residual -= delta;
+      break;
+    }
+  }
+
   return {
     rows: items.map((_, k) => ({ unitPrice: unit[k] / 100, amount: amount[k] / 100, adjustment: moved[k] / 100 })),
     total: amount.reduce((s, c) => s + c, 0) / 100,

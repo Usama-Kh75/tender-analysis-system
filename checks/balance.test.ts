@@ -48,3 +48,8 @@ test('صفوف الطبقتين: المصحح من bidderTotal، والعرض م
   assert.deepEqual(correctedBalanceRows(items).map(r => r.amount), [130, 90]);
   assert.deepEqual(offerBalanceRows(items).map(r => r.amount), [110, 90]);
 });
+
+test('الانحراف الكلي بدقته الكاملة: 10.004% عن حد 10% يُستبعد كما في isCommerciallyExcluded', () => {
+  const a = assessBalance([{ description: 'مادة', estimatedTotal: 100000, amount: 110004 }], 10);
+  assert.equal(a.verdict, 'excluded');
+});

@@ -38,8 +38,8 @@ export function assessBalance(rows: BalanceRow[], threshold: number): BalanceAss
   const counted = rows.filter(r => !isPlaceholder(r));
   const est = counted.reduce((s, r) => s + r.estimatedTotal, 0);
   const amt = counted.reduce((s, r) => s + r.amount, 0);
-  // مقرّب كما في totals.totalDeviationPercent الذي يستعمله isCommerciallyExcluded، فلا يختلف الحكمان عند الحد
-  const totalDeviationPercent = est > 0 ? round2(((amt - est) / est) * 100) : 0;
+  // بست منازل كما في totals.totalDeviationPercent الذي يستعمله isCommerciallyExcluded: 10.004% لا تساوي 10%، فلا يختلف الحكمان عند الحد
+  const totalDeviationPercent = est > 0 ? Math.round(((amt - est) / est) * 100 * 1e6) / 1e6 : 0;
   const deviation = (r: BalanceRow) => ((r.amount - r.estimatedTotal) / r.estimatedTotal) * 100;
   const withEstimate = counted.filter(r => r.estimatedTotal > 0);
   const unbalancedCount = withEstimate.filter(r => deviation(r) > threshold).length;
