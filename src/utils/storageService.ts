@@ -283,24 +283,42 @@ export interface RecoveredData {
   raw: string;
 }
 
-export function getRecoveredData(): RecoveredData[] {
+// ما تعذّر حفظه في التخزين (امتلاء/حظر) يُبقى في الذاكرة ليُنزَّل، ويُوقَف الحفظ ما دامت النسخة الوحيدة
+// هي النص الأصلي: حفظ قائمة المشاريع فوقه كان سيُتلفه دون نسخة
+let memoryRecovered: RecoveredData[] = [];
+let saveBlocked = false;
+
+export const isSaveBlocked = (): boolean => saveBlocked;
+
+function storedRecovered(): RecoveredData[] {
   try {
     const list = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
     return Array.isArray(list) ? list : [];
   } catch { return []; }
 }
 
+export function getRecoveredData(): RecoveredData[] {
+  return [...storedRecovered(), ...memoryRecovered];
+}
+
+// يُستدعى بعد أن نزّل المستخدم النسخة أو تجاهلها: يُستأنف الحفظ العادي
 export function clearRecoveredData(): void {
+  memoryRecovered = [];
+  saveBlocked = false;
   try { localStorage.removeItem(RECOVERY_KEY); } catch { /* تخزين محظور: لا شيء */ }
 }
 
 function stashRecovered(raw: string, reason: string): void {
+  const entry: RecoveredData = { at: new Date().toISOString(), reason, raw };
   try {
-    const list = getRecoveredData();
+    const list = storedRecovered();
     if (list.some(e => e.raw === raw)) return; // القراءة تتكرر في الجلسة نفسها
-    list.push({ at: new Date().toISOString(), reason, raw });
+    list.push(entry);
     localStorage.setItem(RECOVERY_KEY, JSON.stringify(list.slice(-RECOVERY_LIMIT)));
-  } catch { /* الامتلاء لا يمنع التحميل، لكن تبقى البيانات الأصلية دون كتابة فوقها */ }
+  } catch {
+    if (!memoryRecovered.some(e => e.raw === raw)) memoryRecovered.push(entry);
+    saveBlocked = true;
+  }
 }
 
 const looksLikeProject = (p: unknown): p is TenderProject =>
@@ -349,6 +367,7 @@ export function getAllProjects(): TenderProject[] {
 }
 
 export function saveAllProjects(projects: TenderProject[]): void {
+  if (saveBlocked) return; // انظر stashRecovered: النص الأصلي لم تُحفظ له نسخة بعد
   localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
 }
 

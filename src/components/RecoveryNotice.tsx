@@ -4,19 +4,23 @@ import { RecoveredData } from '../utils/storageService';
 
 interface RecoveryNoticeProps {
   entries: RecoveredData[];
+  /** تعذّر حفظ النسخة في المتصفح: الحفظ موقوف حتى تُنزَّل وتُغلق */
+  saveBlocked: boolean;
   onDownload: () => void;
   onDismiss: () => void;
 }
 
 // بيانات محفوظة تعذّرت قراءتها عند التحميل: حُفظت جانباً بدل الكتابة فوقها، ويُنزَّل نصها ليُفحص أو يُرسل للدعم
-export const RecoveryNotice: React.FC<RecoveryNoticeProps> = ({ entries, onDownload, onDismiss }) => {
+export const RecoveryNotice: React.FC<RecoveryNoticeProps> = ({ entries, saveBlocked, onDownload, onDismiss }) => {
   if (entries.length === 0) return null;
   return (
     <div role="alert" className="bg-amber-50 border-b border-amber-300 text-amber-900 px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
       <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
       <p className="flex-1 min-w-[16rem] font-semibold">
-        تعذّرت قراءة بعض بيانات المناقصات المحفوظة ({entries[entries.length - 1].reason}). لم تُحذف: حُفظت نسخة منها
-        في المتصفح، فنزّلها قبل أي تعديل إن احتجت استرجاعها.
+        تعذّرت قراءة بعض بيانات المناقصات المحفوظة ({entries[entries.length - 1].reason}).{' '}
+        {saveBlocked
+          ? 'تعذّر حفظ نسخة منها في المتصفح لضيق مساحته، فأُوقف الحفظ حتى لا تُتلف: نزّل النسخة ثم اضغط ✕ ليُستأنف.'
+          : 'لم تُحذف: حُفظت نسخة منها في المتصفح، فنزّلها قبل أي تعديل إن احتجت استرجاعها.'}
       </p>
       <button
         type="button"

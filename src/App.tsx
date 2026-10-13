@@ -3,6 +3,7 @@ import {
   getAllProjects,
   getRecoveredData,
   clearRecoveredData,
+  isSaveBlocked,
   RecoveredData,
   saveAllProjects,
   getActiveProjectId,
@@ -181,6 +182,7 @@ export function App() {
   const recoveryNotice = (
     <RecoveryNotice
       entries={recovered}
+      saveBlocked={isSaveBlocked()}
       onDownload={downloadRecovered}
       onDismiss={() => { clearRecoveredData(); setRecovered([]); }}
     />
