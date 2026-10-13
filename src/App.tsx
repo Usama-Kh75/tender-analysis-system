@@ -38,6 +38,8 @@ import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
+import { PageBreaksModal } from './components/modals/PageBreaksModal';
+import { PageSummaryTable } from './components/PageSummaryTable';
 import { PrintReportModal } from './components/modals/PrintReportModal';
 import { NewProjectModal } from './components/modals/NewProjectModal';
 import { ProjectsBrowserModal } from './components/modals/ProjectsBrowserModal';
@@ -1557,6 +1559,12 @@ export function App() {
               onSetItemPage={handleSetItemPage}
               onOpenPageBreaks={() => setIsPageBreaksOpen(true)}
             />
+            <div className="mt-4">
+              <PageSummaryTable items={activeBidder.items}
+                showOffer={!!activeBidder.weightedOffer && activeBidder.weightedOffer.status !== 'paused'}
+                offerFinal={activeBidder.weightedOffer?.status === 'adopted' && !offerStatus(activeBidder)?.stale}
+                onOpenPageBreaks={() => setIsPageBreaksOpen(true)} />
+            </div>
             </>
           ) : activeTab === 'summary' ? (
             <ExecutiveSummaryView
@@ -1640,6 +1648,16 @@ export function App() {
         isOpen={isAuditOpen}
         onClose={() => setIsAuditOpen(false)}
         logs={currentProject.auditLogs || []}
+      />
+
+      <PageBreaksModal
+        // يُعاد تهيئة الحقول مع كل فتح ومع كل مجهز، كما في ProjectSettingsModal
+        key={`${activeBidder.id}-${isPageBreaksOpen}`}
+        isOpen={isPageBreaksOpen}
+        onClose={() => setIsPageBreaksOpen(false)}
+        items={activeBidder.items}
+        bidderName={activeBidder.name}
+        onApply={handleApplyPageBreaks}
       />
 
       <ProjectSettingsModal
