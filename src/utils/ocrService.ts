@@ -192,10 +192,11 @@ const GEMINI_RESPONSE_SCHEMA = {
           unitPrice: { type: 'NUMBER', nullable: true },
           total: { type: 'NUMBER', nullable: true },
           writtenText: { type: 'STRING', nullable: true },
-          unpriced: { type: 'BOOLEAN' }
+          unpriced: { type: 'BOOLEAN' },
+          page: { type: 'INTEGER', nullable: true }
         },
         required: ['description', 'unpriced'],
-        propertyOrdering: ['itemNo', 'description', 'unit', 'quantity', 'unitPrice', 'total', 'writtenText', 'unpriced']
+        propertyOrdering: ['itemNo', 'description', 'unit', 'quantity', 'unitPrice', 'total', 'writtenText', 'unpriced', 'page']
       }
     },
     grandTotal: { type: 'NUMBER', nullable: true },
@@ -207,7 +208,7 @@ const GEMINI_RESPONSE_SCHEMA = {
 
 const geminiPrompt = (pages: number) => `أنت مدقق جداول كميات في عطاءات حكومية. الصور المرفقة (${pages}) صفحات متتالية من عطاء واحد، بترتيبها.
 استخرج كل فقرات جدول الكميات من كل الصفحات بالترتيب، وأعد كائن JSON فقط بهذا الشكل دون أي شرح:
-{"items":[{"itemNo":"1.15","description":"Male Plug","unit":"NOS","quantity":6,"unitPrice":396000,"total":2376000,"writtenText":null,"unpriced":false}],"grandTotal":312000000,"grandTotalText":null}
+{"items":[{"itemNo":"1.15","description":"Male Plug","unit":"NOS","quantity":6,"unitPrice":396000,"total":2376000,"writtenText":null,"unpriced":false,"page":1}],"grandTotal":312000000,"grandTotalText":null}
 
 القواعد:
 1. description: وصف الفقرة كاملاً كما هو مكتوب بلغته الأصلية (عربي أو إنجليزي أو مختلط)، دون ترجمة ولا اختصار.
@@ -217,7 +218,8 @@ const geminiPrompt = (pages: number) => `أنت مدقق جداول كميات �
 5. إذا تعذّرت قراءة رقم فاجعله null مع unpriced=false. لا تخمّن رقماً ولا تحسبه بنفسك: انقل المكتوب في العطاء كما هو حتى لو بدا خاطئاً حسابياً.
 6. الأرقام أرقام JSON بلا فواصل آلاف ولا عملة. quantity هي الرقم وحده من خانة الكمية (مثلاً "NOS 6" تعني 6، و"Set 1" تعني 1)، وunit هي الوحدة نصاً.
 7. itemNo رقم الفقرة نصاً كما هو مكتوب (مثل "1.15" أو "2.0")، وnull إن لم يوجد.
-8. writtenText: مبلغ الفقرة المكتوب كتابةً (التفقيط) إن وجد، وإلا null.`;
+8. writtenText: مبلغ الفقرة المكتوب كتابةً (التفقيط) إن وجد، وإلا null.
+9. page: رقم الصورة (الصفحة) التي يبدأ فيها صف الفقرة بين الصور المرفقة، بالترتيب من 1.`;
 
 interface GeminiRawResult {
   rows: any[];
@@ -282,7 +284,20 @@ export function mergeContinuationRows(rows: any[]): any[] {
   return merged;
 }
 
-function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
+/**
+ * رقم صفحة كل صف في الملف كله: النموذج يرى صور الدفعة وحدها فيعيد ترتيب الصورة داخلها (من 1)، فيُضاف موضع
+ * أول صفحاتها. رقم خارج الدفعة أو غير صحيح لا يُسنَد (يبقى بلا صفحة ظاهراً في الملخص بدل صفحة خاطئة)
+ */
+export function attachPages(rows: any[], start: number, count: number): any[] {
+  return rows.map(r => {
+    const p = typeof r?.page === 'string' ? Number(r.page) : r?.page;
+    const ok = Number.isInteger(p) && p >= 1 && p <= count;
+    const { page: _page, ...rest } = r ?? {};
+    return { ...rest, __page: ok ? start + p : undefined };
+  });
+}
+
+export function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
   const itemNo = isBlank(r?.itemNo) ? idx + 1 : normalizeItemNo(String(r.itemNo).trim());
   const description = isBlank(r?.description) ? `فقرة ${itemNo}` : String(r.description).trim();
   const unit = isBlank(r?.unit) ? 'عدد' : String(r.unit).trim();
@@ -310,7 +325,8 @@ function mapGeminiRow(r: any, idx: number): Partial<BOQItem> {
     writtenText,
     hasMathError: isMathError,
     hasTextDiscrepancy: isTextDiscrepancy,
-    unpriced: unpriced || undefined
+    unpriced: unpriced || undefined,
+    pageNo: typeof r?.__page === 'number' ? r.__page : undefined
   };
 }
 
@@ -471,7 +487,8 @@ export async function extractBOQWithGeminiVision(
   const readBatch = async (imgs: string[], label: string, start: number): Promise<GeminiRawResult> => {
     const reading = { start, count: imgs.length };
     const r = await requestGeminiRows(imgs, cleanKey, models, s => onProgress?.(percent, `${label}: ${s}`, reading));
-    if (!r.truncated) return r;
+    // الصفحات تُسند هنا عند أصغر دفعة قُرئت فعلاً، فلا تتضاعف الإزاحة بعد تقسيم دفعة مقطوعة
+    if (!r.truncated) return { ...r, rows: attachPages(r.rows, start, imgs.length) };
     if (imgs.length === 1) {
       throw new Error('رد النموذج على هذه الصفحة طويل جداً فقُطع قبل اكتماله.');
     }
