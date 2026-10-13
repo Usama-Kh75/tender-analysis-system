@@ -580,6 +580,7 @@ export function App() {
   const handleAdoptTafqeetThousands = (index: number, correctedText: string) => {
     const before = activeBidder.items[index];
     if (!before?.writtenText || !correctedText) return;
+    if (blockedByOffer({ bidderId: activeBidder.id })) return;
     const updatedRaw = [...activeBidder.items];
     updatedRaw[index] = {
       ...before,
@@ -796,7 +797,12 @@ export function App() {
         ...source,
         id: dupId,
         itemNo: `${source.itemNo} (مكرر)`,
-        description: `${source.description} (نسخة)`
+        description: `${source.description} (نسخة)`,
+        // صف جديد في آخر الجدول: لا صفحة لمصدره ولا تأشير اللجنة عليه ولا تعديل عرضه الموزون
+        pageNo: undefined,
+        unreasonablePrice: undefined,
+        offerUnitPrice: undefined,
+        offerTotal: undefined
       };
 
       const updatedRaw = [...b.items, dup];
@@ -1228,8 +1234,13 @@ export function App() {
 
   // Save Settings
   const handleSaveSettings = (updated: Partial<TenderProject>) => {
-    const threshold = updated.deviationThreshold ?? currentProject.deviationThreshold;
-    
+    // الحد يغيّر حكم التوازن (سادساً/5) والاستبعاد، فلا يتغيّر بصمت تحت عرض موزون فعّال أو معتمد؛ باقي الإعدادات تُحفظ
+    const requested = updated.deviationThreshold ?? currentProject.deviationThreshold;
+    const lockReason = requested !== currentProject.deviationThreshold ? offerLockReason(currentProject, { shared: true }) : null;
+    if (lockReason) window.alert(`لم يُغيَّر حد الانحراف (بقي ${currentProject.deviationThreshold}%): تغييره يعيد حكم توازن العطاءات.
+${lockReason}`);
+    const threshold = lockReason ? currentProject.deviationThreshold : requested;
+
     const recalculatedBidders = currentProject.bidders.map(b => {
       const recalc = calculateBOQMetrics(b.items, threshold);
       return {
@@ -1242,6 +1253,7 @@ export function App() {
     let updatedProj: TenderProject = {
       ...currentProject,
       ...updated,
+      deviationThreshold: threshold,
       bidders: recalculatedBidders,
       updatedAt: new Date().toISOString()
     };

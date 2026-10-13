@@ -1,4 +1,5 @@
 import type { BOQItem } from '../types/tender';
+import { toLatinDigits } from './calculations';
 
 /**
  * صفحات عطاء المجهز كما قدّمه: رقم صفحة لكل فقرة (pageNo، لكل مجهز ترقيمه)، وملخص بمبلغ كل صفحة في الطبقات
@@ -7,7 +8,8 @@ import type { BOQItem } from '../types/tender';
  */
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
-const key = (v: unknown) => String(v ?? '').trim();
+// الأرقام الهندية تُطابق اللاتينية: «٢٧» تُصيب الفقرة 27 وتُقبل رقماً للصفحة
+const key = (v: unknown) => toLatinDigits(String(v ?? '').trim());
 
 /** أرقام أول فقرة في كل صفحة (كما أدخلتها اللجنة) إلى مواضع في الجدول، أو سبب الرفض */
 export function resolvePageStarts(items: BOQItem[], itemNos: string[]): { starts: number[] } | { error: string } {

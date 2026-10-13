@@ -5,7 +5,7 @@ import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits, percentDecimals } from './calculations';
 import { summarizePages } from './pageSummary';
-import { isOfferEdited } from './weightedOffer';
+import { isOfferEdited, offerStatus } from './weightedOffer';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -455,7 +455,8 @@ function buildPagesSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet
   const pages = summarizePages(bidder.items);
   if (!pages) return null;
   const hasOffer = !!bidder.weightedOffer && bidder.weightedOffer.status !== 'paused';
-  const final = bidder.weightedOffer?.status === 'adopted';
+  // معتمد ولم يتغيّر مبلغ العطاء بعده، كما في المحضر (offerFinal): المتقادم غير نهائي
+  const final = bidder.weightedOffer?.status === 'adopted' && !offerStatus(bidder)?.stale;
   const last = FIRST + pages.rows.length - 1;
   const data: Cell[][] = pages.rows.map(r => [
     r.page === null ? 'فقرات بلا صفحة' : count(r.page), count(r.itemCount), amount(r.stated), amount(r.corrected),
