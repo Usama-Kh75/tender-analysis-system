@@ -1,0 +1,74 @@
+import type { BOQItem } from '../types/tender';
+
+/**
+ * صفحات عطاء المجهز كما قدّمه: رقم صفحة لكل فقرة (pageNo، لكل مجهز ترقيمه)، وملخص بمبلغ كل صفحة في الطبقات
+ * الثلاث (كما دوّنه المجهز، بعد التصحيح الحسابي، العرض الموزون). مجموع الصفحات يساوي مجموع العطاء دائماً:
+ * الفقرات بلا صفحة صف مستقل لا تُسقط
+ */
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+const key = (v: unknown) => String(v ?? '').trim();
+
+/** أرقام أول فقرة في كل صفحة (كما أدخلتها اللجنة) إلى مواضع في الجدول، أو سبب الرفض */
+export function resolvePageStarts(items: BOQItem[], itemNos: string[]): { starts: number[] } | { error: string } {
+  const wanted = itemNos.map(key);
+  if (wanted.length === 0 || wanted.some(n => !n)) return { error: 'أدخل رقم أول فقرة لكل صفحة.' };
+  const starts: number[] = [];
+  for (let p = 0; p < wanted.length; p++) {
+    const from = p === 0 ? 0 : starts[p - 1] + 1;
+    const idx = items.findIndex((it, i) => i >= from && key(it.itemNo) === wanted[p]);
+    if (idx === -1) {
+      const exists = items.some(it => key(it.itemNo) === wanted[p]);
+      return { error: exists
+        ? `الصفحة (${p + 1}): الفقرة (${wanted[p]}) يجب أن تأتي بعد أول فقرة في الصفحة (${p}).`
+        : `الصفحة (${p + 1}): لا توجد فقرة رقمها (${wanted[p]}) في الجدول.` };
+    }
+    starts.push(idx);
+  }
+  return { starts };
+}
+
+/** رقم صفحة كل فقرة من مواضع بدايات الصفحات. الصفحة الأولى تبدأ من أول فقرة دائماً */
+export function pagesFromStarts(itemCount: number, starts: number[]): (number | undefined)[] {
+  const s = [0, ...starts.slice(1)];
+  return Array.from({ length: itemCount }, (_, i) => s.filter(x => x <= i).length);
+}
+
+/** أرقام أول فقرة لكل صفحة مسندة حالياً، لتعبئة نافذة فواصل الصفحات */
+export function startItemNos(items: BOQItem[]): string[] {
+  const seen = new Set<number>();
+  const out: { page: number; itemNo: string }[] = [];
+  items.forEach(it => {
+    if (it.pageNo !== undefined && !seen.has(it.pageNo)) {
+      seen.add(it.pageNo);
+      out.push({ page: it.pageNo, itemNo: key(it.itemNo) });
+    }
+  });
+  return out.sort((a, b) => a.page - b.page).map(x => x.itemNo);
+}
+
+export interface PageSummaryRow { page: number | null; itemCount: number; stated: number; corrected: number; offer: number }
+export interface PageSummary { rows: PageSummaryRow[]; totals: { stated: number; corrected: number; offer: number }; unassigned: number }
+
+export function summarizePages(items: BOQItem[]): PageSummary | null {
+  if (!items.some(i => i.pageNo !== undefined)) return null;
+  const groups = new Map<number | null, PageSummaryRow>();
+  items.forEach(i => {
+    const page = i.pageNo ?? null;
+    const row = groups.get(page) ?? { page, itemCount: 0, stated: 0, corrected: 0, offer: 0 };
+    row.itemCount += 1;
+    row.stated += i.enteredBidderTotal || i.bidderTotal;
+    row.corrected += i.bidderTotal;
+    row.offer += i.offerTotal ?? i.bidderTotal;
+    groups.set(page, row);
+  });
+  const rows = [...groups.values()]
+    .map(r => ({ ...r, stated: round2(r.stated), corrected: round2(r.corrected), offer: round2(r.offer) }))
+    .sort((a, b) => (a.page ?? Infinity) - (b.page ?? Infinity));
+  const sum = (f: 'stated' | 'corrected' | 'offer') => round2(rows.reduce((s, r) => s + r[f], 0));
+  return {
+    rows,
+    totals: { stated: sum('stated'), corrected: sum('corrected'), offer: sum('offer') },
+    unassigned: groups.get(null)?.itemCount ?? 0
+  };
+}
