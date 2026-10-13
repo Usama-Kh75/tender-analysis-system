@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, Play, Pause, CheckCircle2, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Scale, AlertTriangle } from 'lucide-react';
 import type { Bidder } from '../types/tender';
 import { formatNumber } from '../utils/calculations';
 import {
@@ -10,14 +10,11 @@ import {
 interface Props {
   bidder: Bidder;
   threshold: number;
-  onStart: (origin: 'corrected' | 'formula' | 'resume') => void;
-  onPause: () => void;
-  onAdopt: () => void;
-  onUnadopt: () => void;
 }
 
-// حكم التوازن (سادساً/5) ومرحلة العرض الموزون للعطاء النشط: البدء، الشريط الحي، الاعتماد
-export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, onStart, onPause, onAdopt, onUnadopt }) => {
+// حكم التوازن (سادساً/5) ومرحلة العرض الموزون للعطاء النشط: بطاقة معلومات فوق الجدول. أزرار البدء والاعتماد
+// والإيقاف في شريط الشركة المثبت (WeightedOfferControl) فلا تتكرر هنا
+export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold }) => {
   const balance = assessBalance(correctedBalanceRows(bidder.items), threshold);
   const offer = bidder.weightedOffer;
   const status = offerStatus(bidder);
@@ -28,7 +25,6 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, onStart, 
   const verdictTone = balance.verdict === 'excluded' ? 'border-rose-300 bg-rose-50 text-rose-950'
     : balance.verdict === 'weighting-required' ? 'border-amber-300 bg-amber-50 text-amber-950'
     : 'border-emerald-300 bg-emerald-50 text-emerald-950';
-  const btn = 'flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
 
   return (
     <div className={`rounded-3xl border-2 p-4 space-y-3 ${verdictTone}`}>
@@ -45,21 +41,6 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, onStart, 
           </div>
         </div>
 
-        {(!offer || offer.status === 'paused') && balance.verdict !== 'excluded' && (
-          <div className="flex flex-wrap items-center gap-2">
-            {offer?.status === 'paused' && (
-              <button className={`${btn} bg-purple-700 hover:bg-purple-800 text-white`} disabled={!!blocker} title={blocker ?? ''} onClick={() => onStart('resume')}>
-                <Play className="w-3.5 h-3.5" /> استئناف العرض الموزون
-              </button>
-            )}
-            <button className={`${btn} bg-white hover:bg-purple-50 text-purple-900 border border-purple-400`} disabled={!!blocker} title={blocker ?? 'تبدأ بأسعار العطاء بعد التصحيح، ثم تُعدَّل الفقرات التي غيّرها المجهز في جدوله المعدل'} onClick={() => onStart('corrected')}>
-              <Play className="w-3.5 h-3.5" /> بدء العرض الموزون من أسعار العطاء
-            </button>
-            <button className={`${btn} bg-white hover:bg-purple-50 text-purple-900 border border-purple-400`} disabled={!!blocker} title={blocker ?? 'كل فقرة = مبلغها التخميني × النسبة السعرية، مع تسوية التقريب (نص سادساً/5)'} onClick={() => onStart('formula')}>
-              <Play className="w-3.5 h-3.5" /> بدء العرض الموزون بالمعادلة
-            </button>
-          </div>
-        )}
       </div>
 
       {Math.abs(bidder.totals.weightedRoundingResidual ?? 0) >= 0.005 && (
@@ -71,8 +52,11 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, onStart, 
       {blocker && (!offer || offer.status === 'paused') && balance.verdict !== 'excluded' && (
         <div className="text-xs font-bold">{blocker}</div>
       )}
-      {!offer && balance.verdict === 'accept-as-is' && (
-        <div className="text-[11px] font-bold opacity-80">إعداد العرض الموزون هنا اختياري بقرار اللجنة؛ النص يقبل مبلغ العطاء كما هو.</div>
+      {(!offer || offer.status === 'paused') && balance.verdict !== 'excluded' && !blocker && (
+        <div className="text-[11px] font-bold opacity-80">
+          {balance.verdict === 'accept-as-is' ? 'إعداد العرض الموزون اختياري بقرار اللجنة؛ النص يقبل مبلغ العطاء كما هو. ' : ''}
+          يبدأ من زر «العرض الموزون» في شريط الشركة أعلاه.
+        </div>
       )}
 
       {offer && offer.status !== 'paused' && status && (
@@ -81,21 +65,6 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, onStart, 
             <div className="font-black text-sm">
               {offer.status === 'adopted' ? '✓ العرض الموزون معتمد' : 'مرحلة العرض الموزون — أرقام العطاء مقفلة'}
               <span className="text-xs font-bold opacity-70"> ({offer.origin === 'formula' ? 'بالمعادلة' : 'من أسعار العطاء'})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {offer.status === 'active' ? (
-                <button className={`${btn} bg-emerald-700 hover:bg-emerald-800 text-white`} disabled={!status.canAdopt} onClick={onAdopt}
-                  title={status.canAdopt ? '' : 'يُعتمد حين يساوي مجموع العرض مبلغ العطاء تماماً'}>
-                  <CheckCircle2 className="w-3.5 h-3.5" /> اعتماد العرض الموزون
-                </button>
-              ) : (
-                <button className={`${btn} bg-white text-purple-900 border border-purple-400`} onClick={onUnadopt}>
-                  <RotateCcw className="w-3.5 h-3.5" /> إلغاء الاعتماد
-                </button>
-              )}
-              <button className={`${btn} bg-white text-slate-700 border border-slate-300`} onClick={onPause}>
-                <Pause className="w-3.5 h-3.5" /> إيقاف المرحلة
-              </button>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">

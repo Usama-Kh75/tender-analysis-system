@@ -12,8 +12,7 @@ import {
   Search,
   Pencil,
   Download,
-  Flag,
-  FileStack
+  Flag
 } from 'lucide-react';
 import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
@@ -206,8 +205,8 @@ interface BOQTableProps {
   sharedLocked?: boolean;
   onEditOfferUnit?: (index: number, unit: number) => void;
   onMarkUnreasonable?: (index: number, note: string | null) => void;
-  onSetItemPage?: (index: number, page: number | undefined) => void;
-  onOpenPageBreaks?: () => void;
+  // مدخل العرض الموزون (زر البدء ثم السطر الحي) يُرسم في شريط الشركة المثبت ليبقى ظاهراً أثناء التمرير
+  offerControl?: React.ReactNode;
 }
 
 export const BOQTable: React.FC<BOQTableProps> = ({
@@ -228,8 +227,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   sharedLocked = false,
   onEditOfferUnit,
   onMarkUnreasonable,
-  onSetItemPage,
-  onOpenPageBreaks
+  offerControl
 }) => {
   const locked = offerMode !== 'none';
   const sharedReadOnly = locked || sharedLocked;
@@ -287,6 +285,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
         {/* أدوات إدخال البيانات: بجانب اسم الشركة ليرى المستخدم إلى أي جدول تذهب البيانات قبل الضغط */}
         <div className="flex items-center gap-2 flex-wrap">
+          {offerControl}
           {/* مدخل استيراد واحد لكل أنواع الملفات (كان زرّين: Excel/Word، وصورة/PDF): تُختار فيه نوع الجدول
               (المجهز أو الكلفة التخمينية) أولاً، ثم يُوجَّه الملف لمطابقة الأعمدة أو للقراءة بالذكاء الاصطناعي */}
           {onOpenSmartImport && !locked && (
@@ -318,13 +317,6 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>تصفير مبالغ المجهز</span>
-            </button>
-          )}
-          {onOpenPageBreaks && (
-            <button type="button" onClick={onOpenPageBreaks}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold px-3.5 py-2 rounded-xl border border-slate-600 transition cursor-pointer"
-              title="إسناد الفقرات إلى صفحات عطاء المجهز كما قدّمه، برقم أول فقرة في كل صفحة">
-              <FileStack className="w-3.5 h-3.5" /> فواصل الصفحات
             </button>
           )}
         </div>
@@ -457,13 +449,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h)+var(--toolbar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
-                <th className="py-3 px-1 w-8 text-center border-l border-slate-800" title="رقم صفحة الفقرة في عطاء المجهز كما قدّمه">ص</th>
-                <th className="p-3 min-w-[120px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
+                <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
                 <th className="p-3 w-16 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">{locked ? 'سعر المفرد — العرض الموزون' : 'سعر المفرد للمجهز ✏️'}</th>
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">{locked ? 'مبلغ العرض الموزون' : 'مبلغ المجهز الإجمالي 💰'}</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني ✏️</th>
-                <th className="p-3 min-w-[150px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
+                <th className="p-3 min-w-[180px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
                 {hasEstimate && (
                   <>
                     <th className="p-3 w-28 text-center border-l border-slate-800">نسبة الانحراف %</th>
@@ -471,14 +462,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     <th className="p-3 w-28 text-center border-l border-slate-800">التقييم</th>
                   </>
                 )}
-                <th className="p-3 w-12 text-center">حذف</th>
+                <th className="p-3 w-16 text-center">حذف</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200 bg-white font-medium">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={hasEstimate ? 12 : 9} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
+                  <td colSpan={hasEstimate ? 11 : 8} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
                     <div className="max-w-md mx-auto space-y-2">
                       <p className="text-base text-slate-700 font-black">الجدول فارغ حالياً</p>
                       <p className="text-xs text-slate-500">
@@ -514,13 +505,6 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         onChange={(e) => onUpdateItem(actualIndex, 'itemNo', toLatinDigits(e.target.value))}
                         className="w-full min-w-[3rem] text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
                       />
-                    </td>
-
-                    {/* رقم صفحة الفقرة في عطاء المجهز */}
-                    <td className="px-1 py-2 text-center border-l border-slate-200 bg-slate-50/50">
-                      <AmountInput value={item.pageNo ?? 0} onChange={(v) => onSetItemPage?.(actualIndex, v > 0 ? Math.round(v) : undefined)}
-                        label={`صفحة الفقرة ${item.itemNo} في العطاء`} placeholder="—"
-                        className="w-8 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-bold text-slate-700 text-xs" />
                     </td>
 
                     {/* Description */}
@@ -898,7 +882,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             {/* Table Footer Totals */}
             <tfoot className="bg-slate-900 text-white font-black text-xs sticky bottom-0 z-10 shadow-lg">
               <tr>
-                <td colSpan={4} className="p-3 text-center border-l border-slate-800">
+                <td colSpan={3} className="p-3 text-center border-l border-slate-800">
                   المجموع الكلي ({items.length} فقرة)
                 </td>
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-slate-400">

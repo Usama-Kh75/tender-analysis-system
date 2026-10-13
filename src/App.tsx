@@ -30,6 +30,7 @@ import { Navbar } from './components/Navbar';
 import { KPIStatsCards } from './components/KPIStatsCards';
 import { BOQTable } from './components/BOQTable';
 import { WeightedOfferBar } from './components/WeightedOfferBar';
+import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
 
@@ -706,14 +707,6 @@ export function App() {
       note ? `أُشّر سعر الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) غير معقول: ${note}`
         : `أُزيل تأشير السعر غير المعقول عن الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name})`,
       { itemNo: before.itemNo, oldValue: before.unreasonablePrice?.note, newValue: note ?? undefined });
-  };
-
-  const handleSetItemPage = (index: number, page: number | undefined) => {
-    const before = activeBidder.items[index];
-    if (!before || before.pageNo === page) return;
-    commitBidder(activeBidder.id, b => ({ ...b, items: b.items.map((it, i) => i === index ? { ...it, pageNo: page } : it) }),
-      'تعديل صفحة فقرة', `صفحة الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) من (${before.pageNo ?? '—'}) إلى (${page ?? '—'})`,
-      { itemNo: before.itemNo, oldValue: before.pageNo, newValue: page });
   };
 
   const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
@@ -1546,8 +1539,7 @@ export function App() {
             <>
             {hasBidAmounts(activeBidder) && (
               <div className="mb-4">
-                <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold}
-                  onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
+                <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} />
               </div>
             )}
             <BOQTable
@@ -1575,8 +1567,10 @@ export function App() {
               sharedLocked={currentProject.bidders.some(isOfferLocked)}
               onEditOfferUnit={handleEditOfferUnit}
               onMarkUnreasonable={handleMarkUnreasonable}
-              onSetItemPage={handleSetItemPage}
-              onOpenPageBreaks={() => setIsPageBreaksOpen(true)}
+              offerControl={hasBidAmounts(activeBidder) ? (
+                <WeightedOfferControl bidder={activeBidder} threshold={currentProject.deviationThreshold}
+                  onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
+              ) : undefined}
             />
             <div className="mt-4">
               <PageSummaryTable items={activeBidder.items}
