@@ -45,7 +45,8 @@ export function settleWeightedPrices(items: WeightedInput[], ratio: number, targ
     if (residual === 0) break;
     const step = Math.sign(residual);
     // النقصان لا يتجاوز المفرد القائم (لا يُنزَّل تحت الصفر)، فلا تطول الحلقة بكميات كسرية صغيرة
-    const most = Math.max(1, Math.floor(Math.abs(residual) / items[k].quantity));
+    // +1: المبلغ يُقرَّب (Math.round)، فقد لا يبلغ الباقي إلا بخطوة تزيد على القسمة الصحيحة
+    const most = Math.max(1, Math.ceil(Math.abs(residual) / items[k].quantity) + 1);
     for (let take = step < 0 ? Math.min(most, unit[k]) : most; take >= 1; take--) {
       const delta = Math.round(items[k].quantity * (unit[k] + step * take)) - amount[k];
       if (delta === 0 || Math.sign(delta) !== step || Math.abs(delta) > Math.abs(residual)) continue;

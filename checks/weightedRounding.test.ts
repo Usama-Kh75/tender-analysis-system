@@ -83,3 +83,9 @@ test('فرق كبير تمتصه فقرة كميتها 1 يُغلق ولو تج�
   assert.equal(r.total, 150);
   r.rows.forEach((row, k) => assert.equal(cents(row.amount), Math.round([10000, 1][k] * cents(row.unitPrice))));
 });
+
+test("كمية كسرية: الباقي يُغلق بخطوة أكبر مما يقدّره الحد الأدنى", () => {
+  const r = settleWeightedPrices([{ quantity: 0.6, estimatedTotal: 0.006 }], 1, 0.11);
+  assert.equal(r.residual, 0);
+  assert.equal(r.total, 0.11);
+});
