@@ -28,14 +28,33 @@ export function resolvePageStarts(items: BOQItem[], itemNos: string[]): { starts
   return { starts };
 }
 
-/** رقم صفحة كل فقرة من مواضع بدايات الصفحات. الصفحة الأولى تبدأ من أول فقرة دائماً */
-export function pagesFromStarts(itemCount: number, starts: number[]): (number | undefined)[] {
+/**
+ * رقم صفحة كل فقرة من مواضع بدايات الصفحات. الصفحة الأولى تبدأ من أول فقرة دائماً.
+ * pageNumbers أرقام الصفحات الفعلية في العطاء (غلاف يسبق الجدول، أو صفحة شروط بين صفحتين)، وإلا 1..ن
+ */
+export function pagesFromStarts(itemCount: number, starts: number[], pageNumbers?: number[]): (number | undefined)[] {
   const s = [0, ...starts.slice(1)];
-  return Array.from({ length: itemCount }, (_, i) => s.filter(x => x <= i).length);
+  return Array.from({ length: itemCount }, (_, i) => {
+    const idx = s.filter(x => x <= i).length;
+    return pageNumbers?.[idx - 1] ?? idx;
+  });
 }
 
-/** أرقام أول فقرة لكل صفحة مسندة حالياً، لتعبئة نافذة فواصل الصفحات */
-export function startItemNos(items: BOQItem[]): string[] {
+/** أرقام الصفحات المدخلة: أعداد صحيحة موجبة متصاعدة بصرامة، أو سبب الرفض */
+export function resolvePageNumbers(raw: string[]): { numbers: number[] } | { error: string } {
+  const numbers: number[] = [];
+  for (let p = 0; p < raw.length; p++) {
+    const text = key(raw[p]);
+    const n = Number(text);
+    if (!text || !Number.isInteger(n) || n < 1) return { error: `الصفحة (${p + 1}): رقم الصفحة (${text || '—'}) يجب أن يكون عدداً صحيحاً موجباً.` };
+    if (p > 0 && n <= numbers[p - 1]) return { error: `الصفحة (${p + 1}): رقمها (${n}) يجب أن يزيد على رقم الصفحة التي قبلها (${numbers[p - 1]}).` };
+    numbers.push(n);
+  }
+  return { numbers };
+}
+
+// أول فقرة لكل صفحة مسندة حالياً، بترتيب الصفحات
+function currentStarts(items: BOQItem[]): { page: number; itemNo: string }[] {
   const seen = new Set<number>();
   const out: { page: number; itemNo: string }[] = [];
   items.forEach(it => {
@@ -44,7 +63,17 @@ export function startItemNos(items: BOQItem[]): string[] {
       out.push({ page: it.pageNo, itemNo: key(it.itemNo) });
     }
   });
-  return out.sort((a, b) => a.page - b.page).map(x => x.itemNo);
+  return out.sort((a, b) => a.page - b.page);
+}
+
+/** أرقام أول فقرة لكل صفحة مسندة حالياً، لتعبئة نافذة فواصل الصفحات */
+export function startItemNos(items: BOQItem[]): string[] {
+  return currentStarts(items).map(x => x.itemNo);
+}
+
+/** أرقام الصفحات المسندة حالياً بالترتيب نفسه، فلا تُعاد ترقيمتها من 1 عند تصحيح فاصل واحد */
+export function startPages(items: BOQItem[]): number[] {
+  return currentStarts(items).map(x => x.page);
 }
 
 export interface PageSummaryRow { page: number | null; itemCount: number; stated: number; corrected: number; offer: number }

@@ -11,6 +11,7 @@ export interface WeightedPrices { rows: WeightedRow[]; total: number; residual: 
 
 const toCents = (v: number) => Math.round(v * 100);
 const MAX_ROUNDS = 1000;
+const MAX_PAIR_ROUNDS = 5000;
 
 export function settleWeightedPrices(items: WeightedInput[], ratio: number, target: number): WeightedPrices {
   const priced = (i: WeightedInput) => i.estimatedTotal > 0 && i.quantity > 0;
@@ -56,6 +57,45 @@ export function settleWeightedPrices(items: WeightedInput[], ratio: number, targ
       residual -= delta;
       break;
     }
+  }
+
+  // كميات كبيرة متقاربة: أثر كل فلس على مبلغ فقرة بحجم كميتها فلا تقترب منفردةً من فلس واحد، لكن تحريك متعاكس
+  // لفقرتين (+0.01 على إحداهما و−0.01 على الأخرى) يصنع فرقاً صغيراً بينهما (1651 − 1650 = 1 فلس). كل جولة تختار
+  // أقرب تحريكة (منفردة أو زوج) إلى الباقي، وتُقبل فقط إن قرّبته من الصفر فتنتهي الحلقة
+  for (let round = 0; residual !== 0 && round < MAX_PAIR_ROUNDS; round++) {
+    const ups: { k: number; d: number }[] = [];
+    const downs: { k: number; d: number }[] = [];
+    for (const k of order) {
+      ups.push({ k, d: Math.round(items[k].quantity * (unit[k] + 1)) - amount[k] });
+      if (unit[k] >= 1) downs.push({ k, d: Math.round(items[k].quantity * (unit[k] - 1)) - amount[k] });
+    }
+    downs.sort((a, b) => a.d - b.d);
+
+    let best: { gap: number; up?: { k: number; d: number }; down?: { k: number; d: number } } = { gap: Math.abs(residual) };
+    const consider = (net: number, up?: { k: number; d: number }, down?: { k: number; d: number }) => {
+      const gap = Math.abs(residual - net);
+      if (gap < best.gap) best = { gap, up, down };
+    };
+    for (const u of ups) consider(u.d, u);
+    for (const v of downs) consider(v.d, undefined, v);
+    for (const u of ups) {
+      // أقرب هبوط إلى (الباقي − أثر الصعود): بحث ثنائي ثم جيران يمنة ويسرة لتخطي الفقرة نفسها
+      const want = residual - u.d;
+      let lo = 0;
+      let hi = downs.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (downs[mid].d < want) lo = mid + 1; else hi = mid;
+      }
+      for (let j = Math.max(0, lo - 2); j <= Math.min(downs.length - 1, lo + 1); j++) {
+        if (downs[j].k !== u.k) consider(u.d + downs[j].d, u, downs[j]);
+      }
+    }
+    if (best.gap >= Math.abs(residual)) break;
+    let net = 0;
+    if (best.up) { unit[best.up.k] += 1; amount[best.up.k] += best.up.d; moved[best.up.k] += 1; net += best.up.d; }
+    if (best.down) { unit[best.down.k] -= 1; amount[best.down.k] += best.down.d; moved[best.down.k] -= 1; net += best.down.d; }
+    residual -= net;
   }
 
   return {

@@ -62,6 +62,12 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, onStart, 
         )}
       </div>
 
+      {Math.abs(bidder.totals.weightedRoundingResidual ?? 0) >= 0.005 && (
+        <div className="text-[11px] font-bold text-amber-900">
+          فرق تقريب متبقٍ في الأسعار الموزونة المرجعية: <span className="font-mono">{formatNumber(bidder.totals.weightedRoundingResidual ?? 0)}</span> — تعذّرت تسويته بكميات الفقرات، وهو ما يفسّر فرق العرض إن بدأ بالمعادلة.
+        </div>
+      )}
+
       {blocker && (!offer || offer.status === 'paused') && balance.verdict !== 'excluded' && (
         <div className="text-xs font-bold">{blocker}</div>
       )}

@@ -47,7 +47,8 @@ export function assessBalance(rows: BalanceRow[], threshold: number): BalanceAss
   const unbalancedPercent = counted.length > 0 ? round2((unbalancedCount / counted.length) * 100) : 0;
   const verdict: BalanceVerdict = !(est > 0) ? 'no-estimate'
     : Math.abs(totalDeviationPercent) > threshold ? 'excluded'
-    : unbalancedPercent > UNBALANCED_ITEMS_LIMIT_PERCENT ? 'weighting-required'
+    // بالعدد لا بالنسبة المقرّبة: 201 من 2009 = 10.00498% تتجاوز الحد وإن قُرّبت 10.00
+    : unbalancedCount * 100 > UNBALANCED_ITEMS_LIMIT_PERCENT * counted.length ? 'weighting-required'
     : 'accept-as-is';
   return { verdict, itemCount: counted.length, unbalancedCount, unbalancedPercent, belowCount, totalDeviationPercent };
 }
@@ -123,4 +124,43 @@ export function offerLockReason(project: TenderProject, scope: { bidderId?: stri
   return `أرقام العطاء مقفلة أثناء العرض الموزون (${names})${scope.shared ? '، وهذا التعديل مشترك بين كل العطاءات' : ''}.
 `
     + 'أوقف مرحلة العرض الموزون أولاً (تُحفظ تعديلاتها وتعود عند الاستئناف).';
+}
+
+/**
+ * عند إيقاف العرض: الفقرة التي لم تُعدَّل (عرضها يساوي خط أساس نقطة الانطلاق) تُسقط حقولها فتتبع ما بعد
+ * التصحيح (أو الأسعار الموزونة الحالية عند الاستئناف). بدونه تُصحَّح قراءة أثناء الإيقاف فتظهر الفقرة عند
+ * الاستئناف «معدّلة» بتعديل لم تُجرِه اللجنة
+ */
+export function pauseOfferPatch(item: BOQItem, origin: 'corrected' | 'formula'): Pick<BOQItem, 'offerUnitPrice' | 'offerTotal'> {
+  if (item.offerTotal === undefined) return { offerUnitPrice: undefined, offerTotal: undefined };
+  const baseline = origin === 'formula' ? item.newPrice : item.bidderTotal;
+  if (Math.abs(item.offerTotal - baseline) < 0.005) return { offerUnitPrice: undefined, offerTotal: undefined };
+  return { offerUnitPrice: item.offerUnitPrice, offerTotal: item.offerTotal };
+}
+
+/** عند الاستئناف: المعدَّل يبقى، وبالمعادلة تُملأ الفقرات الساقطة من الأسعار الموزونة الحالية */
+export function resumeOfferPatch(item: BOQItem, origin: 'corrected' | 'formula'): Pick<BOQItem, 'offerUnitPrice' | 'offerTotal'> {
+  if (item.offerTotal !== undefined) return { offerUnitPrice: item.offerUnitPrice, offerTotal: item.offerTotal };
+  if (origin === 'formula') return { offerUnitPrice: item.weightedUnitPrice, offerTotal: item.newPrice };
+  return { offerUnitPrice: undefined, offerTotal: undefined };
+}
+
+/**
+ * عبارة التسعير في توصية المحضر (بعد «مع مراعاة نتائج التقييم الفني والقانوني»). لا تُنسب إلى سادساً/5 ما لا يقوله:
+ * النص يقبل مبلغ العطاء كما هو عند ≤10% (فالموزون قرار اللجنة)، ويعتمد عند تجاوزها جدول جهة التعاقد معدلاً بنسبة
+ * مبلغ العطاء (فالجدول المعدل من أسعار المجهز يُذكر أنه بقرار اللجنة)
+ */
+export function pricingClause(verdict: BalanceVerdict, offer: { final: boolean; origin?: 'corrected' | 'formula' }): string {
+  if (offer.final) {
+    if (verdict === 'accept-as-is') {
+      return '، واعتماد أسعار العرض الموزون المعتمد المثبتة في (رابعاً) بقرار اللجنة (اختياراً، إذ يقبل نص ضوابط رقم (4) سادساً/5 مبلغ العطاء كما هو لعدم تجاوز الفقرات غير المتوازنة نسبة (10%) من مجموع الفقرات)';
+    }
+    if (verdict === 'weighting-required' && offer.origin === 'corrected') {
+      return '، واعتماد أسعار العرض الموزون المعتمد المثبتة في (رابعاً) وهي معدّلة من أسعار عطاء المجهز بقرار اللجنة، علماً أن نص ضوابط رقم (4) سادساً/5 يعتمد جدول الكميات المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء';
+    }
+    return '، واعتماد أسعار العرض الموزون المعتمد المثبتة في (رابعاً) وفق ضوابط رقم (4) سادساً/5';
+  }
+  return verdict === 'accept-as-is'
+    ? '، واعتماد أسعار العطاء كما هي لعدم تجاوز الفقرات غير المتوازنة نسبة (10%) من مجموع الفقرات وفق ضوابط رقم (4) سادساً/5'
+    : '، واعتماد جدول الكميات المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء (الأسعار الموزونة المثبتة أعلاه) وفق ضوابط رقم (4) سادساً/5، مع استدعاء مقدم العطاء لختم الجداول المعدلة';
 }

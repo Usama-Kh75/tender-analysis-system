@@ -269,9 +269,31 @@ function refreshDeviationPrecision(project: TenderProject): TenderProject {
   ), { ...project, bidders, updatedAt: new Date().toISOString() });
 }
 
+// قبل 1.15.0 كانت الأسعار الموزونة تُخزَّن غير مقرّبة ولا تساوي مجموعها مبلغ العطاء (ولا باقي مخزَّن). تُعاد حسابها
+// بالتسوية الحالية لتبدأ منها «بدء العرض بالمعادلة» والمحضر، دون مس أي مبلغ أو علامة: حقولها فقط
+export function refreshWeightedPrices(project: TenderProject): TenderProject {
+  let changed = false;
+  const bidders = project.bidders.map(b => {
+    if (!b.totals || b.totals.weightedRoundingResidual !== undefined || b.items.length === 0) return b;
+    const fresh = calculateBOQMetrics(b.items, project.deviationThreshold);
+    changed = true;
+    return {
+      ...b,
+      items: b.items.map((it, i) => ({
+        ...it,
+        newPrice: fresh.items[i].newPrice,
+        weightedUnitPrice: fresh.items[i].weightedUnitPrice,
+        weightedAdjustment: fresh.items[i].weightedAdjustment
+      })),
+      totals: { ...b.totals, newPricesTotal: fresh.totals.newPricesTotal, weightedRoundingResidual: fresh.totals.weightedRoundingResidual }
+    };
+  });
+  return changed ? { ...project, bidders } : project;
+}
+
 // كل مشروع يُحمَّل أو يُستعاد: توحيد أرقام الفقرات والحقول المشتركة ثم إعادة فحص العلامات المخزنة
 const normalizeLoadedProject = (project: TenderProject) =>
-  refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project))));
+  refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project)))));
 
 // نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
 const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';

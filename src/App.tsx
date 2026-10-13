@@ -22,7 +22,7 @@ import { exportTenderToExcel } from './utils/excelService';
 import { exportBidderAuditToExcel } from './utils/bidderAuditExcel';
 import { isCommitteeCorrected } from './utils/bidderAuditEngine';
 import { isOfferLocked, offerLockReason, startOfferBlocker, offerFieldsFromCorrected, offerFieldsFromFormula,
-  offerUnitPatch, offerStatus } from './utils/weightedOffer';
+  offerUnitPatch, offerStatus, pauseOfferPatch, resumeOfferPatch } from './utils/weightedOffer';
 import { estimateMergeLogNote, planEstimateMerge } from './utils/estimateMerge';
 import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './types/tender';
 
@@ -297,7 +297,11 @@ export function App() {
     hasMathError: undefined,
     hasTextDiscrepancy: undefined,
     correctionRationale: undefined,
-    unpriced: undefined
+    unpriced: undefined,
+    // تأشيرات اللجنة وعرضها الموزون خاصة بالأسعار المصفَّرة: لا تُنسخ إلى شركة جديدة ولا تبقى بلا أسعار
+    offerUnitPrice: undefined,
+    offerTotal: undefined,
+    unreasonablePrice: undefined
   });
 
   // Clear Bidder Prices Only
@@ -315,7 +319,8 @@ export function App() {
       ...activeBidder,
       items: recalc.items,
       totals: recalc.totals,
-      statedTotal: undefined // المبلغ المدون يخص العطاء الذي صُفّرت مبالغه
+      statedTotal: undefined, // المبلغ المدون يخص العطاء الذي صُفّرت مبالغه
+      weightedOffer: undefined // عرض موقوف بأسعار صُفّرت
     };
 
     const updatedBidders = currentProject.bidders.map(b => b.id === activeBidder.id ? updatedBidder : b);
@@ -623,8 +628,10 @@ export function App() {
     const prev = activeBidder.weightedOffer;
     if (origin !== 'resume' && activeBidder.items.some(i => i.offerTotal !== undefined) && !window.confirm(
       'لهذا العطاء تعديلات عرض موزون سابقة، وستُستبدل ببداية جديدة. هل تريد المتابعة؟')) return;
-    const fields = origin === 'resume' ? null
-      : origin === 'formula' ? offerFieldsFromFormula(activeBidder.items) : offerFieldsFromCorrected(activeBidder.items);
+    // الأسعار الموزونة المخزَّنة قد تسبق التسوية الحالية أو تتغيّر أثناء الإيقاف: تُحسب من جديد قبل أخذها نقطة انطلاق
+    const fresh = calculateBOQMetrics(activeBidder.items, currentProject.deviationThreshold).items;
+    const fields = origin === 'resume' ? fresh.map(it => resumeOfferPatch(it, prev?.origin ?? 'corrected'))
+      : origin === 'formula' ? offerFieldsFromFormula(fresh) : offerFieldsFromCorrected(activeBidder.items);
     const bidTotal = activeBidder.totals.totalBidderAmount;
     const label = origin === 'resume' ? 'استئناف العرض الموزون'
       : origin === 'formula' ? 'بدء العرض الموزون بالمعادلة (التخميني × النسبة السعرية)'
@@ -648,7 +655,12 @@ export function App() {
     if (!window.confirm(`إيقاف مرحلة العرض الموزون لعطاء (${activeBidder.name})؟\n\n`
       + 'تُفتح أرقام العطاء للتعديل، وتُحفظ تعديلات العرض لتعود عند الاستئناف'
       + (offer.status === 'adopted' ? '، ويسقط اعتماد العرض الموزون.' : '.'))) return;
-    commitBidder(activeBidder.id, b => ({ ...b, weightedOffer: { ...offer, status: 'paused', adoptedAt: undefined } }),
+    // الفقرات التي لم تُعدَّل تُسقط حقول عرضها فتتبع ما بعد التصحيح إن صُحّحت قراءة أثناء الإيقاف
+    commitBidder(activeBidder.id, b => ({
+      ...b,
+      items: b.items.map(it => ({ ...it, ...pauseOfferPatch(it, offer.origin) })),
+      weightedOffer: { ...offer, status: 'paused', adoptedAt: undefined }
+    }),
       'إيقاف العرض الموزون', `أُوقفت مرحلة العرض الموزون لعطاء (${activeBidder.name})${offer.status === 'adopted' ? ' وسقط اعتماده' : ''}`);
   };
 
@@ -987,7 +999,11 @@ export function App() {
           correctionRationale: ext?.correctionRationale,
           unpriced: ext?.unpriced,
           // صفحة الفقرة في هذا العطاء: من القراءة إن وُجدت، وإلا تبقى المسندة سابقاً (استيراد Excel بلا صفحات)
-          pageNo: ext?.pageNo ?? existing?.pageNo
+          pageNo: ext?.pageNo ?? existing?.pageNo,
+          // تأشير اللجنة وتعديلات عرض موقوف يبقيان عبر إعادة القراءة (لا يُسقطهما الدمج حقلاً حقلاً)
+          unreasonablePrice: existing?.unreasonablePrice,
+          offerUnitPrice: existing?.offerUnitPrice,
+          offerTotal: existing?.offerTotal
         });
       }
 
@@ -1055,6 +1071,7 @@ export function App() {
     // استنساخ الفقرات بلا أي سعر لإدخال عطاء الشركة الخاص
     const clonedItems = activeBidder.items.map(item => ({
       ...withoutBidderPrices(item),
+      pageNo: undefined,
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
     }));
 
@@ -1549,6 +1566,8 @@ export function App() {
               onClearBidderPrices={handleClearBidderPrices}
               onExportAudit={handleExportBidderAudit}
               onOpenSmartImport={() => {
+                // يُرفض قبل قراءة الملف لا بعدها: الإدراج مشترك فيرفضه قفل عرض أي مجهز، وكانت القراءة تضيع
+                if (blockedByOffer({ shared: true })) return;
                 setSmartImportDocType('bidder');
                 setIsSmartImportOpen(true);
               }}

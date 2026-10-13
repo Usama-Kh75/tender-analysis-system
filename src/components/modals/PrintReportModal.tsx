@@ -5,7 +5,7 @@ import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
-import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
+import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
 
 interface PrintReportModalProps {
@@ -47,11 +47,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const notifyItems = subject.items.filter(i => (i.estimatedTotal > 0 && i.isDeviated) || i.unreasonablePrice);
   const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
   const residual = subject.totals.weightedRoundingResidual ?? 0;
-  const pricingClause = offerFinal
-    ? '، واعتماد أسعار العرض الموزون المعتمد المثبتة في (رابعاً) وفق ضوابط رقم (4) سادساً/5'
-    : balance.verdict === 'accept-as-is'
-      ? '، واعتماد أسعار العطاء كما هي لعدم تجاوز الفقرات غير المتوازنة نسبة (10%) من مجموع الفقرات وفق ضوابط رقم (4) سادساً/5'
-      : '، واعتماد جدول الكميات المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء (الأسعار الموزونة المثبتة أعلاه) وفق ضوابط رقم (4) سادساً/5، مع استدعاء مقدم العطاء لختم الجداول المعدلة';
+  const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin });
   const subjectLabel = {
     award: 'للعطاء الموصى به',
     tie: 'لأوطأ العطاءات المتقاربة',
@@ -280,7 +276,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   : rec.chosenByCommittee && rec.closeBids.length > 1
                     ? `، وهو العطاء الذي اختارته اللجنة من بين العطاءات ${rec.exactTie ? 'المتساوية' : 'المتقاربة'} في مبالغها`
                     : '، لكونه أوطأ العطاءات المؤهلة تجارياً'}
-                ، مع مراعاة نتائج التقييم الفني والقانوني{rec.primary.id === subject.id ? pricingClause : ''}، واعتماد الأسعار والمفردات الموزونة عند إصدار أوامر التغيير وفق المادة (25)/ثالثاً. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
+                ، مع مراعاة نتائج التقييم الفني والقانوني{rec.primary.id === subject.id ? pricingText : ''}، واعتماد الأسعار والمفردات الموزونة عند إصدار أوامر التغيير وفق المادة (25)/ثالثاً. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
               </p>
             )}
 

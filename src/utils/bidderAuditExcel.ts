@@ -418,7 +418,9 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
       line('الانحراف الكلي', pct(t.totalDeviationPercent, percentDecimals(t.totalDeviationPercent, project.deviationThreshold))),
       line('الانحراف الجزئي', pct(t.partialDeviationPercent)),
       line('النسبة السعرية', ratio(t.overallPriceRatio)),
-      line(`عدد الفقرات المنحرفة (أكثر من ${project.deviationThreshold}%)`, count(t.deviatedItemsCount))
+      line(`عدد الفقرات المنحرفة (أكثر من ${project.deviationThreshold}%)`, count(t.deviatedItemsCount)),
+      ...(Math.abs(t.weightedRoundingResidual ?? 0) >= 0.005
+        ? [line('فرق تقريب متبقٍ في الأسعار الموزونة (تعذّرت تسويته بكميات الفقرات)', amount(t.weightedRoundingResidual ?? 0))] : [])
     ] : [])
   ];
 
