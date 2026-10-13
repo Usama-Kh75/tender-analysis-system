@@ -88,6 +88,18 @@ export const offerUnitPatch = (item: BOQItem, unit: number) =>
 
 export const isOfferEdited = (i: BOQItem) => i.offerTotal !== undefined && Math.abs(i.offerTotal - i.bidderTotal) >= 0.005;
 
+/**
+ * انحراف الفقرة في العرض الموزون: مبلغ العرض (لا مبلغ المجهز) قياساً إلى التخميني، بقاعدة calculateBOQMetrics نفسها
+ * (القيمة المطلقة فوق الحد). تعرضه الشاشة أثناء العرض الفعّال والمعتمد حتى لا يناقض جدولها شريط التوازن
+ * الذي يعدّ الفقرات على مبالغ العرض (assessBalance على offerBalanceRows)
+ */
+export function offerItemView(item: BOQItem, threshold: number) {
+  const amount = item.offerTotal ?? item.bidderTotal;
+  const diffAmount = amount - item.estimatedTotal;
+  const deviationPercent = item.estimatedTotal > 0 ? (diffAmount / item.estimatedTotal) * 100 : 0;
+  return { amount, diffAmount, deviationPercent, isDeviated: Math.abs(deviationPercent) > threshold };
+}
+
 export interface OfferStatus {
   offerSum: number;
   bidTotal: number;

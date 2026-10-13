@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
-import { isOfferEdited } from '../utils/weightedOffer';
+import { isOfferEdited, offerItemView } from '../utils/weightedOffer';
 
 // حقل مبلغ يعرض فواصل الآلاف (60,000,000) خارج التعديل والرقم المجرد أثناء الكتابة: بلا فواصل كان
 // 60000000 يشتبه بـ 6000000. يقبل الأرقام العربية والفواصل الملصوقة عبر parseArabicNumber.
@@ -231,6 +231,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 }) => {
   const locked = offerMode !== 'none';
   const sharedReadOnly = locked || sharedLocked;
+  // أثناء العرض الفعّال والمعتمد يُقاس الانحراف والتقييم والتصفية على مبلغ العرض لا مبلغ المجهز الأصلي،
+  // وإلا ناقض الجدول شريط التوازن (0 فقرة منحرفة) وهو يعرض 30 فقرة منحرفة بنسبها الأصلية
+  const deviationView = (i: BOQItem) => (locked ? offerItemView(i, deviationThreshold) : i);
   const [searchTerm, setSearchTerm] = useState('');
   // الفقرة التي يُصحَّح نص تفقيطها الآن (بمعرّفها)
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -261,8 +264,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
     if (!matchSearch) return false;
 
-    if (filterMode === 'deviated') return item.isDeviated;
-    if (filterMode === 'savings') return item.diffAmount < 0;
+    if (filterMode === 'deviated') return deviationView(item).isDeviated;
+    if (filterMode === 'savings') return deviationView(item).diffAmount < 0;
     if (filterMode === 'errors') return item.hasMathError || item.hasTextDiscrepancy;
     return true;
   });
@@ -409,7 +412,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 filterMode === 'deviated' ? 'bg-rose-600 text-white shadow-xs' : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
               }`}
             >
-              المنحرفة &gt; {deviationThreshold}% ({items.filter(i => i.isDeviated).length})
+              المنحرفة &gt; {deviationThreshold}% ({items.filter(i => deviationView(i).isDeviated).length})
             </button>
 
             <button
@@ -418,7 +421,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 filterMode === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
               }`}
             >
-              مطابقة ({items.filter(i => i.diffAmount < 0).length})
+              مطابقة ({items.filter(i => deviationView(i).diffAmount < 0).length})
             </button>
           </div>
 
@@ -480,8 +483,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 </tr>
               ) : filteredItems.map((item) => {
                 const actualIndex = items.findIndex(i => i.id === item.id);
-                const isDeviated = item.isDeviated;
-                const isSaving = item.diffAmount < 0;
+                const view = deviationView(item);
+                const isDeviated = view.isDeviated;
+                const isSaving = view.diffAmount < 0;
                 const hasError = item.hasMathError || item.hasTextDiscrepancy;
 
                 // فقرة بلا مفرد مدون (جدول بلا عمود للمفرد، أو مُسح مفردها تصحيحاً للقراءة): يظهر المبلغ ÷ الكمية
@@ -829,9 +833,15 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           : 'bg-slate-100 text-slate-700'
                       }`}>
                         {item.estimatedTotal > 0 
-                          ? `${item.deviationPercent > 0 ? '+' : ''}${item.deviationPercent.toFixed(2)}%`
+                          ? `${view.deviationPercent > 0 ? '+' : ''}${view.deviationPercent.toFixed(2)}%`
                           : '-'}
                       </span>
+                      {/* نسبة مبلغ المجهز الأصلي تحت نسبة العرض مشطوبة، كما يفعل عمود المبلغ، فيبقى سبب التوزين ظاهراً */}
+                      {locked && item.estimatedTotal > 0 && isOfferEdited(item) && (
+                        <div className="text-[10px] text-slate-500 line-through font-mono mt-0.5" title="نسبة انحراف مبلغ المجهز قبل العرض الموزون">
+                          {item.deviationPercent > 0 ? '+' : ''}{item.deviationPercent.toFixed(2)}%
+                        </div>
+                      )}
                     </td>
 
                     {/* Weighted Unit Price */}
@@ -849,14 +859,14 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       ) : isDeviated ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
                           <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          منحرفة {item.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
+                          منحرفة {view.deviationPercent < 0 ? '(للأقل)' : '(للأعلى)'}
                         </span>
-                      ) : item.deviationPercent < 0 ? (
+                      ) : view.deviationPercent < 0 ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           مطابق (للأقل ↓)
                         </span>
-                      ) : item.deviationPercent > 0 ? (
+                      ) : view.deviationPercent > 0 ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
                           <CheckCircle2 className="w-3 h-3 text-blue-600" />
                           مطابق (للأعلى ↑)
@@ -915,7 +925,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 </td>
                 {hasEstimate && (
                   <td className="p-3 text-center border-l border-slate-800 font-mono text-rose-300">
-                    {`${(((items.reduce((s, i) => s + i.bidderTotal, 0) - items.reduce((s, i) => s + i.estimatedTotal, 0)) / (items.reduce((s, i) => s + i.estimatedTotal, 0) || 1)) * 100).toFixed(2)}%`}
+                    {`${(((items.reduce((s, i) => s + (locked ? i.offerTotal ?? i.bidderTotal : i.bidderTotal), 0) - items.reduce((s, i) => s + i.estimatedTotal, 0)) / (items.reduce((s, i) => s + i.estimatedTotal, 0) || 1)) * 100).toFixed(2)}%`}
                   </td>
                 )}
                 <td colSpan={hasEstimate ? 3 : 1} className="p-3 text-center font-mono text-slate-400">
