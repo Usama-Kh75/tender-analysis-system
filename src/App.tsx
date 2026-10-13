@@ -21,6 +21,8 @@ import { hasBidAmounts } from './utils/recommendation';
 import { exportTenderToExcel } from './utils/excelService';
 import { exportBidderAuditToExcel } from './utils/bidderAuditExcel';
 import { isCommitteeCorrected } from './utils/bidderAuditEngine';
+import { isOfferLocked, offerLockReason, startOfferBlocker, offerFieldsFromCorrected, offerFieldsFromFormula,
+  offerUnitPatch, offerStatus } from './utils/weightedOffer';
 import { estimateMergeLogNote, planEstimateMerge } from './utils/estimateMerge';
 import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './types/tender';
 
@@ -79,6 +81,7 @@ export function App() {
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+  const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
 
   // Load from Storage
   useEffect(() => {
@@ -111,10 +114,29 @@ export function App() {
     : isSmartImportOpen ? 'استيراد جدول'
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isNewProjectOpen ? 'مناقصة جديدة'
+    : isPageBreaksOpen ? 'فواصل الصفحات'
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
+
+  const fmtNum = (v?: number) => v === undefined ? '—' : v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  // تعديل عطاء واحد بلا إعادة حساب (حقول العرض والصفحة والتأشير لا تدخل في calculateBOQMetrics)، مع قيد في السجل
+  const commitBidder = (bidderId: string, update: (b: Bidder) => Bidder, action: string, details: string, meta?: Parameters<typeof addAuditLog>[3]) => {
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: currentProject.bidders.map(b => b.id === bidderId ? update(b) : b),
+      updatedAt: new Date().toISOString()
+    };
+    updatedProj = addAuditLog(updatedProj, action, details, { bidderId, ...meta });
+    setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+  };
+  // يرفض تعديلاً يغيّر أرقام عطاء له عرض موزون فعّال أو معتمد، برسالة السبب
+  const blockedByOffer = (scope: { bidderId?: string; shared?: boolean }) => {
+    const reason = offerLockReason(currentProject, scope);
+    if (reason) window.alert(reason);
+    return !!reason;
+  };
 
   // Create New Project
   // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
@@ -277,6 +299,7 @@ export function App() {
 
   // Clear Bidder Prices Only
   const handleClearBidderPrices = () => {
+    if (blockedByOffer({ bidderId: activeBidder.id })) return;
     if (!window.confirm(`هل أنت متأكد من رغبتك في تصفير مبالغ المجهز (${activeBidder.name}) للبدء في تعبئتها من جديد؟`)) {
       return;
     }
@@ -377,6 +400,10 @@ export function App() {
     const before = activeBidder.items[index];
     if (!before) return;
     const fields = Object.keys(patch) as (keyof BOQItem)[];
+    // هوية الفقرة والملاحظات لا تغيّر أرقاماً، فلا يقفلها العرض الموزون
+    const lockFree: (keyof BOQItem)[] = ['itemNo', 'description', 'unit', 'notes'];
+    const priced = fields.filter(f => !lockFree.includes(f));
+    if (priced.length > 0 && blockedByOffer({ bidderId: activeBidder.id, shared: priced.some(f => SHARED_ESTIMATE_FIELDS.includes(f)) })) return;
     const sharedPatch: Partial<BOQItem> = {};
     const ownPatch: Partial<BOQItem> = {};
     fields.forEach(f => {
@@ -433,6 +460,7 @@ export function App() {
   const handleCorrectReading = (index: number, field: ReadingField, value: number | string) => {
     const before = activeBidder.items[index];
     if (!before) return;
+    if (blockedByOffer({ bidderId: activeBidder.id, shared: field === 'quantity' })) return;
     const isQuantity = field === 'quantity';
     const label = READING_FIELD_LABELS[field];
     const newValue = field === 'writtenText' ? (String(value).trim() || undefined)
@@ -585,6 +613,101 @@ export function App() {
     setProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
   };
 
+  // بدء العرض الموزون (سادساً/5): من أسعار العطاء بعد التصحيح، أو بالمعادلة، أو استئناف عرض موقوف بتعديلاته
+  const handleStartOffer = (origin: 'corrected' | 'formula' | 'resume') => {
+    const blocker = startOfferBlocker(activeBidder, currentProject.deviationThreshold);
+    if (blocker) { window.alert(blocker); return; }
+    const prev = activeBidder.weightedOffer;
+    if (origin !== 'resume' && activeBidder.items.some(i => i.offerTotal !== undefined) && !window.confirm(
+      'لهذا العطاء تعديلات عرض موزون سابقة، وستُستبدل ببداية جديدة. هل تريد المتابعة؟')) return;
+    const fields = origin === 'resume' ? null
+      : origin === 'formula' ? offerFieldsFromFormula(activeBidder.items) : offerFieldsFromCorrected(activeBidder.items);
+    const bidTotal = activeBidder.totals.totalBidderAmount;
+    const label = origin === 'resume' ? 'استئناف العرض الموزون'
+      : origin === 'formula' ? 'بدء العرض الموزون بالمعادلة (التخميني × النسبة السعرية)'
+      : 'بدء العرض الموزون من أسعار العطاء بعد التصحيح';
+    commitBidder(activeBidder.id, b => ({
+      ...b,
+      items: fields ? b.items.map((it, i) => ({ ...it, ...fields[i] })) : b.items,
+      weightedOffer: {
+        status: 'active',
+        origin: origin === 'resume' ? (prev?.origin ?? 'corrected') : origin,
+        startedAt: origin === 'resume' && prev ? prev.startedAt : new Date().toISOString(),
+        bidTotal
+      }
+    }), label, `${label} لعطاء (${activeBidder.name}) — مبلغ العطاء بعد التصحيح (${fmtNum(bidTotal)})`);
+  };
+
+  // إيقاف المرحلة لتصحيح قراءة أو غيره: تُحفظ تعديلات العرض وتعود عند الاستئناف، ويسقط الاعتماد إن وُجد
+  const handlePauseOffer = () => {
+    const offer = activeBidder.weightedOffer;
+    if (!offer || offer.status === 'paused') return;
+    if (!window.confirm(`إيقاف مرحلة العرض الموزون لعطاء (${activeBidder.name})؟\n\n`
+      + 'تُفتح أرقام العطاء للتعديل، وتُحفظ تعديلات العرض لتعود عند الاستئناف'
+      + (offer.status === 'adopted' ? '، ويسقط اعتماد العرض الموزون.' : '.'))) return;
+    commitBidder(activeBidder.id, b => ({ ...b, weightedOffer: { ...offer, status: 'paused', adoptedAt: undefined } }),
+      'إيقاف العرض الموزون', `أُوقفت مرحلة العرض الموزون لعطاء (${activeBidder.name})${offer.status === 'adopted' ? ' وسقط اعتماده' : ''}`);
+  };
+
+  const handleAdoptOffer = () => {
+    const s = offerStatus(activeBidder);
+    if (!s || activeBidder.weightedOffer?.status !== 'active') return;
+    if (!s.canAdopt) {
+      window.alert(s.stale
+        ? 'تغيّر مبلغ العطاء بعد بدء العرض الموزون. أوقف المرحلة ثم استأنفها لتُعاد المطابقة.'
+        : `مجموع العرض الموزون (${fmtNum(s.offerSum)}) لا يساوي مبلغ العطاء (${fmtNum(s.bidTotal)}): الفرق (${fmtNum(s.diff)}).`);
+      return;
+    }
+    commitBidder(activeBidder.id, b => ({ ...b, weightedOffer: { ...b.weightedOffer!, status: 'adopted', adoptedAt: new Date().toISOString() } }),
+      'اعتماد العرض الموزون', `اعتُمد العرض الموزون لعطاء (${activeBidder.name}) بمجموع (${fmtNum(s.offerSum)}) مساوٍ لمبلغ العطاء، و(${s.editedCount}) فقرة معدّلة`);
+  };
+
+  const handleUnadoptOffer = () => {
+    if (activeBidder.weightedOffer?.status !== 'adopted') return;
+    if (!window.confirm('إلغاء اعتماد العرض الموزون والعودة إلى تعديله؟')) return;
+    commitBidder(activeBidder.id, b => ({ ...b, weightedOffer: { ...b.weightedOffer!, status: 'active', adoptedAt: undefined } }),
+      'إلغاء اعتماد العرض الموزون', `أُلغي اعتماد العرض الموزون لعطاء (${activeBidder.name})`);
+  };
+
+  // تعديل مفرد فقرة في العرض الموزون: طبقة مستقلة، لا تمس ما دوّنه المجهز ولا ما بعد التصحيح
+  const handleEditOfferUnit = (index: number, unit: number) => {
+    const before = activeBidder.items[index];
+    if (!before || activeBidder.weightedOffer?.status !== 'active') return;
+    const patch = offerUnitPatch(before, unit);
+    commitBidder(activeBidder.id, b => ({ ...b, items: b.items.map((it, i) => i === index ? { ...it, ...patch } : it) }),
+      'تعديل بالعرض الموزون',
+      `سعر مفرد الفقرة رقم (${before.itemNo}) في العرض الموزون لعطاء (${activeBidder.name}) من (${fmtNum(before.offerUnitPrice)}) إلى (${fmtNum(unit)})، ومبلغها (${fmtNum(patch.offerTotal)})`,
+      { itemNo: before.itemNo, oldValue: before.offerUnitPrice, newValue: unit });
+  };
+
+  // تأشير سعر غير معقول (خطأ تسعير لا حسابي): للإحاطة والتبليغ، لا يغيّر رقماً
+  const handleMarkUnreasonable = (index: number, note: string | null) => {
+    const before = activeBidder.items[index];
+    if (!before) return;
+    commitBidder(activeBidder.id,
+      b => ({ ...b, items: b.items.map((it, i) => i === index
+        ? { ...it, unreasonablePrice: note ? { note, markedAt: new Date().toISOString() } : undefined } : it) }),
+      note ? 'تأشير سعر غير معقول' : 'إزالة تأشير سعر غير معقول',
+      note ? `أُشّر سعر الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) غير معقول: ${note}`
+        : `أُزيل تأشير السعر غير المعقول عن الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name})`,
+      { itemNo: before.itemNo, oldValue: before.unreasonablePrice?.note, newValue: note ?? undefined });
+  };
+
+  const handleSetItemPage = (index: number, page: number | undefined) => {
+    const before = activeBidder.items[index];
+    if (!before || before.pageNo === page) return;
+    commitBidder(activeBidder.id, b => ({ ...b, items: b.items.map((it, i) => i === index ? { ...it, pageNo: page } : it) }),
+      'تعديل صفحة فقرة', `صفحة الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) من (${before.pageNo ?? '—'}) إلى (${page ?? '—'})`,
+      { itemNo: before.itemNo, oldValue: before.pageNo, newValue: page });
+  };
+
+  const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
+    const count = Math.max(0, ...pages.map(p => p ?? 0));
+    commitBidder(activeBidder.id, b => ({ ...b, items: b.items.map((it, i) => ({ ...it, pageNo: pages[i] })) }),
+      'فواصل صفحات العطاء', `أُسندت فقرات عطاء (${activeBidder.name}) إلى (${count}) صفحة حسب فواصل الصفحات`);
+    setIsPageBreaksOpen(false);
+  };
+
   // تصدير جدول المجهز النشط: واقع الحال كما قدّمه بعيوبه، والجدول المعدل بعد تصحيحات اللجنة
   const handleExportBidderAudit = () => {
     if (!hasBidAmounts(activeBidder)) {
@@ -600,6 +723,7 @@ export function App() {
 
   // Add Item — يُضاف سطر فارغ لكافة المجهزين معاً، لأن الفقرة (الوصف/الوحدة/الكمية/الكلفة التخمينية) واحدة للمشروع
   const handleAddItem = () => {
+    if (blockedByOffer({ shared: true })) return;
     const nextNo = activeBidder.items.length + 1;
     const newItem: Partial<BOQItem> = {
       itemNo: nextNo,
@@ -627,6 +751,7 @@ export function App() {
   // Delete Item
   // Delete Item — يُحذف من جدول كافة المجهزين معاً حفاظاً على تطابق ترقيم وعدد الفقرات بينهم
   const handleDeleteItem = (index: number) => {
+    if (blockedByOffer({ shared: true })) return;
     const targetItem = activeBidder.items[index];
 
     const updatedBidders = currentProject.bidders.map(b => {
@@ -652,6 +777,7 @@ export function App() {
 
   // Duplicate Item — يُكرَّر لدى كافة المجهزين معاً، كل مجهز باستخدام سعره الخاص للفقرة المصدر
   const handleDuplicateItem = (index: number) => {
+    if (blockedByOffer({ shared: true })) return;
     const dupId = `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
 
     const updatedBidders = currentProject.bidders.map(b => {
@@ -686,6 +812,7 @@ export function App() {
     bidderName?: string,
     statedTotal?: number // الإجمالي المكتوب في العطاء كما قرأه الاستخراج (قبل التصحيح الحسابي)
   ) => {
+    if (blockedByOffer({ shared: true })) return;
     const isNew = mode === 'new_bidder' || mode === true;
     const isEstimatedOnly = mode === 'estimated_only';
     const isBidderOnly = mode === 'bidder_only';
@@ -726,7 +853,8 @@ export function App() {
           hasMathError: undefined,
           hasTextDiscrepancy: undefined,
           correctionRationale: ext?.correctionRationale,
-          unpriced: ext?.unpriced
+          unpriced: ext?.unpriced,
+          pageNo: ext?.pageNo
         });
       }
 
@@ -854,7 +982,9 @@ export function App() {
           hasMathError: undefined,
           hasTextDiscrepancy: undefined,
           correctionRationale: ext?.correctionRationale,
-          unpriced: ext?.unpriced
+          unpriced: ext?.unpriced,
+          // صفحة الفقرة في هذا العطاء: من القراءة إن وُجدت، وإلا تبقى المسندة سابقاً (استيراد Excel بلا صفحات)
+          pageNo: ext?.pageNo ?? existing?.pageNo
         });
       }
 
@@ -987,6 +1117,7 @@ export function App() {
 
   // Reset (Clear) All Bidders in Current Project — Fresh Start Without Deleting the Whole Project
   const handleResetAllBidders = () => {
+    if (blockedByOffer({ shared: true })) return;
     if (!window.confirm('⚠️ سيتم حذف جميع المجهزين المدرجين حالياً في هذه المناقصة/الطلبية والبدء بمجهز واحد فارغ. هل أنت متأكد؟')) {
       return;
     }
