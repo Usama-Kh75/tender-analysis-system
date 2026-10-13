@@ -5,6 +5,8 @@ import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
+import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
+import { summarizePages } from '../../utils/pageSummary';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -35,6 +37,21 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // المبلغ بعد التصحيح (ضوابط رقم (4) خامساً/ب/6)
   const showStated = project.bidders.filter(hasBidAmounts).some(b => (b.statedTotal ?? 0) > 0);
   const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
+  // توازن العطاء موضوع المحضر (سادساً/5)، وعرضه الموزون، وصفحاته، وفقرات التبليغ
+  const balance = assessBalance(correctedBalanceRows(subject.items), threshold);
+  const offer = subject.weightedOffer && subject.weightedOffer.status !== 'paused' ? subject.weightedOffer : undefined;
+  const offerState = offer ? offerStatus(subject) : null;
+  const offerFinal = offer?.status === 'adopted' && !offerState?.stale;
+  const editedItems = offer ? subject.items.filter(isOfferEdited) : [];
+  const pages = summarizePages(subject.items);
+  const notifyItems = subject.items.filter(i => (i.estimatedTotal > 0 && i.isDeviated) || i.unreasonablePrice);
+  const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
+  const residual = subject.totals.weightedRoundingResidual ?? 0;
+  const pricingClause = offerFinal
+    ? '، واعتماد أسعار العرض الموزون المعتمد المثبتة في (رابعاً) وفق ضوابط رقم (4) سادساً/5'
+    : balance.verdict === 'accept-as-is'
+      ? '، واعتماد أسعار العطاء كما هي لعدم تجاوز الفقرات غير المتوازنة نسبة (10%) من مجموع الفقرات وفق ضوابط رقم (4) سادساً/5'
+      : '، واعتماد جدول الكميات المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء (الأسعار الموزونة المثبتة أعلاه) وفق ضوابط رقم (4) سادساً/5، مع استدعاء مقدم العطاء لختم الجداول المعدلة';
   const subjectLabel = {
     award: 'للعطاء الموصى به',
     tie: 'لأوطأ العطاءات المتقاربة',
@@ -238,6 +255,15 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 </tr>
               </tfoot>
             </table>
+            {rec.kind !== 'no-estimate' && (
+              <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white">
+                <strong>توازن العطاء (ضوابط رقم (4) سادساً/5):</strong> عدد الفقرات المنحرفة بالزيادة أكثر من ({threshold}%) هو ({balance.unbalancedCount}) من مجموع ({balance.itemCount}) فقرة، أي ({balance.unbalancedPercent.toFixed(2)}%) مقابل حد ({UNBALANCED_ITEMS_LIMIT_PERCENT}%)
+                {balance.belowCount > 0 && <>، وعدد المنحرفة بالنقصان ({balance.belowCount}) للإحاطة</>}.
+                {' '}<strong>الحكم: {BALANCE_VERDICT_LABEL[balance.verdict]}.</strong>
+                {adjustedCount > 0 && <> سُوّيت فروقات تقريب الأسعار الموزونة بتحميل أجزاء من الفلس على مفرد ({adjustedCount}) فقرة ليساوي مجموعها مبلغ العطاء.</>}
+                {Math.abs(residual) >= 0.005 && <> وبقي فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
+              </div>
+            )}
           </div>
 
           {/* 3. توصية وقرار اللجنة القانوني */}
@@ -254,7 +280,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   : rec.chosenByCommittee && rec.closeBids.length > 1
                     ? `، وهو العطاء الذي اختارته اللجنة من بين العطاءات ${rec.exactTie ? 'المتساوية' : 'المتقاربة'} في مبالغها`
                     : '، لكونه أوطأ العطاءات المؤهلة تجارياً'}
-                ، مع مراعاة نتائج التقييم الفني والقانوني، واعتماد الأسعار والمفردات الموزونة المثبتة أعلاه عند إصدار أوامر التغيير وفق المادة (25)/ثالثاً. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
+                ، مع مراعاة نتائج التقييم الفني والقانوني{rec.primary.id === subject.id ? pricingClause : ''}، واعتماد الأسعار والمفردات الموزونة عند إصدار أوامر التغيير وفق المادة (25)/ثالثاً. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
               </p>
             )}
 
@@ -317,6 +343,113 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </div>
             )}
           </div>
+
+          {offer && (
+            <div className="mb-6">
+              <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
+                رابعاً: العرض الموزون لعطاء ({subject.name}) — {offer.origin === 'formula' ? 'بالمعادلة (التخميني × النسبة السعرية)' : 'جدول المجهز المعدل'}{offerFinal ? '' : ' (غير نهائي)'}:
+              </h3>
+              <p className="text-xs mb-2">
+                مجموع العرض الموزون ({formatNumber(offerState?.offerSum ?? 0)}) {Math.abs(offerState?.diff ?? 0) < 0.005 ? 'مساوٍ لمبلغ العطاء بعد التصحيح' : `يختلف عن مبلغ العطاء بعد التصحيح بمقدار (${formatNumber(offerState?.diff ?? 0)})`}، وعدد الفقرات المعدّلة ({editedItems.length}).
+              </p>
+              {editedItems.length > 0 && (
+                <table className="w-full text-xs text-right border-collapse border border-slate-400">
+                  <thead className="bg-slate-100 font-bold">
+                    <tr>
+                      <th className="border border-slate-300 p-2 text-center">ت</th>
+                      <th className="border border-slate-300 p-2">الوصف</th>
+                      <th className="border border-slate-300 p-2 text-center">الكمية</th>
+                      <th className="border border-slate-300 p-2 text-center">المبلغ بعد التصحيح</th>
+                      <th className="border border-slate-300 p-2 text-center">مفرد العرض الموزون</th>
+                      <th className="border border-slate-300 p-2 text-center">مبلغ العرض الموزون</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editedItems.map(i => (
+                      <tr key={i.id}>
+                        <td className="border border-slate-300 p-2 text-center">{i.itemNo}</td>
+                        <td className="border border-slate-300 p-2">{i.description}</td>
+                        <td className="border border-slate-300 p-2 text-center">{formatNumber(i.quantity)}</td>
+                        <td className="border border-slate-300 p-2 text-center">{formatNumber(i.bidderTotal)}</td>
+                        <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(i.offerUnitPrice ?? 0)}</td>
+                        <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(i.offerTotal ?? 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {pages && (
+            <div className="mb-6">
+              <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
+                ملخص صفحات عطاء ({subject.name}):
+              </h3>
+              <table className="w-full text-xs text-right border-collapse border border-slate-400">
+                <thead className="bg-slate-100 font-bold">
+                  <tr>
+                    <th className="border border-slate-300 p-2 text-center">الصفحة</th>
+                    <th className="border border-slate-300 p-2 text-center">عدد الفقرات</th>
+                    <th className="border border-slate-300 p-2 text-center">كما دوّنه المجهز</th>
+                    <th className="border border-slate-300 p-2 text-center">بعد التصحيح الحسابي</th>
+                    {offer && <th className="border border-slate-300 p-2 text-center">العرض الموزون{offerFinal ? '' : ' (غير نهائي)'}</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pages.rows.map(r => (
+                    <tr key={r.page ?? 'none'}>
+                      <td className="border border-slate-300 p-2 text-center">{r.page ?? 'فقرات بلا صفحة'}</td>
+                      <td className="border border-slate-300 p-2 text-center">{r.itemCount}</td>
+                      <td className="border border-slate-300 p-2 text-center">{formatNumber(r.stated)}</td>
+                      <td className="border border-slate-300 p-2 text-center">{formatNumber(r.corrected)}</td>
+                      {offer && <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(r.offer)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-100 font-black">
+                  <tr>
+                    <td className="border border-slate-400 p-2 text-center">المجموع</td>
+                    <td className="border border-slate-400 p-2 text-center">{subject.items.length}</td>
+                    <td className="border border-slate-400 p-2 text-center">{formatNumber(pages.totals.stated)}</td>
+                    <td className="border border-slate-400 p-2 text-center">{formatNumber(pages.totals.corrected)}</td>
+                    {offer && <td className="border border-slate-400 p-2 text-center">{formatNumber(pages.totals.offer)}</td>}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {notifyItems.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
+                فقرات يُبلَّغ بها المجهز ({subject.name}) — للإحاطة بنقاط الضعف في العطاء ({notifyItems.length} فقرة):
+              </h3>
+              <table className="w-full text-xs text-right border-collapse border border-slate-400">
+                <thead className="bg-slate-100 font-bold">
+                  <tr>
+                    <th className="border border-slate-300 p-2 text-center">ت</th>
+                    <th className="border border-slate-300 p-2">الوصف</th>
+                    <th className="border border-slate-300 p-2 text-center">نسبة الانحراف</th>
+                    <th className="border border-slate-300 p-2">الملاحظة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notifyItems.map(i => (
+                    <tr key={i.id}>
+                      <td className="border border-slate-300 p-2 text-center">{i.itemNo}</td>
+                      <td className="border border-slate-300 p-2">{i.description}</td>
+                      <td className="border border-slate-300 p-2 text-center">{i.estimatedTotal > 0 ? `${i.deviationPercent > 0 ? '+' : ''}${i.deviationPercent.toFixed(2)}%` : '—'}</td>
+                      <td className="border border-slate-300 p-2">
+                        {[i.estimatedTotal > 0 && i.isDeviated ? (i.deviationPercent > 0 ? 'منحرفة بالزيادة' : 'منحرفة بالنقصان') : '',
+                          i.unreasonablePrice ? `سعر غير معقول: ${i.unreasonablePrice.note}` : ''].filter(Boolean).join('؛ ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* 4. توقيعات اللجنة (رئيس اللجنة ثابت + عدد الأعضاء حسب حجم اللجنة الفعلي) */}
           <div
