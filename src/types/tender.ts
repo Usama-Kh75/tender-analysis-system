@@ -28,6 +28,14 @@ export interface BOQItem {
   hasTextDiscrepancy?: boolean;    // تعارض تفقيط مع الرقم
   correctionRationale?: string;    // السند القانوني للتصحيح
   unpriced?: boolean;              // الفقرة غير مسعّرة في العطاء نفسه («-» في خانة السعر)، كما قرأها الاستخراج
+  pageNo?: number;                 // رقم صفحة الفقرة في عطاء المجهز كما قدّمه (لكل مجهز ترقيمه)
+  // طبقة العرض الموزون (ضوابط رقم (4) سادساً/5): لا تمس ما دوّنه المجهز ولا ما بعد التصحيح الحسابي
+  offerUnitPrice?: number;
+  offerTotal?: number;
+  // ما حُرّك به المفرد الموزون المرجعي لتسوية التقريب (weightedRounding.ts)، مثل 0.01
+  weightedAdjustment?: number;
+  // تأشير اللجنة على سعر غير معقول (خطأ تسعير لا حسابي)، للإحاطة والتبليغ فقط ولا يدخل في أي حساب
+  unreasonablePrice?: { note: string; markedAt: string };
 }
 
 // الحقول التي يُعدّ تعديلها اليدوي في الجدول تصحيحاً لما قُرئ من العطاء (handleCorrectReading في App.tsx)
@@ -43,6 +51,16 @@ export interface TenderTotals {
   deviatedItemsSum: number;           // مجموع مبالغ الفقرات المنحرفة
   deviatedItemsCount: number;         // عدد الفقرات المنحرفة
   newPricesTotal: number;             // مجموع الأسعار الجديدة الموزونة
+  weightedRoundingResidual?: number;  // ما تعذّرت تسويته من فرق تقريب الأسعار الموزونة (يظهر صراحة)
+}
+
+// مرحلة العرض الموزون لعطاء (ضوابط رقم (4) سادساً/5). paused: أُوقفت وبقيت تعديلاتها لتُستأنف
+export interface WeightedOfferState {
+  status: 'active' | 'adopted' | 'paused';
+  origin: 'corrected' | 'formula';   // من أسعار العطاء بعد التصحيح، أو بالمعادلة (التخميني × النسبة)
+  startedAt: string;
+  adoptedAt?: string;
+  bidTotal: number;                  // مبلغ العطاء بعد التصحيح عند البدء أو الاستئناف — مرجع المطابقة
 }
 
 export interface Bidder {
@@ -54,6 +72,7 @@ export interface Bidder {
   totals: TenderTotals;
   // المبلغ الإجمالي كما كتبه المجهز في عطائه، قبل التصحيح الحسابي (totals بعده — ضوابط رقم (4) خامساً/ب/6)
   statedTotal?: number;
+  weightedOffer?: WeightedOfferState;
   status: 'pending' | 'qualified' | 'disqualified' | 'recommended' | 'awarded';
   notes?: string;
 }

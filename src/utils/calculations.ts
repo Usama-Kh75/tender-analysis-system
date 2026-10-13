@@ -1,4 +1,5 @@
 import { auditRowAmounts } from './bidderAuditEngine';
+import { settleWeightedPrices } from './weightedRounding';
 import { BOQItem, TenderTotals } from '../types/tender';
 
 /** الأرقام المشرقية (٠-٩) والفارسية (۰-۹) والفاصلة العشرية العربية (٫) إلى 0-9 و«.» */
@@ -194,7 +195,11 @@ export function calculateBOQMetrics(
       hasMathError: isMathError,
       hasTextDiscrepancy: isTextDiscrepancy,
       correctionRationale: isMathError ? 'تصحيح خطأ ضرب بالاعتداد بسعر المفرد' : undefined,
-      unpriced: item.unpriced
+      unpriced: item.unpriced,
+      pageNo: item.pageNo,
+      offerUnitPrice: item.offerUnitPrice,
+      offerTotal: item.offerTotal,
+      unreasonablePrice: item.unreasonablePrice
     };
   });
 
@@ -202,23 +207,28 @@ export function calculateBOQMetrics(
 
   let deviatedItemsSum = 0;
   let deviatedItemsCount = 0;
-  let newPricesTotal = 0;
 
-  const finalItems: BOQItem[] = preppedItems.map((item) => {
-    const newPrice = Math.round((overallPriceRatio * item.estimatedTotal) * 100) / 100;
-    const weightedUnitPrice = item.quantity > 0 ? newPrice / item.quantity : 0;
+  // الأسعار الموزونة مقرّبة لمنزلتين ومسوّاة لتساوي مبلغ العطاء (weightedRounding.ts)
+  const weighted = settleWeightedPrices(
+    preppedItems.map(i => ({ quantity: i.quantity, estimatedTotal: i.estimatedTotal })),
+    overallPriceRatio,
+    Math.round(totalBidder * 100) / 100
+  );
+
+  const finalItems: BOQItem[] = preppedItems.map((item, index) => {
+    const { unitPrice, amount, adjustment } = weighted.rows[index];
 
     if (item.isDeviated) {
       deviatedItemsSum += item.deviatedAmount;
       deviatedItemsCount += 1;
     }
-    newPricesTotal += newPrice;
 
     return {
       ...item,
       priceRatio: overallPriceRatio,
-      newPrice,
-      weightedUnitPrice
+      newPrice: amount,
+      weightedUnitPrice: unitPrice,
+      weightedAdjustment: adjustment !== 0 ? adjustment : undefined
     };
   });
 
@@ -236,7 +246,8 @@ export function calculateBOQMetrics(
     partialDeviationPercent: Math.round(partialDeviationPercent * 100) / 100,
     deviatedItemsSum: Math.round(deviatedItemsSum * 100) / 100,
     deviatedItemsCount,
-    newPricesTotal: Math.round(newPricesTotal * 100) / 100
+    newPricesTotal: weighted.total,
+    weightedRoundingResidual: weighted.residual
   };
 
   return { items: finalItems, totals };
