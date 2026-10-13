@@ -46,6 +46,7 @@ import { NewProjectModal } from './components/modals/NewProjectModal';
 import { ProjectsBrowserModal } from './components/modals/ProjectsBrowserModal';
 import { UpdateNotice } from './components/UpdateNotice';
 import { RecoveryNotice } from './components/RecoveryNotice';
+import { ForeignDomNotice } from './components/ForeignDomNotice';
 import { versionLabel } from './changelog';
 import { RESUMED_STATE } from './resume';
 import { CONTRACT_TYPES, contractTypeInfo } from './utils/contractTypes';
@@ -1310,6 +1311,7 @@ ${lockReason}`);
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
       {recoveryNotice}
+      <ForeignDomNotice />
 
       {/* Top Navbar */}
       <Navbar
