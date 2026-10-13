@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { X, Plus, Minus, FileStack } from 'lucide-react';
 import type { BOQItem } from '../../types/tender';
-import { resolvePageStarts, resolvePageNumbers, pagesFromStarts, startItemNos, startPages } from '../../utils/pageSummary';
+import { resolvePageStarts, resolvePageNumbers, pagesFromStarts, startItemNos, startPages, previewPageRanges } from '../../utils/pageSummary';
+import { formatNumber } from '../../utils/calculations';
 
 interface Props {
   isOpen: boolean;
@@ -31,7 +32,8 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
   const error = 'error' in starts ? starts.error : 'error' in numbers ? numbers.error : null;
   const pages = 'starts' in starts && 'numbers' in numbers
     ? pagesFromStarts(items.length, starts.starts, numbers.numbers) : null;
-  const countOf = (k: number) => pages && 'numbers' in numbers ? pages.filter(x => x === numbers.numbers[k]).length : 0;
+  const ranges = pages ? previewPageRanges(items, pages) : [];
+  const n = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 2);
 
   const update = (k: number, patch: Partial<StartRow>) => setRows(rs => rs.map((r, i) => i === k ? { ...r, ...patch } : r));
   const addRow = () => setRows(rs => {
@@ -41,7 +43,7 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="فواصل الصفحات">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-4 bg-slate-950 text-white flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold"><FileStack className="w-5 h-5 text-amber-400" /> فواصل صفحات عطاء ({bidderName})</div>
           <button onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"><X className="w-5 h-5" /></button>
@@ -62,7 +64,6 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
                   onChange={(e) => update(k, { itemNo: e.target.value })}
                   className="w-24 text-center border border-slate-300 rounded-lg p-1 font-mono font-bold disabled:bg-slate-100" />
               </label>
-              {pages && <span className="text-xs text-slate-500">({countOf(k)}) فقرة</span>}
             </div>
           ))}
           <div className="flex gap-2 pt-1">
@@ -72,6 +73,39 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
               className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 cursor-pointer disabled:opacity-50"><Minus className="w-3.5 h-3.5" /> آخر صفحة</button>
           </div>
           {error && <div className="text-xs font-bold text-rose-800 bg-rose-50 border border-rose-200 rounded-lg p-2">{error}</div>}
+          {ranges.length > 0 && (
+            <div className="pt-2 overflow-x-auto">
+              <table className="w-full text-xs text-right border-collapse border border-slate-200 rounded-lg overflow-hidden">
+                <thead className="bg-slate-900 text-slate-100 font-black">
+                  <tr>
+                    <th className="p-2 text-center">الصفحة</th>
+                    <th className="p-2 text-center">من فقرة</th>
+                    <th className="p-2 text-center">إلى فقرة</th>
+                    <th className="p-2 text-center">عدد الفقرات</th>
+                    <th className="p-2 text-center">مجموع الصفحة (كما دوّنه المجهز)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-mono font-bold text-slate-900">
+                  {ranges.map(r => (
+                    <tr key={r.page}>
+                      <td className="p-2 text-center font-sans">{r.page}</td>
+                      <td className="p-2 text-center">{r.from}</td>
+                      <td className="p-2 text-center">{r.to}</td>
+                      <td className="p-2 text-center">{r.itemCount}</td>
+                      <td className="p-2 text-center">{n(r.stated)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-100 font-black font-mono text-slate-900">
+                  <tr>
+                    <td className="p-2 text-center font-sans" colSpan={3}>المجموع</td>
+                    <td className="p-2 text-center">{ranges.reduce((s, r) => s + r.itemCount, 0)}</td>
+                    <td className="p-2 text-center">{n(Math.round(ranges.reduce((s, r) => s + r.stated, 0) * 100) / 100)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
         <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
           <button onClick={onClose} className="text-xs font-bold px-4 py-2 rounded-xl border border-slate-300 cursor-pointer">إلغاء</button>

@@ -79,6 +79,29 @@ export function startPages(items: BOQItem[]): number[] {
 export interface PageSummaryRow { page: number | null; itemCount: number; stated: number; corrected: number; offer: number }
 export interface PageSummary { rows: PageSummaryRow[]; totals: { stated: number; corrected: number; offer: number }; unassigned: number }
 
+export interface PageRangeRow { page: number; from: string; to: string; itemCount: number; stated: number }
+
+/**
+ * معاينة فواصل الصفحات قبل الإسناد: لكل صفحة أول فقرة فيها وآخرها (بترتيب الجدول) وعددها ومبلغها كما دوّنه المجهز.
+ * المبالغ من summarizePages نفسها فلا تختلف عن الملخص بعد الإسناد
+ */
+export function previewPageRanges(items: BOQItem[], pages: (number | undefined)[]): PageRangeRow[] {
+  const summary = summarizePages(items.map((it, i) => ({ ...it, pageNo: pages[i] })));
+  if (!summary) return [];
+  const bounds = new Map<number, { from: string; to: string }>();
+  items.forEach((it, i) => {
+    const page = pages[i];
+    if (page === undefined) return;
+    const b = bounds.get(page);
+    if (b) b.to = key(it.itemNo);
+    else bounds.set(page, { from: key(it.itemNo), to: key(it.itemNo) });
+  });
+  return summary.rows.flatMap(r => {
+    const b = r.page === null ? undefined : bounds.get(r.page);
+    return r.page !== null && b ? [{ page: r.page, from: b.from, to: b.to, itemCount: r.itemCount, stated: r.stated }] : [];
+  });
+}
+
 export function summarizePages(items: BOQItem[]): PageSummary | null {
   if (!items.some(i => i.pageNo !== undefined)) return null;
   const groups = new Map<number | null, PageSummaryRow>();

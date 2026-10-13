@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolvePageStarts, pagesFromStarts, startItemNos, summarizePages } from '../src/utils/pageSummary';
+import { resolvePageStarts, pagesFromStarts, startItemNos, summarizePages, previewPageRanges } from '../src/utils/pageSummary';
 import type { BOQItem } from '../src/types/tender';
 
 const items = (n: number) => Array.from({ length: n }, (_, k) => ({ itemNo: String(k + 1), bidderTotal: 10 * (k + 1) })) as BOQItem[];
@@ -26,6 +26,18 @@ test('أرقام أول فقرة لكل صفحة من الإسناد الحال�
   const its = items(5).map((it, k) => ({ ...it, pageNo: [1, 1, 2, 2, 3][k] }));
   assert.deepEqual(startItemNos(its), ['1', '3', '5']);
   assert.deepEqual(startItemNos(items(3)), []);
+});
+
+test('معاينة الفواصل: لكل صفحة من - إلى وعدد الفقرات ومبلغها كما دوّنه المجهز، ومجموعها مجموع العطاء', () => {
+  const its = items(6).map((it, k) => ({ ...it, enteredBidderTotal: k === 1 ? 500 : undefined })) as BOQItem[];
+  const rows = previewPageRanges(its, [7, 7, 8, 8, 8, 10]);
+  assert.deepEqual(rows, [
+    { page: 7, from: '1', to: '2', itemCount: 2, stated: 510 },
+    { page: 8, from: '3', to: '5', itemCount: 3, stated: 120 },
+    { page: 10, from: '6', to: '6', itemCount: 1, stated: 60 }
+  ]);
+  assert.equal(rows.reduce((s, r) => s + r.stated, 0), 690);
+  assert.deepEqual(previewPageRanges(items(2), [undefined, undefined]), []);
 });
 
 test('الملخص: مجموع الصفحات = مجموع العطاء، وفقرات بلا صفحة في صف مستقل', () => {
