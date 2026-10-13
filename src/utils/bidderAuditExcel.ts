@@ -4,6 +4,8 @@ import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits, percentDecimals } from './calculations';
+import { summarizePages } from './pageSummary';
+import { isOfferEdited } from './weightedOffer';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -355,6 +357,9 @@ function correctionText(row: RowAnalysis): string {
   }
   if (row.pending.length) parts.push(`بانتظار قرار اللجنة: ${row.pending.join(' + ')}`);
   if (item.unpriced) parts.push('غير مسعّرة في العطاء');
+  if (item.weightedAdjustment) parts.push(`سُوّي تقريب المفرد الموزون (${item.weightedAdjustment > 0 ? '+' : ''}${item.weightedAdjustment})`);
+  if (item.unreasonablePrice) parts.push(`سعر غير معقول: ${item.unreasonablePrice.note}`);
+  if (isOfferEdited(item)) parts.push(`معدّل بالعرض الموزون: المبلغ ${fmt(item.offerTotal ?? 0)}`);
   return parts.join('؛ ');
 }
 
@@ -362,6 +367,8 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
   const last = FIRST + rows.length - 1;
   const t = bidder.totals;
   const hasEstimate = t.totalEstimatedAmount > 0;
+  // عمودا العرض الموزون يظهران مع عرض فعّال أو معتمد (الموقوف لا يُعرض)
+  const hasOffer = !!bidder.weightedOffer && bidder.weightedOffer.status !== 'paused';
   const pendingCount = rows.filter(r => r.pending.length > 0).length;
   // بلا كلفة تخمينية لا معنى للانحراف والأسعار الموزونة، فتبقى خاناتها فارغة
   const est = (cell: Cell): Cell => hasEstimate ? cell : '';
@@ -385,7 +392,8 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
       est(ratio(item.priceRatio)),
       est(amount(item.newPrice)),
       est(amount(round2(item.weightedUnitPrice))),
-      correctionText(row)
+      correctionText(row),
+      ...(hasOffer ? [amount(item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal)), amount(item.offerTotal ?? item.bidderTotal)] : [])
     ];
   });
 
@@ -399,7 +407,8 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
     [],
     ['المجموع', '', '', '', '', est(sum('F', t.totalEstimatedAmount)), '', sum('H', t.totalBidderAmount),
       est(sum('I', t.overallDiffAmount)), '', est(sum('K', t.deviatedItemsSum)), '',
-      est(sum('M', t.newPricesTotal))],
+      est(sum('M', t.newPricesTotal)),
+      ...(hasOffer ? ['', '', '', sum('Q', round2(bidder.items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0)))] : [])],
     [],
     line('مبلغ العطاء بعد التصحيح الحسابي (أساس التسلسل — خامساً/ب/6)', formula(`H${sumRow}`, t.totalBidderAmount)),
     line('مجموع مبالغ الفقرات كما دوّنها المجهز', amount(sumEntered)),
@@ -425,11 +434,11 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
     [],
     ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', 'المفرد التخميني', 'المبلغ التخميني', 'مفرد المجهز', 'مبلغ المجهز',
       'فرق المبلغ', 'نسبة الانحراف', 'الفقرة المنحرفة', 'النسبة السعرية', 'السعر الجديد (للمجهز)', 'المفرد المجهز الموزون',
-      'التصحيح المعتمد'],
+      'التصحيح المعتمد', ...(hasOffer ? ['مفرد العرض الموزون', 'مبلغ العرض الموزون'] : [])],
     ...data,
     ...footer
   ], {
-    widths: [6, 34, 9, 11, 13, 16, 13, 16, 15, 11, 15, 11, 17, 15, 60],
+    widths: [6, 34, 9, 11, 13, 16, 13, 16, 15, 11, 15, 11, 17, 15, 60, ...(hasOffer ? [15, 17] : [])],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + rows.length,
     fillOf: r => {
       const row = rows[r - HEADER_ROWS - 1];
@@ -439,7 +448,37 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
   });
 }
 
-export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder) {
+// ملخص صفحات العطاء: مبلغ كل صفحة كما دوّنه المجهز، وبعد التصحيح، وفي العرض الموزون؛ المجموع بصيغ Excel
+function buildPagesSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
+  const pages = summarizePages(bidder.items);
+  if (!pages) return null;
+  const hasOffer = !!bidder.weightedOffer && bidder.weightedOffer.status !== 'paused';
+  const final = bidder.weightedOffer?.status === 'adopted';
+  const last = FIRST + pages.rows.length - 1;
+  const data: Cell[][] = pages.rows.map(r => [
+    r.page === null ? 'فقرات بلا صفحة' : count(r.page), count(r.itemCount), amount(r.stated), amount(r.corrected),
+    ...(hasOffer ? [amount(r.offer)] : [])
+  ]);
+  const sum = (col: string, v: number) => formula(`SUM(${col}${FIRST}:${col}${last})`, v);
+  return buildSheet([
+    [`ملخص صفحات العطاء: ${bidder.name}`],
+    [projectLine(project)],
+    ['مبلغ كل صفحة من عطاء المجهز كما قدّمه: كما دوّنه، وبعد التصحيح الحسابي (ضوابط رقم (4) خامساً/ب)'
+      + (hasOffer ? `، وفي العرض الموزون (سادساً/5)${final ? '' : ' — غير نهائي'}` : '') + '. مجموع الصفحات مجموع العطاء.'],
+    [],
+    ['الصفحة', 'عدد الفقرات', 'كما دوّنه المجهز', 'بعد التصحيح الحسابي', ...(hasOffer ? ['العرض الموزون'] : [])],
+    ...data,
+    [],
+    ['المجموع', sum('B', bidder.items.length), sum('C', pages.totals.stated), sum('D', pages.totals.corrected),
+      ...(hasOffer ? [sum('E', pages.totals.offer)] : [])]
+  ], {
+    widths: [16, 12, 20, 20, ...(hasOffer ? [20] : [])],
+    dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + pages.rows.length,
+    center: [0, 1]
+  });
+}
+
+export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder): XLSX.WorkBook {
   const logs = project.auditLogs || [];
   const rows = bidder.items.map(item => analyseRow(item, bidder.id, logs));
 
@@ -447,8 +486,14 @@ export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder)
   XLSX.utils.book_append_sheet(wb, buildAsIsSheet(project, bidder, rows), AS_IS_SHEET);
   XLSX.utils.book_append_sheet(wb, buildErrorsSheet(project, bidder, rows), 'أخطاء المجهز');
   XLSX.utils.book_append_sheet(wb, buildAdjustedSheet(project, bidder, rows), 'الجدول المعدل');
+  const pagesSheet = buildPagesSheet(project, bidder);
+  if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
   wb.Workbook = { Views: [{ RTL: true }] };
+  return wb;
+}
 
+export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder) {
+  const wb = buildBidderAuditWorkbook(project, bidder);
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
   XLSX.writeFile(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }

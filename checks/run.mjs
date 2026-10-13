@@ -21,7 +21,8 @@ for (const t of tests) {
   await build({
     input: join(here, t),
     platform: 'node',
-    external: id => !id.startsWith('.') && !isAbsolute(id),
+    // xlsx-js-style حزمة CJS لا يكشف Node تصديراتها المسماة عند import *، فتُضمَّن في الحزمة ليعمل XLSX.utils
+    external: id => !id.startsWith('.') && !isAbsolute(id) && id !== 'xlsx-js-style',
     logLevel: 'silent',
     output: { file: join(out, basename(t, '.ts') + '.mjs'), format: 'esm' }
   });
