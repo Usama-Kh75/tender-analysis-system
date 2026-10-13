@@ -9,7 +9,7 @@ import {
   FileCheck
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
-import { formatNumber, formatCurrency } from '../utils/calculations';
+import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 
@@ -54,7 +54,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
       commercialReason = 'بانتظار الكلفة التخمينية: لا يُحكم بالانحراف ولا بالتوازن قبل إدخالها';
     } else if (Math.abs(totalDev) > project.deviationThreshold) {
       commercialStatus = 'excluded';
-      commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${totalDev.toFixed(2)}%)`;
+      commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${formatPercent(totalDev, 2, project.deviationThreshold).replace('+', '')})`;
     } else {
       commercialStatus = bidder.status === 'recommended' ? 'recommended' : 'qualified';
       commercialReason = partialDev > 0
@@ -255,7 +255,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                           ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                           : 'bg-slate-100 text-slate-800'
                       }`}>
-                        {bidder.totals.totalDeviationPercent > 0 ? '+' : ''}{bidder.totals.totalDeviationPercent.toFixed(2)}%
+                        {formatPercent(bidder.totals.totalDeviationPercent, 2, project.deviationThreshold)}
                       </span>
                     </td>
 

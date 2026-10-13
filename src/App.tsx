@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   getAllProjects,
+  getRecoveredData,
+  clearRecoveredData,
+  RecoveredData,
   saveAllProjects,
   getActiveProjectId,
   setActiveProjectId,
@@ -35,6 +38,7 @@ import { PrintReportModal } from './components/modals/PrintReportModal';
 import { NewProjectModal } from './components/modals/NewProjectModal';
 import { ProjectsBrowserModal } from './components/modals/ProjectsBrowserModal';
 import { UpdateNotice } from './components/UpdateNotice';
+import { RecoveryNotice } from './components/RecoveryNotice';
 import { versionLabel } from './changelog';
 import { RESUMED_STATE } from './resume';
 import { CONTRACT_TYPES, contractTypeInfo } from './utils/contractTypes';
@@ -53,6 +57,7 @@ export function App() {
   const [activeProjectId, setActiveId] = useState<string>('');
   // لا يُحفظ شيء قبل اكتمال التحميل الأول؛ وبعده تُحفظ القائمة حتى لو فرغت (حذف آخر مناقصة)
   const [loaded, setLoaded] = useState(false);
+  const [recovered, setRecovered] = useState<RecoveredData[]>([]);
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
   const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
@@ -77,6 +82,7 @@ export function App() {
   // Load from Storage
   useEffect(() => {
     const stored = getAllProjects();
+    setRecovered(getRecoveredData());
     setProjects(stored);
     const currId = getActiveProjectId();
     setActiveId(currId || stored[0]?.id || '');
@@ -163,10 +169,29 @@ export function App() {
     }
   };
 
+  const downloadRecovered = () => {
+    const blob = new Blob([JSON.stringify(recovered, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `بيانات_مناقصات_تعذرت_قراءتها_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const recoveryNotice = (
+    <RecoveryNotice
+      entries={recovered}
+      onDownload={downloadRecovered}
+      onDismiss={() => { clearRecoveredData(); setRecovered([]); }}
+    />
+  );
+
   // لا مناقصة محفوظة (بعد «إعادة ضبط النظام» أو حذف آخر مناقصة): شاشة بداية بدل مناقصة فارغة تُنشأ تلقائياً
   if (loaded && projects.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+      <div className="min-h-screen bg-slate-100">
+      {recoveryNotice}
+      <div className="flex items-center justify-center p-4 min-h-[80vh]">
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-8 max-w-md w-full text-center space-y-4">
           <h1 className="text-lg font-black text-slate-900">نظام تحليل العطاءات</h1>
           <p className="text-sm text-slate-500">لا توجد مناقصة محفوظة في هذا المتصفح.</p>
@@ -199,6 +224,7 @@ export function App() {
           onClose={() => setIsNewProjectOpen(false)}
           onCreate={(data) => { handleCreateProject(data); setIsNewProjectOpen(false); }}
         />
+      </div>
       </div>
     );
   }
@@ -1125,7 +1151,8 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
-      
+      {recoveryNotice}
+
       {/* Top Navbar */}
       <Navbar
         project={currentProject}

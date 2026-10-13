@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx-js-style'; // SheetJS 0.18.5 نفسها، ومعها كتابة التنسيق (bidderAuditExcel)
 import { BOQItem, TenderProject, Bidder } from '../types/tender';
 import { hasBidAmounts } from './recommendation';
+import { percentDecimals } from './calculations';
 
 // أسماء أوراق Excel محدودة بـ 31 محرفاً ولا تقبل الرموز \ / ? * [ ]
 function sanitizeSheetName(name: string, usedNames: Set<string>): string {
@@ -73,7 +74,7 @@ function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive
 
   rows.push([
     'مؤشرات الانحراف',
-    `الانحراف الكلي: ${bidder.totals.totalDeviationPercent.toFixed(2)}%`,
+    `الانحراف الكلي: ${bidder.totals.totalDeviationPercent.toFixed(percentDecimals(bidder.totals.totalDeviationPercent, project.deviationThreshold))}%`,
     `الانحراف الجزئي: ${bidder.totals.partialDeviationPercent.toFixed(2)}%`,
     `النسبة السعرية: ${bidder.totals.overallPriceRatio.toFixed(4)}`,
     `عدد الفقرات المنحرفة: ${bidder.totals.deviatedItemsCount}`,
@@ -121,7 +122,7 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
       b.totals.totalBidderAmount,
       b.totals.totalEstimatedAmount,
       b.totals.overallDiffAmount,
-      `${b.totals.totalDeviationPercent.toFixed(2)}%`,
+      `${b.totals.totalDeviationPercent.toFixed(percentDecimals(b.totals.totalDeviationPercent, project.deviationThreshold))}%`,
       `${b.totals.partialDeviationPercent.toFixed(2)}%`,
       b.totals.deviatedItemsCount,
       b.totals.overallPriceRatio.toFixed(4),

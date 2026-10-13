@@ -209,7 +209,7 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                             ? 'bg-rose-100 text-rose-800'
                             : 'bg-emerald-100 text-emerald-800'
                         }`}>
-                          {formatPercent(bidder.totals.totalDeviationPercent)}
+                          {formatPercent(bidder.totals.totalDeviationPercent, 2, project.deviationThreshold)}
                         </span>
                       </td>
                       <td className="p-3 text-center font-bold text-amber-700">

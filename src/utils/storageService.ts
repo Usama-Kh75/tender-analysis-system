@@ -244,9 +244,67 @@ function latinizeItemNumbers(project: TenderProject): TenderProject {
   );
 }
 
+// الانحراف الكلي كان يُخزَّن بمنزلتين فيُستبعد بالمقارنة المقرَّبة: 20.004% تُخزَّن 20.00 فلا تتجاوز الحد.
+// تُعاد النسبة إلى دقتها من المبلغين المخزَّنين دون مس أي مبلغ أو علامة، ويُسجَّل في السجل فقط ما انقلب حكمه
+function refreshDeviationPrecision(project: TenderProject): TenderProject {
+  const threshold = project.deviationThreshold;
+  const flips: { bidder: Bidder; was: number; now: number }[] = [];
+  const bidders = project.bidders.map(b => {
+    const t = b.totals;
+    if (!t || !(t.totalEstimatedAmount > 0)) return b;
+    const now = Math.round(((t.totalBidderAmount - t.totalEstimatedAmount) / t.totalEstimatedAmount) * 100 * 1e6) / 1e6;
+    if (!Number.isFinite(now) || now === t.totalDeviationPercent) return b;
+    if ((Math.abs(t.totalDeviationPercent) > threshold) !== (Math.abs(now) > threshold)) {
+      flips.push({ bidder: b, was: t.totalDeviationPercent, now });
+    }
+    return { ...b, totals: { ...t, totalDeviationPercent: now } };
+  });
+  if (bidders.every((b, i) => b === project.bidders[i])) return project;
+
+  return flips.reduce((p, f) => addAuditLog(
+    p,
+    'إعادة فحص تلقائية',
+    `الانحراف الكلي لعطاء (${f.bidder.name}) بدقته الكاملة ${f.now}% لا ${f.was}% المخزَّنة مقرَّبة، فتغيّر حكم الاستبعاد بالنسبة إلى الحد (±${threshold}%)`,
+    { bidderId: f.bidder.id }
+  ), { ...project, bidders, updatedAt: new Date().toISOString() });
+}
+
 // كل مشروع يُحمَّل أو يُستعاد: توحيد أرقام الفقرات والحقول المشتركة ثم إعادة فحص العلامات المخزنة
 const normalizeLoadedProject = (project: TenderProject) =>
-  recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project)));
+  refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project))));
+
+// نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
+const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';
+const RECOVERY_LIMIT = 5;
+
+export interface RecoveredData {
+  at: string;
+  reason: string;
+  raw: string;
+}
+
+export function getRecoveredData(): RecoveredData[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+
+export function clearRecoveredData(): void {
+  try { localStorage.removeItem(RECOVERY_KEY); } catch { /* تخزين محظور: لا شيء */ }
+}
+
+function stashRecovered(raw: string, reason: string): void {
+  try {
+    const list = getRecoveredData();
+    if (list.some(e => e.raw === raw)) return; // القراءة تتكرر في الجلسة نفسها
+    list.push({ at: new Date().toISOString(), reason, raw });
+    localStorage.setItem(RECOVERY_KEY, JSON.stringify(list.slice(-RECOVERY_LIMIT)));
+  } catch { /* الامتلاء لا يمنع التحميل، لكن تبقى البيانات الأصلية دون كتابة فوقها */ }
+}
+
+const looksLikeProject = (p: unknown): p is TenderProject =>
+  !!p && typeof p === 'object' && Array.isArray((p as TenderProject).bidders);
 
 export function getAllProjects(): TenderProject[] {
   const data = localStorage.getItem(STORAGE_KEY);
@@ -255,18 +313,39 @@ export function getAllProjects(): TenderProject[] {
     saveAllProjects([defaultProject]);
     return [defaultProject];
   }
+
+  // نص لا يُقرأ قائمة مشاريع: يُحفظ كما هو في مفتاح الاسترداد قبل أن يكتب App فوقه قائمة فارغة
+  let parsed: unknown;
   try {
-    const projects: TenderProject[] = JSON.parse(data);
-    const reconciled = projects.map(normalizeLoadedProject);
-    if (reconciled.some((p, i) => p !== projects[i])) {
-      saveAllProjects(reconciled);
-    }
-    return reconciled;
+    parsed = JSON.parse(data);
   } catch {
-    const defaultProject = createDefaultProject();
-    saveAllProjects([defaultProject]);
-    return [defaultProject];
+    stashRecovered(data, 'نص البيانات المحفوظة تالف ولا يُقرأ');
+    return [];
   }
+  if (!Array.isArray(parsed)) {
+    stashRecovered(data, 'البيانات المحفوظة ليست قائمة مناقصات');
+    return [];
+  }
+
+  // كل مشروع على حدة: عطل في واحد لا يُسقط المناقصات الأخرى
+  const projects: TenderProject[] = [];
+  const unusable: unknown[] = [];
+  parsed.forEach(entry => {
+    if (!looksLikeProject(entry)) { unusable.push(entry); return; }
+    try {
+      projects.push(normalizeLoadedProject(entry));
+    } catch {
+      projects.push(entry); // فشل التوحيد لا يمنع عرض المشروع كما حُفظ
+    }
+  });
+
+  if (unusable.length > 0) {
+    stashRecovered(JSON.stringify(unusable), `${unusable.length} عنصر محفوظ لا يُقرأ كمناقصة`);
+  }
+  if (unusable.length > 0 || projects.some((p, i) => p !== parsed[i])) {
+    saveAllProjects(projects);
+  }
+  return projects;
 }
 
 export function saveAllProjects(projects: TenderProject[]): void {

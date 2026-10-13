@@ -194,7 +194,7 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
         <div className={`text-lg font-black tracking-tight ${
           noEstimate ? 'text-slate-400' : isHighTotalDeviation ? 'text-rose-700' : 'text-emerald-700'
         }`}>
-          {noEstimate ? '—' : formatPercent(totals.totalDeviationPercent)}
+          {noEstimate ? '—' : formatPercent(totals.totalDeviationPercent, 2, deviationThreshold)}
         </div>
         {noEstimate ? pendingNote : (
           <div className="text-[11px] font-medium opacity-80 mt-1">

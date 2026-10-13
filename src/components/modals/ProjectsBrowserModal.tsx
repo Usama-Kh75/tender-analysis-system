@@ -148,7 +148,7 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                                     title="الانحراف عن الكلفة التخمينية"
                                     className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${beyond ? 'text-rose-700 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}`}
                                   >
-                                    {formatPercent(deviation)}
+                                    {formatPercent(deviation, 2, project.deviationThreshold)}
                                   </bdi>
                                 )}
                               </span>

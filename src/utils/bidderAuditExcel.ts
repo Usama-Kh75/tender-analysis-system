@@ -3,7 +3,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
-import { toLatinDigits } from './calculations';
+import { toLatinDigits, percentDecimals } from './calculations';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -54,7 +54,10 @@ const amount = (v: number, color = TEXT): XLSX.CellObject => {
 };
 const input = (v: number) => amount(v, INPUT);
 const formula = (f: string, v: number): XLSX.CellObject => ({ ...amount(v), f });
-const pct = (v: number): XLSX.CellObject => ({ t: 'n', v: v / 100, z: '0.00%', s: { numFmt: '0.00%' } });
+const pct = (v: number, decimals = 2): XLSX.CellObject => {
+  const fmt = `0.${'0'.repeat(decimals)}%`;
+  return { t: 'n', v: v / 100, z: fmt, s: { numFmt: fmt } };
+};
 const ratio = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0.0000', s: { numFmt: '0.0000' } });
 const count = (v: number): XLSX.CellObject => ({ t: 'n', v });
 
@@ -403,7 +406,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
     line('المبلغ الإجمالي المدون في العطاء (قبل التصحيح)', statedTotal ? input(statedTotal) : 'غير مسجل في النظام'),
     ...(hasEstimate ? [
       line('الكلفة التخمينية', amount(t.totalEstimatedAmount)),
-      line('الانحراف الكلي', pct(t.totalDeviationPercent)),
+      line('الانحراف الكلي', pct(t.totalDeviationPercent, percentDecimals(t.totalDeviationPercent, project.deviationThreshold))),
       line('الانحراف الجزئي', pct(t.partialDeviationPercent)),
       line('النسبة السعرية', ratio(t.overallPriceRatio)),
       line(`عدد الفقرات المنحرفة (أكثر من ${project.deviationThreshold}%)`, count(t.deviatedItemsCount))

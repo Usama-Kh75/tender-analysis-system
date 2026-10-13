@@ -150,7 +150,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       {rec.kind === 'no-estimate' ? (
                         <td colSpan={3} className="border border-slate-300 p-2 text-center text-slate-500">بانتظار الكلفة التخمينية</td>
                       ) : (<>
-                        <td className="border border-slate-300 p-2 text-center">{formatPercent(b.totals.totalDeviationPercent)}</td>
+                        <td className="border border-slate-300 p-2 text-center">{formatPercent(b.totals.totalDeviationPercent, 2, threshold)}</td>
                         <td className="border border-slate-300 p-2 text-center">{b.totals.partialDeviationPercent.toFixed(2)}%</td>
                         <td className="border border-slate-300 p-2 text-center font-mono">{b.totals.overallPriceRatio.toFixed(4)}</td>
                       </>)}
@@ -187,7 +187,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <div><strong>الكلفة التخمينية:</strong> {formatCurrency(subject.totals.totalEstimatedAmount, project.currency)}</div>
                 <div><strong>مبلغ العرض:</strong> {formatCurrency(subject.totals.totalBidderAmount, project.currency)}</div>
                 <div><strong>النسبة السعرية:</strong> {subject.totals.overallPriceRatio.toFixed(4)}</div>
-                <div><strong>الانحراف الكلي:</strong> {formatPercent(subject.totals.totalDeviationPercent)}</div>
+                <div><strong>الانحراف الكلي:</strong> {formatPercent(subject.totals.totalDeviationPercent, 2, threshold)}</div>
               </div>
             </div>
 
@@ -230,7 +230,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <td className="border border-slate-400 p-2 text-center">المجموع</td>
                   <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.totalEstimatedAmount)}</td>
                   <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.totalBidderAmount)}</td>
-                  <td className="border border-slate-400 p-2 text-center">{formatPercent(subject.totals.totalDeviationPercent)}</td>
+                  <td className="border border-slate-400 p-2 text-center">{formatPercent(subject.totals.totalDeviationPercent, 2, threshold)}</td>
                   <td className="border border-slate-400 p-2 text-center text-rose-800">{formatNumber(subject.totals.deviatedItemsSum)}</td>
                   <td className="border border-slate-400 p-2 text-center font-mono">{subject.totals.overallPriceRatio.toFixed(4)}</td>
                   <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.newPricesTotal)}</td>
@@ -283,7 +283,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
             {rec.kind === 'referral' && rec.primary && (
               <p>
-                بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{threshold}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> وبانحراف ({formatPercent(rec.primary.totals.totalDeviationPercent)}) عن الكلفة التخمينية.
+                بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{threshold}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> وبانحراف ({formatPercent(rec.primary.totals.totalDeviationPercent, 2, threshold)}) عن الكلفة التخمينية.
                 وعليه توصي لجنة التحليل <strong>برفع الموضوع إلى اللجنة المركزية للمصادقة على الإحالة للنظر في التفاوض لتخفيض الأسعار</strong> إلى الحدود المسموحة للكلفة التخمينية دون المساس بنطاق العمل المعلن، استناداً إلى المادة (13)/ثالثاً/ب — علماً أن إجراء التفاوض ذاته ليس من اختصاص لجنة التحليل.
                 وإذا لم تؤدِّ المفاوضات إلى تخفيض الأسعار ضمن الحدود المقبولة، فلجهة التعاقد إعادة الإعلان أو الدعوة وفق المادة (20)/أولاً.
               </p>
@@ -292,7 +292,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             {rec.kind === 'retender' && (
               <p>
                 {rec.retenderReason === 'lowest-below' && rec.primary ? (
-                  <>بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{threshold}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> ويقل عن الكلفة التخمينية بنسبة ({formatPercent(rec.primary.totals.totalDeviationPercent)})، فلا ينطبق عليه استثناء المادة (13)/ثالثاً/ب المشروط بزيادة أقل العطاءات على الحدود. وعليه توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/رابعاً.</>
+                  <>بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{threshold}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> ويقل عن الكلفة التخمينية بنسبة ({formatPercent(rec.primary.totals.totalDeviationPercent, 2, threshold)})، فلا ينطبق عليه استثناء المادة (13)/ثالثاً/ب المشروط بزيادة أقل العطاءات على الحدود. وعليه توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/رابعاً.</>
                 ) : (
                   <>استبعدت اللجنة جميع العطاءات المقدمة. وإذا كان استبعادها لعدم مطابقتها لشروط ومعايير المناقصة، توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/ثالثاً.</>
                 )}

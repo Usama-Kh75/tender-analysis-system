@@ -158,10 +158,10 @@ export function calculateBOQMetrics(
     const enteredTotal = item.enteredBidderTotal !== undefined ? item.enteredBidderTotal : bidderTotal;
     const writtenTxt = item.writtenText;
 
-    const mathCalcTotal = enteredUnit > 0 && quantity > 1 ? (enteredUnit * quantity) : bidderTotal;
+    const mathCalcTotal = enteredUnit > 0 && quantity > 0 && quantity !== 1 ? (enteredUnit * quantity) : bidderTotal;
     const isMathError = item.hasMathError !== undefined 
       ? item.hasMathError 
-      : (enteredUnit > 0 && quantity > 1 && Math.abs(mathCalcTotal - enteredTotal) > 0.01);
+      : (enteredUnit > 0 && quantity > 0 && quantity !== 1 && Math.abs(mathCalcTotal - enteredTotal) > 0.01);
 
     // التفقيط قد يكون لسعر المفرد أو لمبلغ الفقرة: تعارض إن لم يساوِ أياً منهما (كان يُقارن بالمبلغ وحده)
     const isTextDiscrepancy = item.hasTextDiscrepancy !== undefined
@@ -231,7 +231,8 @@ export function calculateBOQMetrics(
     totalBidderAmount: Math.round(totalBidder * 100) / 100,
     overallDiffAmount: Math.round(overallDiffAmount * 100) / 100,
     overallPriceRatio,
-    totalDeviationPercent: Math.round(totalDeviationPercent * 100) / 100,
+    // ست منازل لا اثنتان: الاستبعاد يُقرَّر بمقارنة هذه القيمة بالحد، فالتقريب إلى منزلتين كان يجعل 20.004% تساوي 20%
+    totalDeviationPercent: Math.round(totalDeviationPercent * 1e6) / 1e6,
     partialDeviationPercent: Math.round(partialDeviationPercent * 100) / 100,
     deviatedItemsSum: Math.round(deviatedItemsSum * 100) / 100,
     deviatedItemsCount,
@@ -249,10 +250,22 @@ export function formatNumber(val: number, decimals: number = 2): string {
   }).format(val);
 }
 
-export function formatPercent(val: number, decimals: number = 2): string {
+/**
+ * عدد منازل عرض النسبة: بإعطاء `threshold` لا تُعرض نسبة تتجاوز الحد بقيمة مقرَّبة تساويه، فتُعرض 20.004%
+ * لا 20.00% (الاستبعاد يقارن القيمة الكاملة، فلا يظهر عطاء مستبعد بانحراف يبدو على الحد نفسه)
+ */
+export function percentDecimals(val: number, threshold?: number, decimals: number = 2): number {
+  let shown = decimals;
+  if (threshold !== undefined && Math.abs(val) > threshold) {
+    while (shown < 6 && Math.abs(Number(val.toFixed(shown))) <= threshold) shown++;
+  }
+  return shown;
+}
+
+export function formatPercent(val: number, decimals: number = 2, threshold?: number): string {
   if (val === undefined || val === null || isNaN(val)) return '0.00%';
   const prefix = val > 0 ? '+' : '';
-  return `${prefix}${formatNumber(val, decimals)}%`;
+  return `${prefix}${formatNumber(val, percentDecimals(val, threshold, decimals))}%`;
 }
 
 export function formatCurrency(val: number, currency: string = 'د.ع'): string {

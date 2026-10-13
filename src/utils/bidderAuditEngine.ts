@@ -303,10 +303,10 @@ export const readMissingThousands = (
 
 /**
  * علامتا التدقيق لفقرة كما كتبها المجهز: خطأ ضرب (المفرد × الكمية ≠ المبلغ، بشرط الكمية نفسه في
- * calculateBOQMetrics)، وتعارض تفقيط (المكتوب كتابةً لا يساوي المفرد ولا المبلغ)
+ * calculateBOQMetrics: كمية غير 1، وتشمل الكسرية كـ 0.5)، وتعارض تفقيط (المكتوب كتابةً لا يساوي المفرد ولا المبلغ)
  */
 export const auditRowAmounts = (quantity: number, unitPrice: number, total: number, writtenText?: string) => {
-  const hasMathError = unitPrice > 0 && quantity > 1 && Math.abs(unitPrice * quantity - total) > 0.01;
+  const hasMathError = unitPrice > 0 && quantity > 0 && quantity !== 1 && Math.abs(unitPrice * quantity - total) > 0.01;
   let hasTextDiscrepancy = false;
   if (writtenText && writtenText.length > 2) {
     const textNum = parseArabicTextToNumber(writtenText);
@@ -347,12 +347,13 @@ export const auditBidderRows = (
     const itemNo = row.itemNo || idx + 1;
     const description = row.description || `فقرة ${itemNo}`;
     const unitPrice = parseArabicNumber(row.unitPrice);
-    const quantity = Math.max(1, parseArabicNumber(row.quantity) || 1);
+    const readQuantity = parseArabicNumber(row.quantity);
+    const quantity = readQuantity > 0 ? readQuantity : 1; // كمية كسرية (0.5) تبقى كما هي
     const enteredNumberTotal = parseArabicNumber(row.enteredTotal !== undefined ? row.enteredTotal : row.bidderTotal);
     const writtenText = row.writtenText ? String(row.writtenText).trim() : undefined;
 
-    // 1. تدقيق الخطأ الحسابي في حاصل الضرب (سعر المفرد * العدد - يطبق فقط عند وجود كمية أكبر من 1)
-    const calculatedMathTotal = unitPrice > 0 && quantity > 1 ? (unitPrice * quantity) : enteredNumberTotal;
+    // 1. تدقيق الخطأ الحسابي في حاصل الضرب (سعر المفرد * العدد - لا يطبق عند الكمية 1، ويطبق على الكسرية)
+    const calculatedMathTotal = unitPrice > 0 && quantity > 0 && quantity !== 1 ? (unitPrice * quantity) : enteredNumberTotal;
     const mathDifference = calculatedMathTotal - enteredNumberTotal;
 
     // 2. العلامتان من auditRowAmounts كالقراءة بالذكاء الاصطناعي: التفقيط يُقبل إن ساوى المفرد أو المبلغ
