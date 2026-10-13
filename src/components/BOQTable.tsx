@@ -159,7 +159,7 @@ const OfferUnitCell: React.FC<{ item: BOQItem; editable: boolean; onChange: (v: 
   return (
     <div className="flex flex-col items-center gap-0.5">
       <AmountInput value={unit} onChange={onChange} readOnly={!editable} label={`سعر المفرد في العرض الموزون للفقرة ${item.itemNo}`}
-        className={`w-full min-w-[7rem] text-center rounded-lg p-1.5 font-mono font-black text-xs shadow-2xs border ${edited ? 'bg-purple-50 border-purple-400 text-purple-950' : 'bg-white border-indigo-200 text-indigo-950'}`} />
+        className={`w-full min-w-[6rem] text-center rounded-lg p-1.5 font-mono font-black text-xs shadow-2xs border ${edited ? 'bg-purple-50 border-purple-400 text-purple-950' : 'bg-white border-indigo-200 text-indigo-950'}`} />
       {edited && (<>
         <span className="text-[10px] font-black text-purple-800 bg-purple-100 px-1.5 rounded">معدّل بالعرض الموزون</span>
         <span className="text-[10px] text-slate-500 line-through font-mono">{show(correctedUnit)}</span>
@@ -236,7 +236,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   // الفقرة التي يُصحَّح نص تفقيطها الآن (بمعرّفها)
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors' | 'notify'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'deviated' | 'savings' | 'errors'>('all');
 
   // ارتفاع شريط الشركة وشريط البحث المثبتين يُقاس فعلياً (قد يلتف اسم شركة طويل أو تلتف المرشِّحات)،
   // لتثبت العناصر تحتهما مباشرة على الشاشات العريضة دون أن تختفي خلفهما
@@ -252,10 +252,6 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   const mathErrorsCount = items.filter(i => i.hasMathError).length;
   const textErrorsCount = items.filter(i => i.hasTextDiscrepancy).length;
 
-  // فقرات يُبلَّغ بها المجهز: المنحرفة (بالاتجاهين) والمؤشرة «سعر غير معقول» — لمراجعة عطاء كبير بلا تمرير كله
-  const isNotify = (i: BOQItem) => (i.estimatedTotal > 0 && i.isDeviated) || !!i.unreasonablePrice;
-  const notifyCount = items.filter(isNotify).length;
-
   // فلترة الأسطر. الأرقام المشرقية والإنجليزية سيّان في البحث: «24» تجد «كيك ٢٤ قطعة»
   const term = toLatinDigits(searchTerm.toLowerCase());
   const matches = (text: string) => toLatinDigits(text.toLowerCase()).includes(term);
@@ -270,7 +266,6 @@ export const BOQTable: React.FC<BOQTableProps> = ({
     if (filterMode === 'deviated') return item.isDeviated;
     if (filterMode === 'savings') return item.diffAmount < 0;
     if (filterMode === 'errors') return item.hasMathError || item.hasTextDiscrepancy;
-    if (filterMode === 'notify') return isNotify(item);
     return true;
   });
 
@@ -426,12 +421,6 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             </button>
 
             <button
-              onClick={() => setFilterMode('notify')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${filterMode === 'notify' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white text-orange-800 border border-orange-200 hover:bg-orange-50'}`}>
-              للتبليغ ({notifyCount})
-            </button>
-
-            <button
               onClick={() => setFilterMode('savings')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                 filterMode === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
@@ -468,13 +457,13 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h)+var(--toolbar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
-                <th className="p-3 w-14 text-center border-l border-slate-800" title="رقم صفحة الفقرة في عطاء المجهز كما قدّمه">ص</th>
-                <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
+                <th className="py-3 px-1 w-8 text-center border-l border-slate-800" title="رقم صفحة الفقرة في عطاء المجهز كما قدّمه">ص</th>
+                <th className="p-3 min-w-[120px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
                 <th className="p-3 w-16 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">{locked ? 'سعر المفرد — العرض الموزون' : 'سعر المفرد للمجهز ✏️'}</th>
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">{locked ? 'مبلغ العرض الموزون' : 'مبلغ المجهز الإجمالي 💰'}</th>
                 <th className="p-3 w-28 text-center border-l border-slate-800 bg-blue-950 text-blue-200">المبلغ التخميني ✏️</th>
-                <th className="p-3 min-w-[180px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
+                <th className="p-3 min-w-[150px] border-l border-slate-800 bg-amber-950 text-amber-200">تدقيق الأخطاء الحسابية والتفقيط</th>
                 {hasEstimate && (
                   <>
                     <th className="p-3 w-28 text-center border-l border-slate-800">نسبة الانحراف %</th>
@@ -482,7 +471,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     <th className="p-3 w-28 text-center border-l border-slate-800">التقييم</th>
                   </>
                 )}
-                <th className="p-3 w-16 text-center">حذف</th>
+                <th className="p-3 w-12 text-center">حذف</th>
               </tr>
             </thead>
 
@@ -528,10 +517,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     </td>
 
                     {/* رقم صفحة الفقرة في عطاء المجهز */}
-                    <td className="p-2 text-center border-l border-slate-200 bg-slate-50/50">
+                    <td className="px-1 py-2 text-center border-l border-slate-200 bg-slate-50/50">
                       <AmountInput value={item.pageNo ?? 0} onChange={(v) => onSetItemPage?.(actualIndex, v > 0 ? Math.round(v) : undefined)}
                         label={`صفحة الفقرة ${item.itemNo} في العطاء`} placeholder="—"
-                        className="w-12 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-bold text-slate-700 text-xs" />
+                        className="w-8 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-bold text-slate-700 text-xs" />
                     </td>
 
                     {/* Description */}

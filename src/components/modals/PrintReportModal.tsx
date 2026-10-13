@@ -37,14 +37,13 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // المبلغ بعد التصحيح (ضوابط رقم (4) خامساً/ب/6)
   const showStated = project.bidders.filter(hasBidAmounts).some(b => (b.statedTotal ?? 0) > 0);
   const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
-  // توازن العطاء موضوع المحضر (سادساً/5)، وعرضه الموزون، وصفحاته، وفقرات التبليغ
+  // توازن العطاء موضوع المحضر (سادساً/5)، وعرضه الموزون، وصفحاته
   const balance = assessBalance(correctedBalanceRows(subject.items), threshold);
   const offer = subject.weightedOffer && subject.weightedOffer.status !== 'paused' ? subject.weightedOffer : undefined;
   const offerState = offer ? offerStatus(subject) : null;
   const offerFinal = offer?.status === 'adopted' && !offerState?.stale;
   const editedItems = offer ? subject.items.filter(isOfferEdited) : [];
   const pages = summarizePages(subject.items);
-  const notifyItems = subject.items.filter(i => (i.estimatedTotal > 0 && i.isDeviated) || i.unreasonablePrice);
   const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
   const residual = subject.totals.weightedRoundingResidual ?? 0;
   const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin });
@@ -412,37 +411,6 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                     {offer && <td className="border border-slate-400 p-2 text-center">{formatNumber(pages.totals.offer)}</td>}
                   </tr>
                 </tfoot>
-              </table>
-            </div>
-          )}
-
-          {notifyItems.length > 0 && (
-            <div className="mb-6">
-              <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
-                فقرات يُبلَّغ بها المجهز ({subject.name}) — للإحاطة بنقاط الضعف في العطاء ({notifyItems.length} فقرة):
-              </h3>
-              <table className="w-full text-xs text-right border-collapse border border-slate-400">
-                <thead className="bg-slate-100 font-bold">
-                  <tr>
-                    <th className="border border-slate-300 p-2 text-center">ت</th>
-                    <th className="border border-slate-300 p-2">الوصف</th>
-                    <th className="border border-slate-300 p-2 text-center">نسبة الانحراف</th>
-                    <th className="border border-slate-300 p-2">الملاحظة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {notifyItems.map(i => (
-                    <tr key={i.id}>
-                      <td className="border border-slate-300 p-2 text-center">{i.itemNo}</td>
-                      <td className="border border-slate-300 p-2">{i.description}</td>
-                      <td className="border border-slate-300 p-2 text-center">{i.estimatedTotal > 0 ? `${i.deviationPercent > 0 ? '+' : ''}${i.deviationPercent.toFixed(2)}%` : '—'}</td>
-                      <td className="border border-slate-300 p-2">
-                        {[i.estimatedTotal > 0 && i.isDeviated ? (i.deviationPercent > 0 ? 'منحرفة بالزيادة' : 'منحرفة بالنقصان') : '',
-                          i.unreasonablePrice ? `سعر غير معقول: ${i.unreasonablePrice.note}` : ''].filter(Boolean).join('؛ ')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
               </table>
             </div>
           )}
