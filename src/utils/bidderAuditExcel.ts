@@ -191,7 +191,7 @@ function analyseRow(item: BOQItem, bidderId: string, logs: AuditLogEntry[]): Row
         explanation.push(`التفقيط «${asWritten}» ناقص كلمة «آلاف»؛ والصواب «${missing.corrected}» (${fmt(missing.value)}) ويوافق `
           + `${Math.abs(missing.value - unit) <= 0.01 ? `سعر المفرد المدون ${fmt(unit)}` : `مبلغ الفقرة المدون ${fmt(stated)}`}`);
       } else {
-        explanation.push(unit > 0 && qty !== 1
+        explanation.push(unit > 0 && (qty !== 1 || Math.abs(unit - stated) > 0.01)
           ? `التفقيط «${asWritten}» (${fmt(written)}) لا يساوي سعر المفرد المدون ${fmt(unit)} ولا مبلغ الفقرة ${fmt(stated)}`
           : `التفقيط «${asWritten}» (${fmt(written)}) لا يساوي المبلغ المدون ${fmt(stated)}`);
       }
