@@ -1,4 +1,4 @@
-import { parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
+import { committeeResolvedTextMismatch, parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus,
@@ -742,7 +742,23 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         })()}
 
                         {/* 3. التفقيط المطابق والسليم (أخضر) */}
-                        {item.writtenText && !item.hasTextDiscrepancy && editingTextId !== item.id && (
+                        {/* بعد اعتماد اللجنة (ب/2 أو حاصل الضرب) قد لا يطابق التفقيط الأرقام المعتمدة: بطاقة محايدة لا خضراء */}
+                        {item.writtenText && !item.hasTextDiscrepancy && editingTextId !== item.id && (() => {
+                          const resolved = committeeResolvedTextMismatch(item);
+                          if (!resolved) return null;
+                          return (
+                            <div className="bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5 rounded-lg text-[11px] font-semibold flex items-start gap-1">
+                              <AlertTriangle className="w-3 h-3 text-slate-500 shrink-0 mt-0.5" />
+                              <span className="flex-1">
+                                <strong className="text-slate-900 font-bold">تفقيط المجهز لا يطابق المعتمد:</strong> {item.writtenText}
+                                {' '}(<bdi>{resolved.written.toLocaleString()}</bdi>) — المفرد المعتمد <bdi>{resolved.unit.toLocaleString()}</bdi>،
+                                والمبلغ <bdi>{resolved.total.toLocaleString()}</bdi> بقرار اللجنة
+                              </span>
+                              <EditTextButton rowId={item.id} itemNo={item.itemNo} onClick={() => setEditingTextId(item.id)} />
+                            </div>
+                          );
+                        })()}
+                        {item.writtenText && !item.hasTextDiscrepancy && editingTextId !== item.id && !committeeResolvedTextMismatch(item) && (
                           <div className="bg-emerald-50 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-lg text-[11px] font-semibold flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                             <span className="flex-1">

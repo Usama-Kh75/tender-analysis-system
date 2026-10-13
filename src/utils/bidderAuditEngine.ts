@@ -9,6 +9,20 @@ export const isCommitteeCorrected = (item: BOQItem) =>
   || item.originalUnitPrice !== undefined
   || item.originalWrittenText !== undefined;
 
+/**
+ * تفقيط فقرة صحّحتها اللجنة لم يعد يطابق أرقامها المعتمدة: اعتماد المبلغ وتصحيح المفرد (ب/2) يُبدّل المفرد
+ * ويبقى التفقيط المدون على المفرد القديم، واعتماد حاصل الضرب يُبدّل المبلغ. العلامة المخزّنة تبقى false لأن
+ * اللجنة حسمت الفقرة، فلا تُعاد علامة خطأ، لكن الشاشة لا تقول عنه «مطابق». يُرجع null حين لا تعارض
+ */
+export const committeeResolvedTextMismatch = (item: BOQItem) => {
+  if (!item.writtenText || item.hasTextDiscrepancy || !isCommitteeCorrected(item)) return null;
+  const unit = item.enteredUnitPrice || 0;
+  const total = item.bidderTotal;
+  if (!auditRowAmounts(item.quantity, unit, total, item.writtenText).hasTextDiscrepancy) return null;
+  const written = parseArabicTextToNumber(item.writtenText);
+  return written === null ? null : { written, unit, total };
+};
+
 export interface BidderRowAudit {
   itemNo: string | number;
   description: string;
