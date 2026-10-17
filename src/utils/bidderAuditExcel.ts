@@ -2,7 +2,7 @@
 // التصدير بمواصفات «عرض_المجهز_..._مطابق_للأصل.xlsx» التي اعتمدتها اللجنة. الاستيراد يبقى على xlsx
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
-import { auditRowAmounts, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
+import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits, percentDecimals } from './calculations';
 import { summarizePages } from './pageSummary';
 import { isOfferEdited, offerStatus } from './weightedOffer';
@@ -32,6 +32,10 @@ const ADOPTIONS: Record<string, string> = {
     'اعتماد مبلغ الفقرة كما دوّنه المجهز وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية (ضوابط رقم (4) خامساً/ب/2، الاستثناء)'
 };
 const MATH_ADOPTION = 'اعتماد تصحيح خطأ الضرب بقرار اللجنة';
+// حضور المجهز وتوقيعه وختمه إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)، كما أشّرته اللجنة في الجدول
+const signatureText = (item: BOQItem) => isSignedCorrection(item)
+  ? 'وقّع المجهز وختم إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)'
+  : 'بانتظار توقيع المجهز وختمه إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)';
 
 const fmt = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 2 });
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -303,7 +307,8 @@ function buildErrorsSheet(project: TenderProject, bidder: Bidder, rows: RowAnaly
         hasUnit ? formula(`F${n}-G${n}`, stated - product) : '',
         row.defects.join(' + '),
         row.explanation.join('؛ '),
-        ''
+        // ما قررته اللجنة في النظام وتوقيع المجهز عليه؛ الفقرة التي لم تُحسم تبقى خانتها للتعبئة
+        row.corrected ? `${adoptionRule(row)}؛ ${signatureText(item)}` : ''
       ];
     })
     : [['لا خطأ ضرب ولا تعارض تفقيط في هذا العطاء']];
@@ -329,31 +334,34 @@ function buildErrorsSheet(project: TenderProject, bidder: Bidder, rows: RowAnaly
   return buildSheet([
     [`ملاحظات على عطاء المجهز تحتاج قرار اللجنة: ${bidder.name}`],
     [projectLine(project)],
-    ['الفقرات التي فيها خطأ ضرب أو تعارض تفقيط، بأرقام المجهز كما دوّنها قبل أي تصحيح. التصحيح الحسابي قرار اللجنة ويُبلَّغ به المجهز (ضوابط رقم (4) خامساً/ب). عمود «قرار اللجنة» للتعبئة. الصفوف الحمراء: خطأ ضرب، والكهرمانية: تعارض تفقيط.'],
+    ['الفقرات التي فيها خطأ ضرب أو تعارض تفقيط، بأرقام المجهز كما دوّنها قبل أي تصحيح. التصحيح الحسابي قرار اللجنة ويحضر المجهز فيوقّع ويختم إزاءه (ضوابط رقم (4) خامساً/ب/3). عمود «قرار اللجنة» فيه ما قررته اللجنة في النظام وتوقيع المجهز، وفارغ للتعبئة فيما لم تحسمه. الصفوف الحمراء: خطأ ضرب، والكهرمانية: تعارض تفقيط.'],
     [],
     ['ت', 'وصف الفقرة', 'الكمية', 'المفرد رقماً', 'التفقيط (كتابةً)', 'المبلغ المدون', 'الكمية × المفرد', 'الفرق',
       'نوع الملاحظة', 'التفصيل', 'قرار اللجنة'],
     ...data,
     ...footer
   ], {
-    widths: [6, 26, 10, 11, 24, 14, 15, 14, 12, 52, 22],
+    widths: [6, 26, 10, 11, 24, 14, 15, 14, 12, 52, 34],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + data.length,
     fillOf: r => errors.length > 0 ? defectFill(errors[r - HEADER_ROWS - 1]) : undefined,
     center: [0, 8], wrap: [1, 4, 8, 9, 10], filter: errors.length > 0
   });
 }
 
+const adoptionRule = (row: RowAnalysis) => row.adoption ? ADOPTIONS[row.adoption.action] : 'تصحيح حسابي بقرار اللجنة';
+
 // التصحيح المعتمد للفقرة كما يظهر في الجدول المعدل
 function correctionText(row: RowAnalysis): string {
-  const { item, corrected, adoption, stated } = row;
+  const { item, corrected, stated } = row;
   const parts: string[] = [];
   if (corrected) {
     const changes: string[] = [];
     if (Math.abs(item.bidderTotal - stated) > 0.01) changes.push(`المبلغ من ${fmt(stated)} إلى ${fmt(item.bidderTotal)}`);
     if (item.originalUnitPrice !== undefined) changes.push(`المفرد من ${fmt(item.originalUnitPrice)} إلى ${fmt(item.enteredUnitPrice || 0)}`);
     if (item.originalWrittenText !== undefined) changes.push(`التفقيط من «${item.originalWrittenText}» إلى «${item.writtenText}»`);
-    const rule = adoption ? ADOPTIONS[adoption.action] : 'تصحيح حسابي بقرار اللجنة';
+    const rule = adoptionRule(row);
     parts.push(changes.length ? `${rule}: ${changes.join('، و')}` : rule);
+    parts.push(signatureText(item));
   }
   if (row.pending.length) parts.push(`بانتظار قرار اللجنة: ${row.pending.join(' + ')}`);
   if (item.unpriced) parts.push('غير مسعّرة في العطاء');

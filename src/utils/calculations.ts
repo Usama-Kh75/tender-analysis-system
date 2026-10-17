@@ -199,7 +199,8 @@ export function calculateBOQMetrics(
       pageNo: item.pageNo,
       offerUnitPrice: item.offerUnitPrice,
       offerTotal: item.offerTotal,
-      unreasonablePrice: item.unreasonablePrice
+      unreasonablePrice: item.unreasonablePrice,
+      bidderSignedAt: item.bidderSignedAt
     };
   });
 

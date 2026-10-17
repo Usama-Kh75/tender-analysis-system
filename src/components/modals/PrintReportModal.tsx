@@ -7,6 +7,7 @@ import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
 import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
+import { correctionSignatures } from '../../utils/bidderAuditEngine';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -36,6 +37,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // المبلغ قبل التصحيح الحسابي وبعده: عمودان متى سُجّل المبلغ المدون لأي عطاء. الترتيب والتوصية على
   // المبلغ بعد التصحيح (ضوابط رقم (4) خامساً/ب/6)
   const showStated = project.bidders.filter(hasBidAmounts).some(b => (b.statedTotal ?? 0) > 0);
+  // توقيع كل مجهز إزاء تصحيحات اللجنة في عطائه (ضوابط رقم (4) خامساً/ب/3)، للعطاءات التي فيها تصحيح
+  const signatures = project.bidders.filter(hasBidAmounts)
+    .map(b => ({ bidder: b, ...correctionSignatures(b.items) })).filter(s => s.corrected > 0);
   const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
   // توازن العطاء موضوع المحضر (سادساً/5)، وعرضه الموزون، وصفحاته
   const balance = assessBalance(correctedBalanceRows(subject.items), threshold);
@@ -185,6 +189,20 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 })}
               </tbody>
             </table>
+            {signatures.length > 0 && (
+              <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white space-y-1">
+                <strong>التصحيح الحسابي وتوقيع مقدمي العطاءات (ضوابط رقم (4) خامساً/ب/3):</strong>
+                {signatures.map(s => (
+                  <p key={s.bidder.id}>
+                    صحّحت اللجنة ({s.corrected}) فقرة في عطاء ({s.bidder.name})،
+                    {s.signed === s.corrected
+                      ? ` وحضر المجهز ووقّع وختم إزاء التصحيح${s.corrected > 1 ? ' فيها جميعاً' : ''}.`
+                      : <> {s.signed > 0 ? `ووقّع المجهز وختم إزاء (${s.signed}) منها، وبانتظار توقيعه وختمه` : 'وبانتظار توقيع المجهز وختمه'} إزاء
+                        التصحيح في {s.unsigned.length > 1 ? 'الفقرات' : 'الفقرة'}: <bdi>{s.unsigned.join('، ')}</bdi>.</>}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 2. التحليل التفصيلي للفقرات للعطاء الموصى به */}

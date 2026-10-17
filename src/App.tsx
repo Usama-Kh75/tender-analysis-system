@@ -303,7 +303,8 @@ export function App() {
     // تأشيرات اللجنة وعرضها الموزون خاصة بالأسعار المصفَّرة: لا تُنسخ إلى شركة جديدة ولا تبقى بلا أسعار
     offerUnitPrice: undefined,
     offerTotal: undefined,
-    unreasonablePrice: undefined
+    unreasonablePrice: undefined,
+    bidderSignedAt: undefined
   });
 
   // Clear Bidder Prices Only
@@ -520,7 +521,9 @@ export function App() {
           ...item, bidderTotal: item.enteredBidderTotal || 0, enteredUnitPrice: restoredUnit, bidderUnitPrice: restoredUnit || 0,
           originalUnitPrice: undefined,
           // التفقيط المعتمد بعد إضافة «آلاف» يعود إلى ما كتبه المجهز
-          writtenText: item.originalWrittenText ?? item.writtenText, originalWrittenText: undefined
+          writtenText: item.originalWrittenText ?? item.writtenText, originalWrittenText: undefined,
+          // توقيع المجهز كان إزاء التصحيح الملغى
+          bidderSignedAt: undefined
         }
         : item;
       let patch: Partial<BOQItem>;
@@ -561,7 +564,7 @@ export function App() {
       updatedProj = addAuditLog(
         updatedProj,
         'إلغاء تصحيح اللجنة لتصحيح قراءة',
-        `أُلغي التصحيح الحسابي للفقرة رقم (${before.itemNo}) في عطاء (${b.name}) لتصحيح قراءة ${label}: عاد مبلغها من (${fmt(it.bidderTotal)}) إلى ما دوّنه المجهز (${fmt(it.enteredBidderTotal)})${it.originalUnitPrice !== undefined ? `، وسعر مفردها من (${fmt(it.enteredUnitPrice)}) إلى (${fmt(it.originalUnitPrice)})` : ''}`,
+        `أُلغي التصحيح الحسابي للفقرة رقم (${before.itemNo}) في عطاء (${b.name}) لتصحيح قراءة ${label}: عاد مبلغها من (${fmt(it.bidderTotal)}) إلى ما دوّنه المجهز (${fmt(it.enteredBidderTotal)})${it.originalUnitPrice !== undefined ? `، وسعر مفردها من (${fmt(it.enteredUnitPrice)}) إلى (${fmt(it.originalUnitPrice)})` : ''}${it.bidderSignedAt ? '، وسقط معه تأشير توقيع المجهز إزاءه' : ''}`,
         { itemNo: before.itemNo, oldValue: it.bidderTotal, newValue: it.enteredBidderTotal }
       );
     });
@@ -711,6 +714,19 @@ export function App() {
       { itemNo: before.itemNo, oldValue: before.unreasonablePrice?.note, newValue: note ?? undefined });
   };
 
+  // تأشير حضور المجهز وتوقيعه وختمه إزاء تصحيح اللجنة لفقرة (ضوابط رقم (4) خامساً/ب/3): لا يغيّر رقماً
+  const handleMarkBidderSigned = (index: number, signed: boolean) => {
+    const before = activeBidder.items[index];
+    if (!before || (signed && !isCommitteeCorrected(before))) return;
+    commitBidder(activeBidder.id,
+      b => ({ ...b, items: b.items.map((it, i) => i === index
+        ? { ...it, bidderSignedAt: signed ? new Date().toISOString() : undefined } : it) }),
+      signed ? 'تأشير توقيع المجهز إزاء التصحيح' : 'إزالة تأشير توقيع المجهز',
+      signed ? `حضر المجهز (${activeBidder.name}) ووقّع وختم إزاء التصحيح الحسابي للفقرة رقم (${before.itemNo}) (ضوابط رقم (4) خامساً/ب/3)`
+        : `أُزيل تأشير توقيع المجهز (${activeBidder.name}) إزاء التصحيح الحسابي للفقرة رقم (${before.itemNo})`,
+      { itemNo: before.itemNo, oldValue: before.bidderSignedAt, newValue: signed ? 'موقَّع' : undefined });
+  };
+
   const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
     const count = Math.max(0, ...pages.map(p => p ?? 0));
     commitBidder(activeBidder.id, b => ({ ...b, items: b.items.map((it, i) => ({ ...it, pageNo: pages[i] })) }),
@@ -802,6 +818,7 @@ export function App() {
         // صف جديد في آخر الجدول: لا صفحة لمصدره ولا تأشير اللجنة عليه ولا تعديل عرضه الموزون
         pageNo: undefined,
         unreasonablePrice: undefined,
+        bidderSignedAt: undefined,
         offerUnitPrice: undefined,
         offerTotal: undefined
       };
@@ -1585,6 +1602,7 @@ ${lockReason}`);
               sharedLocked={currentProject.bidders.some(isOfferLocked)}
               onEditOfferUnit={handleEditOfferUnit}
               onMarkUnreasonable={handleMarkUnreasonable}
+              onMarkBidderSigned={handleMarkBidderSigned}
               offerControl={hasBidAmounts(activeBidder) ? (
                 <WeightedOfferControl bidder={activeBidder} threshold={currentProject.deviationThreshold}
                   onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />

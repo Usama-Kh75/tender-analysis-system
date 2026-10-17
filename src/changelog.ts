@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.0',
+    date: '2026-10-18',
+    notes: [
+      'يمكنك تأشير حضور المجهز وتوقيعه وختمه إزاء تصحيح اللجنة الحسابي لكل فقرة (ضوابط رقم (4) خامساً/ب/3)، فيظهر في المحضر وفي ملف Excel.'
+    ]
+  },
+  {
     version: '1.15.0',
     date: '2026-10-13',
     notes: [

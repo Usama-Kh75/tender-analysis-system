@@ -9,6 +9,19 @@ export const isCommitteeCorrected = (item: BOQItem) =>
   || item.originalUnitPrice !== undefined
   || item.originalWrittenText !== undefined;
 
+// المجهز حضر ووقّع وختم إزاء تصحيح اللجنة (ضوابط رقم (4) خامساً/ب/3). التأشير على فقرة غير مصحَّحة لا يُحسب
+export const isSignedCorrection = (item: BOQItem) => !!item.bidderSignedAt && isCommitteeCorrected(item);
+
+// خلاصة توقيع المجهز على تصحيحات عطائه: عدد الفقرات المصحَّحة، والموقَّعة منها، وأرقام ما بقي بلا توقيع
+export const correctionSignatures = (items: BOQItem[]) => {
+  const corrected = items.filter(isCommitteeCorrected);
+  return {
+    corrected: corrected.length,
+    signed: corrected.filter(isSignedCorrection).length,
+    unsigned: corrected.filter(i => !isSignedCorrection(i)).map(i => i.itemNo)
+  };
+};
+
 /**
  * تفقيط فقرة صحّحتها اللجنة لم يعد يطابق أرقامها المعتمدة: اعتماد المبلغ وتصحيح المفرد (ب/2) يُبدّل المفرد
  * ويبقى التفقيط المدون على المفرد القديم، واعتماد حاصل الضرب يُبدّل المبلغ. العلامة المخزّنة تبقى false لأن

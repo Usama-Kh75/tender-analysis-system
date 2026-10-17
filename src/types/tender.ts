@@ -36,6 +36,9 @@ export interface BOQItem {
   weightedAdjustment?: number;
   // تأشير اللجنة على سعر غير معقول (خطأ تسعير لا حسابي)، للإحاطة والتبليغ فقط ولا يدخل في أي حساب
   unreasonablePrice?: { note: string; markedAt: string };
+  // تأشير اللجنة أن المجهز حضر ووقّع وختم إزاء تصحيحها الحسابي لهذه الفقرة (ضوابط رقم (4) خامساً/ب/3)، بتاريخ
+  // التأشير. لا معنى له إلا على فقرة مصحَّحة (isSignedCorrection)، ويسقط مع إلغاء التصحيح
+  bidderSignedAt?: string;
 }
 
 // الحقول التي يُعدّ تعديلها اليدوي في الجدول تصحيحاً لما قُرئ من العطاء (handleCorrectReading في App.tsx)

@@ -1,4 +1,4 @@
-import { committeeResolvedTextMismatch, parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
+import { committeeResolvedTextMismatch, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus,
@@ -12,7 +12,8 @@ import {
   Search,
   Pencil,
   Download,
-  Flag
+  Flag,
+  Signature
 } from 'lucide-react';
 import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
@@ -205,6 +206,8 @@ interface BOQTableProps {
   sharedLocked?: boolean;
   onEditOfferUnit?: (index: number, unit: number) => void;
   onMarkUnreasonable?: (index: number, note: string | null) => void;
+  // حضور المجهز وتوقيعه وختمه إزاء تصحيح اللجنة لفقرة (ضوابط رقم (4) خامساً/ب/3)
+  onMarkBidderSigned?: (index: number, signed: boolean) => void;
   // مدخل العرض الموزون (زر البدء ثم السطر الحي) يُرسم في شريط الشركة المثبت ليبقى ظاهراً أثناء التمرير
   offerControl?: React.ReactNode;
 }
@@ -227,6 +230,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   sharedLocked = false,
   onEditOfferUnit,
   onMarkUnreasonable,
+  onMarkBidderSigned,
   offerControl
 }) => {
   const locked = offerMode !== 'none';
@@ -816,6 +820,22 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                             }}
                             className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-orange-700 cursor-pointer">
                             <Flag className="w-3 h-3" /> تأشير سعر غير معقول
+                          </button>
+                        ))}
+
+                        {/* توقيع المجهز إزاء تصحيح اللجنة (ضوابط رقم (4) خامساً/ب/3): على الفقرة المصحَّحة وحدها */}
+                        {onMarkBidderSigned && isCommitteeCorrected(item) && (item.bidderSignedAt ? (
+                          <div className="bg-teal-50 text-teal-900 border border-teal-300 px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-start gap-1">
+                            <Signature className="w-3 h-3 text-teal-600 shrink-0 mt-0.5" />
+                            <span className="flex-1">وقّع المجهز وختم إزاء التصحيح ({new Date(item.bidderSignedAt).toLocaleDateString('ar-EG')})</span>
+                            <button type="button" onClick={() => onMarkBidderSigned(actualIndex, false)}
+                              className="shrink-0 px-1 rounded text-teal-700 hover:bg-white cursor-pointer" aria-label={`إزالة تأشير توقيع المجهز عن الفقرة ${item.itemNo}`}>✕</button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => onMarkBidderSigned(actualIndex, true)}
+                            title="حضر المجهز ووقّع وختم إزاء تصحيح اللجنة لهذه الفقرة (ضوابط رقم (4) خامساً/ب/3)"
+                            className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-teal-700 cursor-pointer">
+                            <Signature className="w-3 h-3" /> تأشير توقيع المجهز إزاء التصحيح
                           </button>
                         ))}
 
