@@ -21,6 +21,13 @@ interface KPIStatsCardsProps {
   /** فقرات مؤشرة بخطأ ضرب أو تعارض تفقيط لم تعالجها اللجنة بعد */
   pendingAuditCount?: number;
   onChangeStatedTotal?: (value: number) => void;
+  /** أثناء العرض الموزون الفعّال أو المعتمد: الانحراف الجزئي والفقرات المنحرفة على مبالغ العرض (offerDeviationTotals) */
+  offer?: {
+    status: 'active' | 'adopted';
+    partialDeviationPercent: number;
+    deviatedItemsSum: number;
+    deviatedItemsCount: number;
+  };
 }
 
 /**
@@ -109,9 +116,21 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
   deviationThreshold,
   statedTotal,
   pendingAuditCount = 0,
-  onChangeStatedTotal
+  onChangeStatedTotal,
+  offer
 }) => {
   const isHighTotalDeviation = Math.abs(totals.totalDeviationPercent) > deviationThreshold;
+  // بطاقتا الانحراف الجزئي والفقرات المنحرفة تتبعان العرض الموزون كما يتبعه الجدول، ورقم العطاء كما قُدّم
+  // يبقى تحته مشطوباً فيظهر سبب التوزين. البطاقات الأخرى لا يغيّرها العرض (مجموعه = مبلغ العطاء عند الاعتماد)
+  const partial = offer ?? totals;
+  const offerNote = (submitted: string) => offer && (
+    <div className="text-[11px] text-slate-500 mt-0.5">
+      <div>{offer.status === 'adopted' ? 'في العرض الموزون المعتمد' : 'في العرض الموزون (قيد الإعداد)'}</div>
+      <div title="العطاء كما قُدّم قبل العرض الموزون">
+        كما قُدّم: <span className="line-through whitespace-nowrap">{submitted}</span>
+      </div>
+    </div>
+  );
   // قبل إدخال الكلفة التخمينية كل الانحرافات صفر، وكانت البطاقات تعرضها خضراء «ضمن الحد المقبول»
   // و«لا يوجد انحرافات حادة» قبل أي مقارنة ممكنة: تُعرض «—» محايدة بدلها
   const noEstimate = !(totals.totalEstimatedAmount > 0);
@@ -210,11 +229,14 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
           <Percent className="w-4 h-4 text-amber-600" />
         </div>
         <div className={`text-lg font-black tracking-tight ${noEstimate ? 'text-slate-400' : 'text-slate-800'}`}>
-          {noEstimate ? '—' : `${totals.partialDeviationPercent.toFixed(2)}%`}
+          {noEstimate ? '—' : `${partial.partialDeviationPercent.toFixed(2)}%`}
         </div>
         {noEstimate ? pendingNote : (
-          <div className="text-[11px] text-slate-500 mt-1">
-            مجموع المنحرف: {formatNumber(totals.deviatedItemsSum)}
+          <div>
+            <div className="text-[11px] text-slate-500 mt-1">
+              مجموع المنحرف: {formatNumber(partial.deviatedItemsSum)}
+            </div>
+            {offerNote(`${totals.partialDeviationPercent.toFixed(2)}%`)}
           </div>
         )}
       </div>
@@ -223,26 +245,29 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
       <div className={`rounded-xl p-4 border shadow-xs flex flex-col justify-between transition ${
         noEstimate
           ? neutralCard
-          : totals.deviatedItemsCount > 0
+          : partial.deviatedItemsCount > 0
           ? 'bg-rose-50/50 border-rose-200'
           : 'bg-emerald-50/50 border-emerald-200'
       }`}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-semibold text-slate-600">الفقرات المنحرفة &gt; {deviationThreshold}%</span>
-          {noEstimate ? null : totals.deviatedItemsCount > 0 ? (
+          {noEstimate ? null : partial.deviatedItemsCount > 0 ? (
             <AlertTriangle className="w-4 h-4 text-rose-600" />
           ) : (
             <CheckCircle className="w-4 h-4 text-emerald-600" />
           )}
         </div>
         <div className={`text-lg font-black tracking-tight ${
-          noEstimate ? 'text-slate-400' : totals.deviatedItemsCount > 0 ? 'text-rose-700' : 'text-emerald-700'
+          noEstimate ? 'text-slate-400' : partial.deviatedItemsCount > 0 ? 'text-rose-700' : 'text-emerald-700'
         }`}>
-          {noEstimate ? '—' : `${totals.deviatedItemsCount} فقرة`}
+          {noEstimate ? '—' : `${partial.deviatedItemsCount} فقرة`}
         </div>
         {noEstimate ? pendingNote : (
-          <div className="text-[11px] text-slate-500 mt-1">
-            {totals.deviatedItemsCount === 0 ? 'لا يوجد انحرافات حادة' : 'تتطلب مراجعة وتدقيق'}
+          <div>
+            <div className="text-[11px] text-slate-500 mt-1">
+              {partial.deviatedItemsCount === 0 ? 'لا يوجد انحرافات حادة' : 'تتطلب مراجعة وتدقيق'}
+            </div>
+            {offerNote(`${totals.deviatedItemsCount} فقرة`)}
           </div>
         )}
       </div>

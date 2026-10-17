@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { offerItemView, offerFieldsFromFormula, assessBalance, offerBalanceRows } from '../src/utils/weightedOffer';
+import { offerItemView, offerFieldsFromFormula, assessBalance, offerBalanceRows, offerDeviationTotals } from '../src/utils/weightedOffer';
 import type { BOQItem } from '../src/types/tender';
 
 // عطاء مجموعه −20% بالضبط (على الحد) وفقراته منحرفة بالزيادة والنقصان: يلزم له الجدول الموزون
@@ -39,4 +39,25 @@ test('فقرة بلا offerTotal تُقاس على مبلغ المجهز، وت�
   assert.equal(edited.isDeviated, true);
   assert.ok(edited.deviationPercent > 50);
   assert.equal(offerItemView({ ...items[0], estimatedTotal: 0 }, 20).deviationPercent, 0);
+});
+
+test('بطاقات المؤشرات: بلا عرض تطابق totals، وبالعرض تُحسب على مبالغه', () => {
+  const { items, totals } = calculateBOQMetrics(raw, 20);
+  // فقرات بلا offerTotal تُقاس على مبلغ المجهز فتطابق totals كما حسبها calculateBOQMetrics
+  assert.deepEqual(offerDeviationTotals(items, 20), {
+    partialDeviationPercent: totals.partialDeviationPercent,
+    deviatedItemsSum: totals.deviatedItemsSum,
+    deviatedItemsCount: totals.deviatedItemsCount
+  });
+  assert.equal(totals.deviatedItemsCount, 2);
+  // بالمعادلة كل فقرة على −20% (على الحد) فلا منحرفة
+  const offered = items.map((i, k) => ({ ...i, ...offerFieldsFromFormula(items)[k] }));
+  assert.deepEqual(offerDeviationTotals(offered, 20), { partialDeviationPercent: 0, deviatedItemsSum: 0, deviatedItemsCount: 0 });
+  // فقرة واحدة معدّلة فوق الحد: الفرق المطلق ÷ مجموع مبالغ العرض
+  const one = offered.map((i, k) => (k === 1 ? { ...i, offerTotal: 17_280_000 } : i));
+  const t = offerDeviationTotals(one, 20);
+  assert.equal(t.deviatedItemsCount, 1);
+  assert.equal(t.deviatedItemsSum, 8_640_000);
+  const sum = one.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0);
+  assert.equal(t.partialDeviationPercent, Math.round((8_640_000 / sum) * 100 * 100) / 100);
 });

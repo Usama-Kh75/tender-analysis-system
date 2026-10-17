@@ -100,6 +100,24 @@ export function offerItemView(item: BOQItem, threshold: number) {
   return { amount, diffAmount, deviationPercent, isDeviated: Math.abs(deviationPercent) > threshold };
 }
 
+/**
+ * الانحراف الجزئي والفقرات المنحرفة على مبالغ العرض (offerItemView)، بحساب totals في calculateBOQMetrics نفسه:
+ * مجموع |الفرق| للمنحرفة ÷ مجموع المبالغ. تعرضه بطاقات المؤشرات أثناء العرض الفعّال والمعتمد كما يعرضه الجدول
+ */
+export function offerDeviationTotals(items: BOQItem[], threshold: number) {
+  let sum = 0, deviatedItemsSum = 0, deviatedItemsCount = 0;
+  for (const i of items) {
+    const v = offerItemView(i, threshold);
+    sum += v.amount;
+    if (v.isDeviated) { deviatedItemsSum += Math.abs(v.diffAmount); deviatedItemsCount += 1; }
+  }
+  return {
+    partialDeviationPercent: sum > 0 ? round2((deviatedItemsSum / sum) * 100) : 0,
+    deviatedItemsSum: round2(deviatedItemsSum),
+    deviatedItemsCount
+  };
+}
+
 export interface OfferStatus {
   offerSum: number;
   bidTotal: number;

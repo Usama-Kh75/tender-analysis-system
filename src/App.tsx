@@ -22,7 +22,7 @@ import { exportTenderToExcel } from './utils/excelService';
 import { exportBidderAuditToExcel } from './utils/bidderAuditExcel';
 import { isCommitteeCorrected } from './utils/bidderAuditEngine';
 import { isOfferLocked, offerLockReason, startOfferBlocker, offerFieldsFromCorrected, offerFieldsFromFormula,
-  offerUnitPatch, offerStatus, pauseOfferPatch, resumeOfferPatch } from './utils/weightedOffer';
+  offerUnitPatch, offerStatus, pauseOfferPatch, resumeOfferPatch, offerDeviationTotals } from './utils/weightedOffer';
 import { estimateMergeLogNote, planEstimateMerge } from './utils/estimateMerge';
 import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './types/tender';
 
@@ -1545,6 +1545,10 @@ ${lockReason}`);
           statedTotal={activeBidder.statedTotal}
           pendingAuditCount={activeBidder.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length}
           onChangeStatedTotal={handleUpdateStatedTotal}
+          offer={activeBidder.weightedOffer && isOfferLocked(activeBidder) ? {
+            status: activeBidder.weightedOffer.status === 'adopted' ? 'adopted' : 'active',
+            ...offerDeviationTotals(activeBidder.items, currentProject.deviationThreshold)
+          } : undefined}
         />
 
         {/* Content based on Tab */}
