@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { BackupMarks, isUnloadAllowed, lastBackupTime, readBackupMarks, saveBackupMarks, unsavedProjects } from './utils/backupStatus';
 import {
   getAllProjects,
   getRecoveredData,
@@ -66,6 +67,7 @@ export function App() {
   // لا يُحفظ شيء قبل اكتمال التحميل الأول؛ وبعده تُحفظ القائمة حتى لو فرغت (حذف آخر مناقصة)
   const [loaded, setLoaded] = useState(false);
   const [recovered, setRecovered] = useState<RecoveredData[]>([]);
+  const [backupMarks, setBackupMarks] = useState<BackupMarks>(readBackupMarks);
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
   const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
@@ -103,6 +105,24 @@ export function App() {
     if (loaded) saveAllProjects(projects);
   }, [projects, loaded]);
 
+  // تذكير النسخة الاحتياطية: المناقصات التي تغيّرت منذ آخر نسخة تحويها
+  const unsaved = useMemo(() => unsavedProjects(projects, backupMarks), [projects, backupMarks]);
+  const hasUnsaved = loaded && unsaved.length > 0;
+
+  // المتصفح لا يعرض إلا رسالته العامة «مغادرة الموقع؟»، ولا يظهر التنبيه إلا إذا بقيت تغييرات لم تُحفظ في نسخة احتياطية
+  useEffect(() => {
+    if (!hasUnsaved) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isUnloadAllowed()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasUnsaved]);
+
+  const recordBackup = (marks: BackupMarks) => { saveBackupMarks(marks); setBackupMarks(marks); };
+
   // استعادة موضع التمرير بعد «حفظ والتحديث»، مرة واحدة بعد أن تُرسم بيانات المشاريع
   const scrollRestored = useRef(false);
   useEffect(() => {
@@ -124,6 +144,17 @@ export function App() {
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
+
+  // النسخة الشاملة تستبدل كل العلامات، فتسقط علامات المناقصات المحذوفة
+  const handleBackupAll = async () => {
+    const at = await downloadAllProjectsBackup(projects);
+    if (at) recordBackup(Object.fromEntries(projects.map(p => [p.id, at])));
+  };
+  // قراءة العلامات من جديد بعد await مقصودة، لتفادي القيمة القديمة في الإغلاق (closure)
+  const handleBackupProject = async () => {
+    const at = await downloadProjectBackup(currentProject);
+    if (at) recordBackup({ ...readBackupMarks(), [currentProject.id]: at });
+  };
 
   const fmtNum = (v?: number) => v === undefined ? '—' : v.toLocaleString('en-US', { maximumFractionDigits: 2 });
   // تعديل عطاء واحد بلا إعادة حساب (حقول العرض والصفحة والتأشير لا تدخل في calculateBOQMetrics)، مع قيد في السجل
@@ -1308,6 +1339,8 @@ ${lockReason}`);
 
       saveAllProjects(imported);
       setProjects(imported);
+      // المناقصات المستعادة محفوظة في الملف الذي استُعيدت منه
+      recordBackup(Object.fromEntries(imported.map(p => [p.id, new Date().toISOString()])));
       setActiveId(imported[0].id);
       setActiveProjectId(imported[0].id);
       alert(`تم استيراد (${imported.length}) مناقصة بنجاح من النسخة الاحتياطية الشاملة.`);
@@ -1344,6 +1377,9 @@ ${lockReason}`);
         onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        unsavedCount={unsaved.length}
+        lastBackupAt={lastBackupTime(backupMarks)}
+        onBackupAll={handleBackupAll}
       />
 
       {/* Main Content Area */}
@@ -1371,7 +1407,7 @@ ${lockReason}`);
                     value={currentProject.referenceNumber}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, referenceNumber: val } : p));
+                      setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, referenceNumber: val, updatedAt: new Date().toISOString() } : p));
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && setIsEditingRefNumber(false)}
                     className="bg-white border border-amber-400 text-amber-900 text-xs font-black font-mono px-3 py-1 rounded-full focus:outline-none ring-2 ring-amber-500/20 w-40"
@@ -1430,7 +1466,7 @@ ${lockReason}`);
                       value={currentProject.title}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, title: val } : p));
+                        setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, title: val, updatedAt: new Date().toISOString() } : p));
                       }}
                       className="w-full text-lg font-bold border border-blue-500 rounded-xl px-3 py-1 bg-white focus:outline-none ring-2 ring-blue-500/20"
                       autoFocus
@@ -1717,9 +1753,9 @@ ${lockReason}`);
         onClose={() => setIsSettingsOpen(false)}
         project={currentProject}
         onSaveSettings={handleSaveSettings}
-        onExportBackup={() => downloadProjectBackup(currentProject)}
+        onExportBackup={handleBackupProject}
         onImportBackup={handleImportBackup}
-        onExportAllBackup={() => downloadAllProjectsBackup(projects)}
+        onExportAllBackup={handleBackupAll}
         onImportAllBackup={handleImportAllBackup}
         onDeleteProject={() => handleDeleteProject(currentProject.id)}
         onFactoryReset={handleFactoryReset}

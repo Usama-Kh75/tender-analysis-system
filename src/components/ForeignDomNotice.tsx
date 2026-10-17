@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, RotateCw, X } from 'lucide-react';
 import { watchForeignDom } from '../utils/foreignDom';
+import { allowUnload } from '../utils/backupStatus';
 
 // تنبيه حين تعدّل إضافة متصفح نصوص الصفحة (انظر foreignDom.ts): العلاج إيقافها لهذا الموقع، لا في التطبيق
 export const ForeignDomNotice: React.FC = () => {
@@ -23,7 +24,7 @@ export const ForeignDomNotice: React.FC = () => {
       </p>
       <button
         type="button"
-        onClick={() => window.location.reload()}
+        onClick={() => { allowUnload(); window.location.reload(); }}
         className="flex items-center gap-1.5 font-bold bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg cursor-pointer transition"
       >
         <RotateCw className="w-4 h-4" />

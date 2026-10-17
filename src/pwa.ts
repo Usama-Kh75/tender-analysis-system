@@ -1,4 +1,5 @@
 import { APP_VERSION, compareVersions } from './changelog';
+import { allowUnload } from './utils/backupStatus';
 
 // تفعيل وضع التطبيق القابل للتثبيت (PWA) — فقط حين يُفتح النظام من رابط الويب.
 // الملف المحمول المفتوح من القرص (file://) لا يدعم عامل الخدمة، فيبقى كما هو.
@@ -85,6 +86,7 @@ export async function applyUpdate(): Promise<boolean> {
       });
       if (!ok) return false;
     }
+    allowUnload();
     location.reload();
     return true;
   } catch {

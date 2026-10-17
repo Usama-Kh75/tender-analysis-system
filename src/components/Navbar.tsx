@@ -6,7 +6,9 @@ import {
   Plus,
   Settings,
   FolderOpen,
-  UserCheck
+  UserCheck,
+  DownloadCloud,
+  ShieldCheck
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { canInstallApp, installApp, subscribeInstall } from '../pwa';
@@ -21,6 +23,9 @@ interface NavbarProps {
   onOpenMultiBidder: () => void;
   onOpenAuditTrail: () => void;
   onOpenSettings: () => void;
+  unsavedCount: number;
+  lastBackupAt?: string;
+  onBackupAll: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,9 +36,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProjectsBrowser,
   onOpenMultiBidder,
   onOpenAuditTrail,
-  onOpenSettings
+  onOpenSettings,
+  unsavedCount,
+  lastBackupAt,
+  onBackupAll
 }) => {
   const canInstall = useSyncExternalStore(subscribeInstall, canInstallApp);
+  const lastBackupText = lastBackupAt
+    ? new Date(lastBackupAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
+    : 'لم تُحفظ نسخة احتياطية بعد';
 
   return (
     <header className="bg-slate-950 text-white shadow-2xl border-b border-amber-500/30 sticky top-0 z-50">
@@ -87,12 +98,36 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Left Side: Clean Action Tools */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+
+            {/* نسخة احتياطية شاملة: العدد = المناقصات التي تغيّرت منذ آخر نسخة تحويها */}
+            <button
+              onClick={onBackupAll}
+              className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border transition cursor-pointer ${
+                unsavedCount > 0
+                  ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-100 border-amber-500/60'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
+              }`}
+              title={unsavedCount > 0
+                ? `${unsavedCount} مناقصة تغيّرت منذ آخر نسخة احتياطية — اضغط لحفظ نسخة شاملة لكل المناقصات (آخر نسخة: ${lastBackupText})`
+                : `كل المناقصات محفوظة في نسخة احتياطية (آخر نسخة: ${lastBackupText}) — اضغط لحفظ نسخة جديدة`}
+              aria-label={unsavedCount > 0
+                ? `نسخة احتياطية (${unsavedCount} مناقصة لم تُحفظ)`
+                : 'نسخة احتياطية (كل المناقصات محفوظة)'}
+            >
+              {unsavedCount > 0
+                ? <DownloadCloud className="w-4 h-4 text-amber-400" />
+                : <ShieldCheck className="w-4 h-4 text-emerald-400" />}
+              <span className="hidden md:inline">نسخة احتياطية</span>
+              {unsavedCount > 0 && (
+                <span className="bg-amber-500 text-slate-950 text-xs px-1.5 py-0.5 rounded-full font-bold">{unsavedCount}</span>
+              )}
+            </button>
 
             {/* كل المناقصات وعروضها — ظاهر في كل المقاسات، بخلاف القائمة المنسدلة */}
             <button
               onClick={onOpenProjectsBrowser}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
               title="استعراض كل المناقصات وعروضها"
               aria-label={`المناقصات (${projects.length})`}
             >
@@ -106,7 +141,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Multi-Bidder Comparison */}
             <button
               onClick={onOpenMultiBidder}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
               title="مقارنة كافة المجهزين"
             >
               <Users2 className="w-4 h-4 text-indigo-400" />
@@ -119,7 +154,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Audit Trail */}
             <button
               onClick={onOpenAuditTrail}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
               title="سجل التتبع والتعديلات"
             >
               <History className="w-4 h-4 text-amber-400" />
@@ -130,7 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {canInstall && (
               <button
                 onClick={installApp}
-                className="flex items-center gap-1.5 whitespace-nowrap bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-black px-3 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-amber-300/50"
+                className="flex items-center gap-1.5 whitespace-nowrap bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-black px-2 sm:px-3 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-amber-300/50"
                 title="تثبيت النظام كتطبيق على الحاسوب — يعمل بنافذته الخاصة وبلا إنترنت"
                 aria-label="تثبيت كتطبيق"
               >
@@ -142,7 +177,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Settings */}
             <button
               onClick={onOpenSettings}
-              className="p-2.5 text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-800 transition cursor-pointer"
+              className="p-2 sm:p-2.5 text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-800 transition cursor-pointer"
               title="إعدادات المناقصة والنسب"
             >
               <Settings className="w-4 h-4 text-amber-400" />

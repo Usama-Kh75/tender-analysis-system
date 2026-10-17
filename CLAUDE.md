@@ -139,6 +139,13 @@ The same build is also deployed to GitHub Pages (`https://usama-kh75.github.io/t
   - Known trade-off: a table whose quantities were never entered (all 1) with a unit price and an amount both read is flagged row by row. That is a prompt to enter the quantities, so no exemption was added; enter the estimate (with quantities) before the bid, as the normal flow does.
   - Commit 5a61c97 (2026-08-24) had exempted quantity 1 for direct unit-price tables; there the unit price equals the amount, so nothing is flagged.
 
+**Backup reminder** (since v1.17.0). Data lives only in the browser, so the app reminds the user to save it to a file.
+- `src/utils/backupStatus.ts` stores, per tender, the time of the last backup that contains it, under the key `antigravity_tenders_backed_up_v1`.
+- A tender is unsaved when its `updatedAt` is later than that time, so every handler that changes a tender's data must update `updatedAt`.
+- The Navbar button saves the all-tenders backup. A single-tender backup updates only that tender's mark, and a full restore counts as a backup.
+- `beforeunload` fires only while unsaved changes remain. Reloads the app asks for itself (update, extension notice) call `allowUnload()`.
+- `saveJsonFile` uses `showSaveFilePicker` with `id: 'tender-backups'` so the browser remembers the folder, falls back to a normal download when it is unavailable, and a cancel is not recorded as a backup.
+
 **Browser extensions that rewrite the page** (since v1.15.5). TransOver, a hover-to-translate extension, replaces the text node under the mouse with a new one; Chrome's own translation wraps text in `<font>`. React keeps the old node, so a later insert next to it throws `NotFoundError: insertBefore` and the whole app went white (the user's installed app, 2026-10-14, «إلغاء الاعتماد» → «اعتماد العرض»). It can also leave a shown figure stale.
 - `src/utils/foreignDom.ts` watches `#root` for the first foreign element (FONT, hyphenated, or `HTMLUnknownElement`), and `ForeignDomNotice` (under `RecoveryNotice` in `App.tsx`) tells the user to disable the extension for this site.
 - `RenderErrorBoundary` wraps `<App/>` in `main.tsx`: a render crash shows «تعطّل عرض الصفحة» with a reload button instead of a white screen. The change that crashed the render is already saved (checked).

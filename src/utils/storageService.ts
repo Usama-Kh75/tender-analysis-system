@@ -404,55 +404,68 @@ export function setActiveProjectId(id: string): void {
   localStorage.setItem(ACTIVE_PROJECT_KEY, id);
 }
 
-/**
- * تنزيل نسخة احتياطية كاملة لمشروع واحد كملف JSON
- * يتيح نقل المشروع بكامل بياناته (المجهزين، الأسعار، سجل التدقيق) إلى جهاز آخر
- * دون الاعتماد على localStorage للجهاز الحالي فقط
- */
-export function downloadProjectBackup(project: TenderProject): void {
-  const backup = {
-    __type: 'boc-tender-backup',
-    __version: 1,
-    exportedAt: new Date().toISOString(),
-    project
-  };
+interface SavePickerWindow {
+  showSaveFilePicker?: (options: object) => Promise<FileSystemFileHandle>;
+}
 
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const safeTitle = (project.title || 'مناقصة').replace(/[\\/:*?"<>|]/g, '_');
+// نافذة «حفظ باسم» إن دعمها المتصفح (Chrome/Edge): يختار المستخدم مجلد النسخ الاحتياطية مرة،
+// ويفتح عليه المتصفح في المرات التالية (id). وإلا يُنزَّل الملف كما كان. يعيد false إن ألغى المستخدم الحفظ.
+// النص يُبنى قبل فتح النافذة: النافذة تحتاج ضغطة المستخدم نفسها، والنسخة تحوي البيانات لحظة الضغط.
+async function saveJsonFile(fileName: string, data: unknown): Promise<boolean> {
+  const text = JSON.stringify(data, null, 2);
+  const w = window as unknown as SavePickerWindow;
+  if (w.showSaveFilePicker) {
+    try {
+      const handle = await w.showSaveFilePicker({
+        suggestedName: fileName,
+        id: 'tender-backups',
+        types: [{ description: 'نسخة احتياطية (JSON)', accept: { 'application/json': ['.json'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      return true;
+    } catch (err) {
+      if ((err as DOMException)?.name === 'AbortError') return false;
+      // النافذة غير مسموحة هنا أو تعذّرت الكتابة: التنزيل العادي
+    }
+  }
 
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `نسخة_احتياطية_${safeTitle}_${new Date().toISOString().split('T')[0]}.json`;
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+  return true;
+}
+
+/**
+ * تنزيل نسخة احتياطية كاملة لمشروع واحد كملف JSON
+ * يتيح نقل المشروع بكامل بياناته (المجهزين، الأسعار، سجل التدقيق) إلى جهاز آخر
+ * دون الاعتماد على localStorage للجهاز الحالي فقط.
+ * يعيد وقت النسخة إن حُفظت، أو null إن ألغى المستخدم الحفظ.
+ */
+export async function downloadProjectBackup(project: TenderProject): Promise<string | null> {
+  const exportedAt = new Date().toISOString();
+  const backup = { __type: 'boc-tender-backup', __version: 1, exportedAt, project };
+  const safeTitle = (project.title || 'مناقصة').replace(/[\\/:*?"<>|]/g, '_');
+  const saved = await saveJsonFile(`نسخة_احتياطية_${safeTitle}_${exportedAt.split('T')[0]}.json`, backup);
+  return saved ? exportedAt : null;
 }
 
 /**
  * تنزيل نسخة احتياطية شاملة لكل المناقصات/الطلبيات المحفوظة محلياً في ملف JSON واحد
- * (بديل عن downloadProjectBackup التي تُصدّر مناقصة واحدة فقط)
+ * (بديل عن downloadProjectBackup التي تُصدّر مناقصة واحدة فقط).
+ * يعيد وقت النسخة إن حُفظت، أو null إن ألغى المستخدم الحفظ.
  */
-export function downloadAllProjectsBackup(projects: TenderProject[]): void {
-  const backup = {
-    __type: 'boc-tender-backup-all',
-    __version: 1,
-    exportedAt: new Date().toISOString(),
-    projectsCount: projects.length,
-    projects
-  };
-
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `نسخة_احتياطية_شاملة_كل_المناقصات_${new Date().toISOString().split('T')[0]}.json`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+export async function downloadAllProjectsBackup(projects: TenderProject[]): Promise<string | null> {
+  const exportedAt = new Date().toISOString();
+  const backup = { __type: 'boc-tender-backup-all', __version: 1, exportedAt, projectsCount: projects.length, projects };
+  const saved = await saveJsonFile(`نسخة_احتياطية_شاملة_كل_المناقصات_${exportedAt.split('T')[0]}.json`, backup);
+  return saved ? exportedAt : null;
 }
 
 /**
