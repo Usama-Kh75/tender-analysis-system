@@ -104,7 +104,6 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <div className="text-left text-xs font-bold text-slate-700">
                 <div>العدد: {project.referenceNumber}</div>
                 <div>التاريخ: {new Date().toLocaleDateString('ar-EG')}</div>
-                <div className="text-emerald-700 mt-1">إعداد: م. أسامة خليل هاشم</div>
               </div>
             </div>
 

@@ -54,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="flex items-center gap-2 text-[11px] font-medium mt-0.5 flex-wrap">
                   <span className="text-emerald-400 font-bold flex items-center gap-1 bg-emerald-950/90 px-2 py-0.5 rounded-md border border-emerald-500/40">
                     <UserCheck className="w-3.5 h-3.5" />
-                    إعداد: م. أسامة خليل هاشم
+                    إعداد المهندس أسامة خليل هاشم
                   </span>
                 </div>
               </div>

@@ -1630,7 +1630,7 @@ ${lockReason}`);
           </div>
 
           <div className="text-emerald-400 font-bold">
-            إعداد: م. أسامة خليل هاشم
+            إعداد المهندس أسامة خليل هاشم
           </div>
         </div>
       </footer>
