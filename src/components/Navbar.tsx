@@ -109,7 +109,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
               }`}
               title={unsavedCount > 0
-                ? `${unsavedCount} مناقصة تغيّرت منذ آخر نسخة احتياطية — اضغط لحفظ نسخة شاملة لكل المناقصات (آخر نسخة: ${lastBackupText})`
+                ? lastBackupAt
+                  ? `${unsavedCount} مناقصة تغيّرت منذ آخر نسخة احتياطية — اضغط لحفظ نسخة شاملة لكل المناقصات (آخر نسخة: ${lastBackupText})`
+                  : `${unsavedCount} مناقصة لم تُحفظ في نسخة احتياطية بعد — اضغط لحفظ نسخة شاملة لكل المناقصات`
                 : `كل المناقصات محفوظة في نسخة احتياطية (آخر نسخة: ${lastBackupText}) — اضغط لحفظ نسخة جديدة`}
               aria-label={unsavedCount > 0
                 ? `نسخة احتياطية (${unsavedCount} مناقصة لم تُحفظ)`
