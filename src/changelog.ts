@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.17.2',
+    date: '2026-10-21',
+    notes: [
+      'يمكنك أن تختار عند طباعة المحضر طباعة جدول الأسعار الموزونة أو تركه، بمربع «طباعة جدول الأسعار الموزونة» أعلى نافذة الطباعة.',
+    ],
+  },
+  {
     version: '1.17.0',
     date: '2026-10-18',
     notes: [
