@@ -58,9 +58,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const weightingNeeded = rec.kind === 'award' && balance.verdict === 'weighting-required' && !offerFinal;
   const showWeighted = weightedOverride ?? weightingNeeded;
   const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin, tableShown: showWeighted });
-  // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح والتوقيع؛ يبقى تفصيلها في سجل التدقيق
   const approval = rec.kind === 'award' && rec.primary
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
+  // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح بحضور المجهز وتوقيعه، فلا تُطبع فقرة التصحيح أصلاً:
+  // تسلسلها في أوليات المناقصة (سجل التدقيق وقيد الاختيار). قرار المستخدم 2026-10-21
   const adopted = rec.kind === 'award' && rec.chosenByCommittee;
   const subjectLabel = {
     award: 'للعطاء الموصى به',
@@ -217,12 +218,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 })}
               </tbody>
             </table>
-            {signatures.length > 0 && (
+            {signatures.length > 0 && !adopted && (
               <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white space-y-1">
-                <strong>{adopted ? 'التصحيح الحسابي لجداول العطاءات (ضوابط رقم (4) خامساً/ب):' : 'التصحيح الحسابي وتوقيع مقدمي العطاءات (ضوابط رقم (4) خامساً/ب/3):'}</strong>
-                {signatures.map(s => adopted ? (
-                  <p key={s.bidder.id}>صحّحت اللجنة ({s.corrected}) فقرة في عطاء ({s.bidder.name}).</p>
-                ) : (
+                <strong>التصحيح الحسابي وتوقيع مقدمي العطاءات (ضوابط رقم (4) خامساً/ب/3):</strong>
+                {signatures.map(s => (
                   <p key={s.bidder.id}>
                     صحّحت اللجنة ({s.corrected}) فقرة في عطاء ({s.bidder.name})،
                     {s.signed === s.corrected
