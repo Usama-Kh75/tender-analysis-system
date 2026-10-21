@@ -57,6 +57,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // نص التسعير لا يُطبع إلا في توصية الإحالة على عطاء (لا في المفاضلة ولا التفاوض ولا إعادة الإعلان)
   const weightingNeeded = rec.kind === 'award' && balance.verdict === 'weighting-required' && !offerFinal;
   const showWeighted = weightedOverride ?? weightingNeeded;
+  // النسبة السعرية أداة الأسعار الموزونة وحدها: حين تُعتمد أسعار المجهز كما هي لا تُذكر (قرار المستخدم 2026-10-21)
+  const ratioShown = !!offer || balance.verdict === 'weighting-required' || showWeighted;
   const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin, tableShown: showWeighted });
   const approval = rec.kind === 'award' && rec.primary
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
@@ -168,7 +170,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   )}
                   <th className="border border-slate-300 p-2 text-center">الانحراف الكلي %</th>
                   <th className="border border-slate-300 p-2 text-center">الانحراف الجزئي %</th>
-                  <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>
+                  {ratioShown && <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>}
                   <th className="border border-slate-300 p-2 text-center">الموقف التجاري والرقابي</th>
                 </tr>
               </thead>
@@ -192,11 +194,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       <td className="border border-slate-300 p-2 text-center font-bold">{formatNumber(b.totals.totalBidderAmount)}</td>
                       {/* قبل الكلفة التخمينية: «—» بدل أصفار توحي بالمطابقة */}
                       {rec.kind === 'no-estimate' ? (
-                        <td colSpan={3} className="border border-slate-300 p-2 text-center text-slate-500">بانتظار الكلفة التخمينية</td>
+                        <td colSpan={ratioShown ? 3 : 2} className="border border-slate-300 p-2 text-center text-slate-500">بانتظار الكلفة التخمينية</td>
                       ) : (<>
                         <td className="border border-slate-300 p-2 text-center">{formatPercent(b.totals.totalDeviationPercent, 2, threshold)}</td>
                         <td className="border border-slate-300 p-2 text-center">{b.totals.partialDeviationPercent.toFixed(2)}%</td>
-                        <td className="border border-slate-300 p-2 text-center font-mono">{b.totals.overallPriceRatio.toFixed(4)}</td>
+                        {ratioShown && <td className="border border-slate-300 p-2 text-center font-mono">{b.totals.overallPriceRatio.toFixed(4)}</td>}
                       </>)}
                       <td className="border border-slate-300 p-2 text-center font-bold">
                         {isRejected ? (
@@ -243,10 +245,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             </h3>
 
             <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 mb-3 text-xs leading-relaxed">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-semibold">
+              <div className={`grid grid-cols-2 ${ratioShown ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3 font-semibold`}>
                 <div><strong>الكلفة التخمينية:</strong> {formatCurrency(subject.totals.totalEstimatedAmount, project.currency)}</div>
                 <div><strong>مبلغ العرض:</strong> {formatCurrency(subject.totals.totalBidderAmount, project.currency)}</div>
-                <div><strong>النسبة السعرية:</strong> {subject.totals.overallPriceRatio.toFixed(4)}</div>
+                {ratioShown && <div><strong>النسبة السعرية:</strong> {subject.totals.overallPriceRatio.toFixed(4)}</div>}
                 <div><strong>الانحراف الكلي:</strong> {formatPercent(subject.totals.totalDeviationPercent, 2, threshold)}</div>
               </div>
             </div>
