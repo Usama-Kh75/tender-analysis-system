@@ -300,13 +300,18 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </tfoot>
             </table>
             )}
-            {rec.kind !== 'no-estimate' && (
+            {/* حكم التوازن من مرحلة التحليل: بعد اختيار الترسية يبقى في المحضر ما استندت إليه التوصية وحده (عبارة
+                التسعير في ثالثاً)، فظهوره معها توصيتان متناقضتان؛ مكانه أوليات المناقصة. قرار المستخدم 2026-10-21.
+                ملاحظة تقريب الأسعار الموزونة تبقى مع جدولها */}
+            {rec.kind !== 'no-estimate' && (!adopted || (showWeighted && (adjustedCount > 0 || Math.abs(residual) >= 0.005))) && (
               <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white">
+                {!adopted && <>
                 <strong>توازن العطاء (ضوابط رقم (4) سادساً/5):</strong> عدد الفقرات المنحرفة بالزيادة أكثر من ({threshold}%) هو ({balance.unbalancedCount}) من مجموع ({balance.itemCount}) فقرة، أي ({balance.unbalancedPercent.toFixed(2)}%) مقابل حد ({UNBALANCED_ITEMS_LIMIT_PERCENT}%)
                 {balance.belowCount > 0 && <>، وعدد المنحرفة بالنقصان ({balance.belowCount}) للإحاطة</>}.
                 {' '}<strong>الحكم: {BALANCE_VERDICT_LABEL[balance.verdict]}.</strong>
                 {/* حكم النص وحده يوحي بأن اللجنة قبلت العطاء كما هو، فيُثبت قرارها بعده */}
                 {offerFinal && <> <strong>وقرّرت اللجنة{balance.verdict === 'accept-as-is' ? ' مع ذلك' : ''} اعتماد العرض الموزون المثبت في (رابعاً).</strong></>}
+                </>}
                 {showWeighted && adjustedCount > 0 && <> سُوّيت فروقات تقريب الأسعار الموزونة بتحميل أجزاء من الفلس على مفرد ({adjustedCount}) فقرة ليساوي مجموعها مبلغ العطاء.</>}
                 {showWeighted && Math.abs(residual) >= 0.005 && <> وبقي فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
               </div>
