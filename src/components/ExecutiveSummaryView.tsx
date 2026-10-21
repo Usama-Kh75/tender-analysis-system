@@ -13,7 +13,7 @@ import { formatNumber, formatCurrency, formatPercent } from '../utils/calculatio
 import { buildRecommendation, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
-import { isOfferFinal } from '../utils/weightedOffer';
+import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
@@ -59,9 +59,13 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
       commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${formatPercent(totalDev, 2, project.deviationThreshold).replace('+', '')})`;
     } else {
       commercialStatus = bidder.status === 'recommended' ? 'recommended' : 'qualified';
-      commercialReason = (partialDev > 0
-        ? `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً (انحراف جزئي استرشادي: ${partialDev.toFixed(2)}%)`
-        : `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً`)
+      // «متوازن» حكم على الفقرات (سادساً/5)، و«ضمن الحدود» حكم على المبلغ الكلي (13/ثالثاً/أ)؛ فلا يُكتب
+      // «متوازن» لعطاء تتجاوز فقراته المنحرفة بالزيادة حد 10% من عددها
+      const balance = assessBalance(correctedBalanceRows(bidder.items), project.deviationThreshold);
+      const guide = partialDev > 0 ? ` (انحراف جزئي استرشادي: ${partialDev.toFixed(2)}%)` : '';
+      commercialReason = (balance.verdict === 'weighting-required'
+        ? `عطاء ضمن الحدود المقبولة قانونياً بمبلغه الكلي، وغير متوازن بفقراته: (${balance.unbalancedCount}) من (${balance.itemCount}) فقرة منحرفة بالزيادة أكثر من (${project.deviationThreshold}%) تتجاوز (${UNBALANCED_ITEMS_LIMIT_PERCENT}%) من عددها، فيلزم الجدول الموزون (ضوابط رقم (4) سادساً/5)${guide}`
+        : `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً بمبلغه الكلي${guide}`)
         + (isOfferFinal(bidder) ? '، واعتمدت اللجنة له العرض الموزون' : '');
     }
 
