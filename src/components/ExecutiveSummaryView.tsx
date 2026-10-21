@@ -12,6 +12,7 @@ import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
+import { isOfferFinal } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
@@ -57,9 +58,10 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
       commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${formatPercent(totalDev, 2, project.deviationThreshold).replace('+', '')})`;
     } else {
       commercialStatus = bidder.status === 'recommended' ? 'recommended' : 'qualified';
-      commercialReason = partialDev > 0
+      commercialReason = (partialDev > 0
         ? `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً (انحراف جزئي استرشادي: ${partialDev.toFixed(2)}%)`
-        : `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً`;
+        : `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً`)
+        + (isOfferFinal(bidder) ? '، واعتمدت اللجنة له العرض الموزون' : '');
     }
 
     return {
@@ -354,7 +356,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 {rec.kind === 'award' && rec.primary && (
                   <>
                     الإحالة على: <span className="text-emerald-700 underline font-black">({rec.primary.name})</span> بمبلغ إجمالي <span className="font-mono">{formatCurrency(rec.primary.totals.totalBidderAmount, project.currency)}</span>
-                    {rec.chosenNotLowest ? ' — باختيار اللجنة، وليس الأوطأ (تُثبت المسوغات في التقرير — المادة 10/أولاً/هـ)' : ' — أوطأ العطاءات المؤهلة تجارياً'}.
+                    {rec.chosenNotLowest ? ' — باختيار اللجنة، وليس الأوطأ (تُثبت المسوغات في التقرير — المادة 10/أولاً/هـ)' : ' — أوطأ العطاءات المؤهلة تجارياً'}
+                    {isOfferFinal(rec.primary) && '، باعتماد أسعار العرض الموزون المعتمد بقرار اللجنة'}.
                   </>
                 )}
                 {rec.kind === 'tie' && (

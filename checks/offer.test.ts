@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { calculateBOQMetrics } from '../src/utils/calculations';
 import {
   isOfferLocked, startOfferBlocker, offerFieldsFromCorrected, offerFieldsFromFormula, offerUnitPatch,
-  isOfferEdited, offerStatus, offerLockReason
+  isOfferEdited, offerStatus, offerLockReason, isOfferFinal
 } from '../src/utils/weightedOffer';
 import type { Bidder, BOQItem, TenderProject, WeightedOfferState } from '../src/types/tender';
 
@@ -65,4 +65,12 @@ test('القفل: العرض الفعّال أو المعتمد يقفل عطا�
   assert.match(offerLockReason(project, { bidderId: 'c', shared: true })!, /مشترك/);
   const paused = { bidders: [bidder(base, { weightedOffer: offer({ status: 'paused' }) })] } as TenderProject;
   assert.equal(offerLockReason(paused, { shared: true }), null);
+});
+
+test('قرار اللجنة النافذ: معتمد وغير قديم فقط', () => {
+  const total = bidder(base).totals.totalBidderAmount;
+  assert.equal(isOfferFinal(bidder(base)), false);
+  assert.equal(isOfferFinal(bidder(base, { weightedOffer: offer({ status: 'active', bidTotal: total }) })), false);
+  assert.equal(isOfferFinal(bidder(base, { weightedOffer: offer({ status: 'adopted', bidTotal: total }) })), true);
+  assert.equal(isOfferFinal(bidder(base, { weightedOffer: offer({ status: 'adopted', bidTotal: total + 1 }) })), false);
 });

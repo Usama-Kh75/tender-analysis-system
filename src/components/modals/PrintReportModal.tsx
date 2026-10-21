@@ -5,7 +5,7 @@ import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
-import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
+import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, isOfferFinal, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
 import { correctionSignatures } from '../../utils/bidderAuditEngine';
 
@@ -47,7 +47,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const balance = assessBalance(correctedBalanceRows(subject.items), threshold);
   const offer = subject.weightedOffer && subject.weightedOffer.status !== 'paused' ? subject.weightedOffer : undefined;
   const offerState = offer ? offerStatus(subject) : null;
-  const offerFinal = offer?.status === 'adopted' && !offerState?.stale;
+  const offerFinal = isOfferFinal(subject);
   const editedItems = offer ? subject.items.filter(isOfferEdited) : [];
   const pages = summarizePages(subject.items);
   const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
@@ -302,6 +302,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <strong>توازن العطاء (ضوابط رقم (4) سادساً/5):</strong> عدد الفقرات المنحرفة بالزيادة أكثر من ({threshold}%) هو ({balance.unbalancedCount}) من مجموع ({balance.itemCount}) فقرة، أي ({balance.unbalancedPercent.toFixed(2)}%) مقابل حد ({UNBALANCED_ITEMS_LIMIT_PERCENT}%)
                 {balance.belowCount > 0 && <>، وعدد المنحرفة بالنقصان ({balance.belowCount}) للإحاطة</>}.
                 {' '}<strong>الحكم: {BALANCE_VERDICT_LABEL[balance.verdict]}.</strong>
+                {/* حكم النص وحده يوحي بأن اللجنة قبلت العطاء كما هو، فيُثبت قرارها بعده */}
+                {offerFinal && <> <strong>وقرّرت اللجنة{balance.verdict === 'accept-as-is' ? ' مع ذلك' : ''} اعتماد العرض الموزون المثبت في (رابعاً).</strong></>}
                 {showWeighted && adjustedCount > 0 && <> سُوّيت فروقات تقريب الأسعار الموزونة بتحميل أجزاء من الفلس على مفرد ({adjustedCount}) فقرة ليساوي مجموعها مبلغ العطاء.</>}
                 {showWeighted && Math.abs(residual) >= 0.005 && <> وبقي فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
               </div>

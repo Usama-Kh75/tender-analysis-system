@@ -143,6 +143,9 @@ export function offerStatus(b: Bidder): OfferStatus | null {
   };
 }
 
+/** قرار اللجنة النافذ: عرض معتمد لم يتغيّر مبلغ عطائه بعد البدء. تتبعه التوصية في الشاشة والمحضر */
+export const isOfferFinal = (b: Bidder) => b.weightedOffer?.status === 'adopted' && !offerStatus(b)?.stale;
+
 /**
  * سبب رفض تعديل يغيّر أرقام عطاء له عرض موزون فعّال أو معتمد. shared: التعديل مشترك بين العطاءات كلها
  * (الكمية، التخميني، إضافة فقرة أو حذفها، الاستيراد)، فيقفله عرض أي مجهز
