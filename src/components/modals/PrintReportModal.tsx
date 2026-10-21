@@ -391,9 +391,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </div>
             )}
 
+            {/* تذكير للجنة لا أساس للإحالة: يظهر في المعاينة ولا يُطبع (قرار المستخدم 2026-10-21). ملاحظة المفاضلة بعده تُطبع */}
             {rec.kind === 'award' && rec.chosenNotLowest && rec.eligible[0] && (
-              <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
-                📌 <strong>ملاحظة (المادة 10/أولاً/هـ):</strong> العطاء الموصى به ليس أوطأ العطاءات المؤهلة تجارياً (الأوطأ: {rec.eligible[0].name} بمبلغ {money(rec.eligible[0])}). جهة التعاقد غير ملزمة بقبول أوطأ العطاءات، ويجب تثبيت مسوغات اختيار اللجنة في التقرير النهائي.
+              <div className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                📌 <strong>ملاحظة (المادة 10/أولاً/هـ):</strong> العطاء الموصى به ليس أوطأ العطاءات المؤهلة تجارياً (الأوطأ: {rec.eligible[0].name} بمبلغ {money(rec.eligible[0])}). جهة التعاقد غير ملزمة بقبول أوطأ العطاءات، ويجب تثبيت مسوغات اختيار اللجنة في التقرير النهائي. (هذه الملاحظة لا تظهر في الطباعة)
               </div>
             )}
 
