@@ -53,7 +53,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
   const residual = subject.totals.weightedRoundingResidual ?? 0;
   // مفعّل افتراضياً حين يحيل نص التوصية إلى جدول الأسعار الموزونة
-  const weightingNeeded = rec.kind !== 'no-estimate' && balance.verdict === 'weighting-required' && !offerFinal;
+  // نص التسعير لا يُطبع إلا في توصية الإحالة على عطاء (لا في المفاضلة ولا التفاوض ولا إعادة الإعلان)
+  const weightingNeeded = rec.kind === 'award' && balance.verdict === 'weighting-required' && !offerFinal;
   const showWeighted = weightedOverride ?? weightingNeeded;
   const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin, tableShown: showWeighted });
   // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح والتوقيع؛ يبقى تفصيلها في سجل التدقيق
@@ -92,13 +93,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <input
                   type="checkbox"
                   className="accent-amber-500"
+                  aria-describedby={weightingNeeded && !showWeighted ? 'weighted-table-warning' : undefined}
                   checked={showWeighted}
                   onChange={e => setWeightedOverride(e.target.checked)}
                 />
                 طباعة جدول الأسعار الموزونة
               </label>
               {weightingNeeded && !showWeighted && (
-                <span className="text-[11px] font-bold text-amber-400">نص التوصية يحيل إلى الأسعار الموزونة: أرفق جدولها بالمحضر</span>
+                <span id="weighted-table-warning" className="text-[11px] font-bold text-amber-400">نص التوصية يحيل إلى الأسعار الموزونة: أرفق جدولها بالمحضر</span>
               )}
             </div>
             <button
