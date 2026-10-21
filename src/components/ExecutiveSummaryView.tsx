@@ -46,6 +46,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
     // (الانحراف الجزئي مؤشر استرشادي فقط في الجدول المعتمد ولا يُستخدم فيه كسبب استبعاد أو تحذير مستقل)
     let commercialStatus: 'recommended' | 'qualified' | 'excluded' | 'pending' = 'qualified';
     let commercialReason = '';
+    let unbalancedItems = false;
 
     if (bidder.status === 'disqualified') {
       commercialStatus = 'excluded';
@@ -63,7 +64,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
       // «متوازن» لعطاء تتجاوز فقراته المنحرفة بالزيادة حد 10% من عددها
       const balance = assessBalance(correctedBalanceRows(bidder.items), project.deviationThreshold);
       const guide = partialDev > 0 ? ` (انحراف جزئي استرشادي: ${partialDev.toFixed(2)}%)` : '';
-      commercialReason = (balance.verdict === 'weighting-required'
+      unbalancedItems = balance.verdict === 'weighting-required';
+      commercialReason = (unbalancedItems
         ? `عطاء ضمن الحدود المقبولة قانونياً بمبلغه الكلي، وغير متوازن بفقراته: (${balance.unbalancedCount}) من (${balance.itemCount}) فقرة منحرفة بالزيادة أكثر من (${project.deviationThreshold}%) تتجاوز (${UNBALANCED_ITEMS_LIMIT_PERCENT}%) من عددها، فيلزم الجدول الموزون (ضوابط رقم (4) سادساً/5)${guide}`
         : `عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً بمبلغه الكلي${guide}`)
         + (isOfferFinal(bidder) ? '، واعتمدت اللجنة له العرض الموزون' : '');
@@ -73,6 +75,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
       ...bidder,
       commercialStatus,
       commercialReason,
+      unbalancedItems,
       diff
     };
   });
@@ -299,7 +302,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                       ) : (
                         <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black px-3 py-1 rounded-full">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          مؤهل ومتوازن
+                          {bidder.unbalancedItems ? 'مؤهل تجارياً' : 'مؤهل ومتوازن'}
                         </span>
                       )}
                     </td>
