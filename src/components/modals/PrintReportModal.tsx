@@ -405,7 +405,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <p className="text-xs mb-2">
                 مجموع العرض الموزون ({formatNumber(offerState?.offerSum ?? 0)}) {Math.abs(offerState?.diff ?? 0) < 0.005 ? 'مساوٍ لمبلغ العطاء بعد التصحيح' : `يختلف عن مبلغ العطاء بعد التصحيح بمقدار (${formatNumber(offerState?.diff ?? 0)})`}، وعدد الفقرات المعدّلة ({editedItems.length}).
               </p>
-              {editedItems.length > 0 && (
+              {/* جدول فقرات العرض اختياري كجدول (ثانياً): يتبع مربع الطباعة، ويبقى سطر الخلاصة فتصح إحالة التوصية إلى (رابعاً) */}
+              {editedItems.length > 0 && showWeighted && (
                 <table className="w-full text-xs text-right border-collapse border border-slate-400">
                   <thead className="bg-slate-100 font-bold">
                     <tr>
