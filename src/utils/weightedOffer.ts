@@ -180,7 +180,7 @@ export function resumeOfferPatch(item: BOQItem, origin: 'corrected' | 'formula')
  * النص يقبل مبلغ العطاء كما هو عند ≤10% (فالموزون قرار اللجنة)، ويعتمد عند تجاوزها جدول جهة التعاقد معدلاً بنسبة
  * مبلغ العطاء (فالجدول المعدل من أسعار المجهز يُذكر أنه بقرار اللجنة)
  */
-export function pricingClause(verdict: BalanceVerdict, offer: { final: boolean; origin?: 'corrected' | 'formula' }): string {
+export function pricingClause(verdict: BalanceVerdict, offer: { final: boolean; origin?: 'corrected' | 'formula'; tableShown?: boolean }): string {
   if (offer.final) {
     if (verdict === 'accept-as-is') {
       return '، واعتماد أسعار العرض الموزون المعتمد المثبتة في (رابعاً) بقرار اللجنة (اختياراً، إذ يقبل نص ضوابط رقم (4) سادساً/5 مبلغ العطاء كما هو لعدم تجاوز الفقرات غير المتوازنة نسبة (10%) من مجموع الفقرات)';
@@ -192,5 +192,5 @@ export function pricingClause(verdict: BalanceVerdict, offer: { final: boolean; 
   }
   return verdict === 'accept-as-is'
     ? '، واعتماد أسعار العطاء كما هي لعدم تجاوز الفقرات غير المتوازنة نسبة (10%) من مجموع الفقرات وفق ضوابط رقم (4) سادساً/5'
-    : '، واعتماد جدول الكميات المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء (الأسعار الموزونة المثبتة أعلاه) وفق ضوابط رقم (4) سادساً/5، مع استدعاء مقدم العطاء لختم الجداول المعدلة';
+    : '، واعتماد جدول الكميات المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء (' + (offer.tableShown === false ? 'الأسعار الموزونة المرفقة بهذا المحضر' : 'الأسعار الموزونة المثبتة أعلاه') + ') وفق ضوابط رقم (4) سادساً/5، مع استدعاء مقدم العطاء لختم الجداول المعدلة';
 }

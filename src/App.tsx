@@ -345,6 +345,8 @@ export function App() {
       />
 
       <PrintReportModal
+        // خيار جدول الأسعار الموزونة يبدأ بقيمته الافتراضية مع كل فتح، كما في ProjectSettingsModal
+        key={`${currentProject.id}-${isPrintOpen}`}
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
         project={currentProject}

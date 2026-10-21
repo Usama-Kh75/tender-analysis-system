@@ -1,6 +1,7 @@
 import { calculateBOQMetrics } from '../utils/calculations';
 import { addAuditLog } from '../utils/storageService';
 import { offerLockReason } from '../utils/weightedOffer';
+import { correctionSignatures } from '../utils/bidderAuditEngine';
 import { localDate } from '../utils/localDate';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
@@ -150,6 +151,12 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       b.id === bidderId ? { ...b, status } : displaced.includes(b) ? { ...b, status: 'pending' as const } : b
     );
     const targetBidder = currentProject.bidders.find(b => b.id === bidderId);
+    // عند اختياره للترسية تبقى حال التصحيح والتوقيع في السجل (المحضر يطبع عدد التصحيحات فقط)
+    const sig = status === 'recommended' && targetBidder ? correctionSignatures(targetBidder.items) : null;
+    const selectionSignatureNote = sig && sig.corrected > 0
+      ? ` — وعند اختياره للترسية: صحّحت اللجنة (${sig.corrected}) فقرة في عطائه، ووقّع المجهز وختم إزاء (${sig.signed}) منها`
+        + (sig.unsigned.length ? `، ولم يُؤشَّر توقيعه إزاء ${sig.unsigned.length > 1 ? 'الفقرات' : 'الفقرة'}: ${sig.unsigned.join('، ')}` : '')
+      : '';
 
     let updatedProj: TenderProject = {
       ...currentProject,
@@ -162,6 +169,7 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       'تحديث حالة العطاء',
       `تم تعديل حالة المجهز (${targetBidder?.name}) إلى (${status})`
         + (displaced.length ? ` — وأُلغي اختيار (${displaced.map(b => b.name).join('، ')}) للترسية` : '')
+        + selectionSignatureNote
     );
 
     saveProject(updatedProj);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
@@ -22,6 +22,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   project,
   activeBidder
 }) => {
+  // تجاوز المستخدم لطباعة جدول الأسعار الموزونة؛ null = القيمة الافتراضية (تتبع نص التوصية)
+  const [weightedOverride, setWeightedOverride] = useState<boolean | null>(null);
   if (!isOpen) return null;
 
   const handlePrint = () => {
@@ -50,7 +52,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const pages = summarizePages(subject.items);
   const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
   const residual = subject.totals.weightedRoundingResidual ?? 0;
-  const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin });
+  // مفعّل افتراضياً حين يحيل نص التوصية إلى جدول الأسعار الموزونة
+  const weightingNeeded = rec.kind !== 'no-estimate' && balance.verdict === 'weighting-required' && !offerFinal;
+  const showWeighted = weightedOverride ?? weightingNeeded;
+  const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin, tableShown: showWeighted });
+  // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح والتوقيع؛ يبقى تفصيلها في سجل التدقيق
+  const adopted = rec.kind === 'award' && rec.chosenByCommittee;
   const subjectLabel = {
     award: 'للعطاء الموصى به',
     tie: 'لأوطأ العطاءات المتقاربة',
@@ -79,7 +86,21 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             <h2 className="text-base font-bold">معاينة وطباعة محضر لجنة فتح وتحليل العطاءات والترسية</h2>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-start gap-0.5">
+              <label className="flex items-center gap-1.5 text-white text-xs font-bold cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="accent-amber-500"
+                  checked={showWeighted}
+                  onChange={e => setWeightedOverride(e.target.checked)}
+                />
+                طباعة جدول الأسعار الموزونة
+              </label>
+              {weightingNeeded && !showWeighted && (
+                <span className="text-[11px] font-bold text-amber-400">نص التوصية يحيل إلى الأسعار الموزونة: أرفق جدولها بالمحضر</span>
+              )}
+            </div>
             <button
               onClick={handlePrint}
               className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-slate-950 text-xs font-black px-4 py-2 rounded-xl shadow-sm cursor-pointer"
@@ -191,8 +212,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             </table>
             {signatures.length > 0 && (
               <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white space-y-1">
-                <strong>التصحيح الحسابي وتوقيع مقدمي العطاءات (ضوابط رقم (4) خامساً/ب/3):</strong>
-                {signatures.map(s => (
+                <strong>{adopted ? 'التصحيح الحسابي لجداول العطاءات (ضوابط رقم (4) خامساً/ب):' : 'التصحيح الحسابي وتوقيع مقدمي العطاءات (ضوابط رقم (4) خامساً/ب/3):'}</strong>
+                {signatures.map(s => adopted ? (
+                  <p key={s.bidder.id}>صحّحت اللجنة ({s.corrected}) فقرة في عطاء ({s.bidder.name}).</p>
+                ) : (
                   <p key={s.bidder.id}>
                     صحّحت اللجنة ({s.corrected}) فقرة في عطاء ({s.bidder.name})،
                     {s.signed === s.corrected
@@ -208,7 +231,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* 2. التحليل التفصيلي للفقرات للعطاء الموصى به */}
           <div className="mb-6">
             <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
-              ثانياً: جدول التحليل المالي والأسعار الموزونة {subjectLabel} ({subject.name}):
+              {showWeighted
+                ? <>ثانياً: جدول التحليل المالي والأسعار الموزونة {subjectLabel} ({subject.name}):</>
+                : <>ثانياً: التحليل المالي {subjectLabel} ({subject.name}):</>}
             </h3>
 
             <div className="bg-slate-50 border border-slate-300 rounded-xl p-3 mb-3 text-xs leading-relaxed">
@@ -220,6 +245,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </div>
             </div>
 
+            {showWeighted && (
             <table className="w-full text-xs text-right border-collapse border border-slate-400 mb-4">
               <thead className="bg-slate-100 font-bold border-b border-slate-400">
                 <tr>
@@ -267,13 +293,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 </tr>
               </tfoot>
             </table>
+            )}
             {rec.kind !== 'no-estimate' && (
               <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white">
                 <strong>توازن العطاء (ضوابط رقم (4) سادساً/5):</strong> عدد الفقرات المنحرفة بالزيادة أكثر من ({threshold}%) هو ({balance.unbalancedCount}) من مجموع ({balance.itemCount}) فقرة، أي ({balance.unbalancedPercent.toFixed(2)}%) مقابل حد ({UNBALANCED_ITEMS_LIMIT_PERCENT}%)
                 {balance.belowCount > 0 && <>، وعدد المنحرفة بالنقصان ({balance.belowCount}) للإحاطة</>}.
                 {' '}<strong>الحكم: {BALANCE_VERDICT_LABEL[balance.verdict]}.</strong>
-                {adjustedCount > 0 && <> سُوّيت فروقات تقريب الأسعار الموزونة بتحميل أجزاء من الفلس على مفرد ({adjustedCount}) فقرة ليساوي مجموعها مبلغ العطاء.</>}
-                {Math.abs(residual) >= 0.005 && <> وبقي فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
+                {showWeighted && adjustedCount > 0 && <> سُوّيت فروقات تقريب الأسعار الموزونة بتحميل أجزاء من الفلس على مفرد ({adjustedCount}) فقرة ليساوي مجموعها مبلغ العطاء.</>}
+                {showWeighted && Math.abs(residual) >= 0.005 && <> وبقي فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
               </div>
             )}
           </div>

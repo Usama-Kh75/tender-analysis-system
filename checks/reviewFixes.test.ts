@@ -63,6 +63,14 @@ test('صياغة المحضر: لا تُنسب إلى سادساً/5 ما لا �
   assert.match(pricingClause('weighting-required', { final: true, origin: 'corrected' }), /المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء/);
   assert.notEqual(pricingClause('weighting-required', { final: true, origin: 'corrected' }), pricingClause('weighting-required', { final: true, origin: 'formula' }));
   assert.match(pricingClause('weighting-required', { final: false }), /ختم الجداول المعدلة/);
+  assert.match(pricingClause('weighting-required', { final: false }), /المثبتة أعلاه/);
+  const noTable = pricingClause('weighting-required', { final: false, tableShown: false });
+  assert.match(noTable, /المرفقة بهذا المحضر/);
+  assert.doesNotMatch(noTable, /أعلاه/);
+  for (const v of ['accept-as-is', 'weighting-required'] as const) {
+    assert.equal(pricingClause(v, { final: true, origin: 'corrected', tableShown: false }), pricingClause(v, { final: true, origin: 'corrected' }));
+  }
+  assert.equal(pricingClause('accept-as-is', { final: false, tableShown: false }), pricingClause('accept-as-is', { final: false }));
 });
 
 test('أرقام الصفحات: تُحفظ كما هي ولا تُعاد من 1', () => {
