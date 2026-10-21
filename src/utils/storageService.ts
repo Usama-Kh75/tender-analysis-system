@@ -1,6 +1,7 @@
 import { TenderProject, Bidder, AuditLogEntry, BOQItem } from '../types/tender';
 import { calculateBOQMetrics, normalizeItemNo } from './calculations';
 import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
+import { localDate } from './localDate';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
 const ACTIVE_PROJECT_KEY = 'antigravity_active_project_id_v2';
@@ -28,7 +29,7 @@ export function createDefaultProject(): TenderProject {
     id: 'bidder-1',
     name: 'شركة النور للمقاولات العامة والتجهيزات',
     commercialRecord: 'CR-98421',
-    submissionDate: new Date().toISOString().split('T')[0],
+    submissionDate: localDate(),
     items: calc1.items,
     totals: calc1.totals,
     status: 'pending',
@@ -39,7 +40,7 @@ export function createDefaultProject(): TenderProject {
     id: 'bidder-2',
     name: 'شركة الفرات للتجارة والمقاولات الهندسية',
     commercialRecord: 'CR-11204',
-    submissionDate: new Date().toISOString().split('T')[0],
+    submissionDate: localDate(),
     items: calc2.items,
     totals: calc2.totals,
     status: 'recommended',
@@ -96,7 +97,7 @@ export function createNewTenderProject(opts: {
     return {
       id: `bidder-${now}-${i}`,
       name,
-      submissionDate: new Date().toISOString().split('T')[0],
+      submissionDate: localDate(),
       items: calc.items,
       totals: calc.totals,
       status: 'pending'
@@ -452,7 +453,7 @@ export async function downloadProjectBackup(project: TenderProject): Promise<str
   const exportedAt = new Date().toISOString();
   const backup = { __type: 'boc-tender-backup', __version: 1, exportedAt, project };
   const safeTitle = (project.title || 'مناقصة').replace(/[\\/:*?"<>|]/g, '_');
-  const saved = await saveJsonFile(`نسخة_احتياطية_${safeTitle}_${exportedAt.split('T')[0]}.json`, backup);
+  const saved = await saveJsonFile(`نسخة_احتياطية_${safeTitle}_${localDate(new Date(exportedAt))}.json`, backup);
   return saved ? exportedAt : null;
 }
 
@@ -464,7 +465,7 @@ export async function downloadProjectBackup(project: TenderProject): Promise<str
 export async function downloadAllProjectsBackup(projects: TenderProject[]): Promise<string | null> {
   const exportedAt = new Date().toISOString();
   const backup = { __type: 'boc-tender-backup-all', __version: 1, exportedAt, projectsCount: projects.length, projects };
-  const saved = await saveJsonFile(`نسخة_احتياطية_شاملة_كل_المناقصات_${exportedAt.split('T')[0]}.json`, backup);
+  const saved = await saveJsonFile(`نسخة_احتياطية_شاملة_كل_المناقصات_${localDate(new Date(exportedAt))}.json`, backup);
   return saved ? exportedAt : null;
 }
 

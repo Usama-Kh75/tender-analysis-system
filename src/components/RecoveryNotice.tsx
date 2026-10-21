@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AlertTriangle, Download, X } from 'lucide-react';
 import { RecoveredData } from '../utils/storageService';
 
@@ -12,7 +12,22 @@ interface RecoveryNoticeProps {
 
 // بيانات محفوظة تعذّرت قراءتها عند التحميل: حُفظت جانباً بدل الكتابة فوقها، ويُنزَّل نصها ليُفحص أو يُرسل للدعم
 export const RecoveryNotice: React.FC<RecoveryNoticeProps> = ({ entries, saveBlocked, onDownload, onDismiss }) => {
+  // عدد النسخ عند آخر تنزيل: نسخة أُضيفت بعده لم تُنزَّل بعد
+  const [downloadedCount, setDownloadedCount] = useState(0);
   if (entries.length === 0) return null;
+
+  const download = () => {
+    onDownload();
+    setDownloadedCount(entries.length);
+  };
+  // ✕ يحذف النسخة من المتصفح نهائياً، فلا يُحذف ما لم يُنزَّل إلا بتأكيد
+  const dismiss = () => {
+    if (downloadedCount < entries.length && !window.confirm(
+      'لم تُنزَّل النسخة المحفوظة بعد.\n\nإخفاء التنبيه يحذفها من المتصفح نهائياً، ولا يمكن استرجاعها بعد ذلك.\n\nهل تحذفها دون تنزيل؟'
+    )) return;
+    onDismiss();
+  };
+
   return (
     <div role="alert" className="bg-amber-50 border-b border-amber-300 text-amber-900 px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
       <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
@@ -24,7 +39,7 @@ export const RecoveryNotice: React.FC<RecoveryNoticeProps> = ({ entries, saveBlo
       </p>
       <button
         type="button"
-        onClick={onDownload}
+        onClick={download}
         className="flex items-center gap-1.5 font-bold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg cursor-pointer transition"
       >
         <Download className="w-4 h-4" />
@@ -32,7 +47,7 @@ export const RecoveryNotice: React.FC<RecoveryNoticeProps> = ({ entries, saveBlo
       </button>
       <button
         type="button"
-        onClick={onDismiss}
+        onClick={dismiss}
         aria-label="إخفاء التنبيه وحذف النسخة المحفوظة"
         title="إخفاء التنبيه وحذف النسخة المحفوظة"
         className="p-1.5 rounded-lg hover:bg-amber-100 cursor-pointer transition"

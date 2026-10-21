@@ -3,6 +3,7 @@ import { X, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import type { TenderProject } from '../../types/tender';
 import { formatNumber, formatPercent } from '../../utils/calculations';
 import { hasBidAmounts, hasNoEstimate } from '../../utils/recommendation';
+import { localDate } from '../../utils/localDate';
 import { contractTypeInfo } from '../../utils/contractTypes';
 
 interface ProjectsBrowserModalProps {
@@ -16,11 +17,10 @@ interface ProjectsBrowserModalProps {
   onNewProject: () => void;
 }
 
-// تاريخ اليوم بتوقيت الجهاز: آخر الليل في العراق يقع في يوم UTC السابق
-const localDate = (iso?: string): string => {
+// تاريخ المناقصة بتوقيت الجهاز، وفارغ إن لم يُسجَّل
+const dateOf = (iso?: string): string => {
   const d = iso ? new Date(iso) : null;
-  if (!d || isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return d && !isNaN(d.getTime()) ? localDate(d) : '';
 };
 
 /**
@@ -73,8 +73,8 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
             const noEstimate = hasNoEstimate(project);
             const estimate = project.bidders.find(b => b.totals.totalEstimatedAmount > 0)?.totals.totalEstimatedAmount ?? 0;
             const typeLabel = contractTypeInfo(project.contractType)?.label;
-            const created = localDate(project.createdAt);
-            const updated = localDate(project.updatedAt);
+            const created = dateOf(project.createdAt);
+            const updated = dateOf(project.updatedAt);
             return (
               <section
                 key={project.id}

@@ -25,6 +25,7 @@ import { isCommitteeCorrected } from './utils/bidderAuditEngine';
 import { isOfferLocked, offerLockReason, startOfferBlocker, offerFieldsFromCorrected, offerFieldsFromFormula,
   offerUnitPatch, offerStatus, pauseOfferPatch, resumeOfferPatch, offerDeviationTotals } from './utils/weightedOffer';
 import { estimateMergeLogNote, planEstimateMerge } from './utils/estimateMerge';
+import { localDate } from './utils/localDate';
 import { TenderProject, Bidder, BOQItem, ContractType, ReadingField } from './types/tender';
 
 import { Navbar } from './components/Navbar';
@@ -233,7 +234,7 @@ export function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `بيانات_مناقصات_تعذرت_قراءتها_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `بيانات_مناقصات_تعذرت_قراءتها_${localDate()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -926,7 +927,7 @@ export function App() {
       const newBidder: Bidder = {
         id: `bidder-${Date.now()}`,
         name: bidderName || `شركة جديدة (${currentProject.bidders.length + 1})`,
-        submissionDate: new Date().toISOString().split('T')[0],
+        submissionDate: localDate(),
         items: recalc.items,
         totals: recalc.totals,
         ...stated,
@@ -1128,7 +1129,7 @@ export function App() {
     const newBidder: Bidder = {
       id: `bidder-${Date.now()}`,
       name: targetName,
-      submissionDate: new Date().toISOString().split('T')[0],
+      submissionDate: localDate(),
       items: recalc.items,
       totals: recalc.totals,
       status: 'pending'
@@ -1196,7 +1197,7 @@ export function App() {
     const freshBidder: Bidder = {
       id: `bidder-${Date.now()}`,
       name: 'شركة جديدة',
-      submissionDate: new Date().toISOString().split('T')[0],
+      submissionDate: localDate(),
       items: recalc.items,
       totals: recalc.totals,
       status: 'pending'
