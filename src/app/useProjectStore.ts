@@ -5,9 +5,9 @@ import {
   getRecoveredData,
   clearRecoveredData,
   saveAllProjects,
-  getActiveProjectId
+  getActiveProjectId,
+  downloadRecoveredData
 } from '../utils/storageService';
-import { localDate } from '../utils/localDate';
 import { RESUMED_STATE } from '../resume';
 import { TenderProject } from '../types/tender';
 
@@ -59,15 +59,7 @@ export function useProjectStore() {
     setTimeout(() => { if (Math.abs(window.scrollY - y) > 20) window.scrollTo(0, y); }, 600);
   }, [projects]);
 
-  const downloadRecovered = () => {
-    const blob = new Blob([JSON.stringify(recovered, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `بيانات_مناقصات_تعذرت_قراءتها_${localDate()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const downloadRecovered = () => downloadRecoveredData(recovered);
   const dismissRecovered = () => { clearRecoveredData(); setRecovered([]); };
 
   return {

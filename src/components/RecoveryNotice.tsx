@@ -6,7 +6,8 @@ interface RecoveryNoticeProps {
   entries: RecoveredData[];
   /** تعذّر حفظ النسخة في المتصفح: الحفظ موقوف حتى تُنزَّل وتُغلق */
   saveBlocked: boolean;
-  onDownload: () => void;
+  /** يعيد false إن أُلغي الحفظ */
+  onDownload: () => Promise<boolean>;
   onDismiss: () => void;
 }
 
@@ -16,9 +17,10 @@ export const RecoveryNotice: React.FC<RecoveryNoticeProps> = ({ entries, saveBlo
   const [downloadedCount, setDownloadedCount] = useState(0);
   if (entries.length === 0) return null;
 
-  const download = () => {
-    onDownload();
-    setDownloadedCount(entries.length);
+  // تُعدّ النسخ منزّلة بعد الحفظ فقط، وبعددها لحظة الضغط
+  const download = async () => {
+    const count = entries.length;
+    if (await onDownload()) setDownloadedCount(count);
   };
   // ✕ يحذف النسخة من المتصفح نهائياً، فلا يُحذف ما لم يُنزَّل إلا بتأكيد
   const dismiss = () => {

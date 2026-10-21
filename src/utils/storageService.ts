@@ -412,7 +412,7 @@ interface SavePickerWindow {
 // نافذة «حفظ باسم» إن دعمها المتصفح (Chrome/Edge): يختار المستخدم مجلد النسخ الاحتياطية مرة،
 // ويفتح عليه المتصفح في المرات التالية (id). وإلا يُنزَّل الملف كما كان. يعيد false إن ألغى المستخدم الحفظ.
 // النص يُبنى قبل فتح النافذة: النافذة تحتاج ضغطة المستخدم نفسها، والنسخة تحوي البيانات لحظة الضغط.
-async function saveJsonFile(fileName: string, data: unknown): Promise<boolean> {
+async function saveJsonFile(fileName: string, data: unknown, description = 'نسخة احتياطية (JSON)'): Promise<boolean> {
   const text = JSON.stringify(data, null, 2);
   const w = window as unknown as SavePickerWindow;
   if (w.showSaveFilePicker) {
@@ -420,7 +420,7 @@ async function saveJsonFile(fileName: string, data: unknown): Promise<boolean> {
       const handle = await w.showSaveFilePicker({
         suggestedName: fileName,
         id: 'tender-backups',
-        types: [{ description: 'نسخة احتياطية (JSON)', accept: { 'application/json': ['.json'] } }]
+        types: [{ description, accept: { 'application/json': ['.json'] } }]
       });
       const writable = await handle.createWritable();
       await writable.write(text);
@@ -441,6 +441,12 @@ async function saveJsonFile(fileName: string, data: unknown): Promise<boolean> {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
   return true;
+}
+
+// تنزيل البيانات التي تعذّرت قراءتها بنافذة الحفظ نفسها: يعيد false إن ألغى المستخدم الحفظ، فلا تُعدّ منزّلة
+// ويبقى تأكيد ✕ قبل حذفها. كان التنزيل بالرابط يعدّها منزّلة ولو أُلغي أو مُنع
+export function downloadRecoveredData(entries: RecoveredData[]): Promise<boolean> {
+  return saveJsonFile(`بيانات_مناقصات_تعذرت_قراءتها_${localDate()}.json`, entries, 'بيانات تعذّرت قراءتها (JSON)');
 }
 
 /**
