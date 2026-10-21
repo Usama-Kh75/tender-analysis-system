@@ -394,7 +394,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
               {/* مرحلة التحليل: التساوي لأصغر فئة نقدية يجيز استكمال المبادرات (ضوابط رقم (5))، فتُنبَّه اللجنة إلى مخاطبة
                   المجهزين قبل المفاضلة. التقارب لغاية 1% يُفاضَل فيه بما قُدّم فلا يشمله. طلب المستخدم 2026-10-21 */}
               {rec.kind === 'tie' && equalPriceBids(rec.closeBids).length > 1 && (
-                <div className="text-xs font-bold text-amber-800 mt-1">
+                <div className="text-xs font-bold text-amber-800 mt-1 leading-relaxed">
                   📌 الأسعار متساوية لأصغر فئة نقدية: تُخاطَب الشركات ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتها لغرض المفاضلة إن لم تقدّمها ابتداءً، وتصبح المبادرات جزءاً من العطاء، ويُستقطع مبلغ ما لا يُلتزم به عند التنفيذ حسب الأسعار السائدة ({preferenceReference(project.contractType).clause}).
                 </div>
               )}
