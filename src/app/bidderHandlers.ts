@@ -4,6 +4,7 @@ import { offerLockReason } from '../utils/weightedOffer';
 import { correctionSignatures } from '../utils/bidderAuditEngine';
 import { localDate } from '../utils/localDate';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
+import { BUDGET_TYPES } from '../utils/budgetTypes';
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
 import { withoutBidderPrices } from './itemFields';
@@ -207,6 +208,8 @@ ${lockReason}`);
       `تم تحديث إعدادات المناقصة وحد الانحراف إلى (${threshold}%)`
         + (updated.contractType && updated.contractType !== currentProject.contractType
           ? ` — نوع العقد: ${CONTRACT_TYPES[updated.contractType].label}` : '')
+        + (updated.budgetType && updated.budgetType !== currentProject.budgetType
+          ? ` — نوع الموازنة: ${BUDGET_TYPES[updated.budgetType].label}` : '')
     );
 
     saveProject(updatedProj);

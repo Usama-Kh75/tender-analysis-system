@@ -22,7 +22,7 @@ const mkBidder = (id: string, name: string, bid: number[], extra?: (r: Partial<B
   return { id, name, submissionDate: '2026-01-01', items: c.items, totals: c.totals, status: 'pending' };
 };
 const mkProject = (a: Bidder = mkBidder('A', 'أ', [1000, 500, 200])): TenderProject => ({
-  ...createNewTenderProject({ title: 'ت', referenceNumber: '1', contractType: 'works', bidderNames: ['x'] }),
+  ...createNewTenderProject({ title: 'ت', referenceNumber: '1', contractType: 'works', budgetType: 'operating', bidderNames: ['x'] }),
   bidders: [a, mkBidder('B', 'ب', [900, 450, 180])],
   activeBidderId: 'A'
 });

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { ContractType } from '../types/tender';
+import { ContractType, BudgetType } from '../types/tender';
 import { NewProjectModal } from './modals/NewProjectModal';
 
 interface StartScreenProps {
   recoveryNotice: React.ReactNode;
-  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
   onImportBackup: (file: File) => void;
 }
 

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { X, FolderPlus } from 'lucide-react';
-import type { ContractType } from '../../types/tender';
+import type { ContractType, BudgetType } from '../../types/tender';
 import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER } from '../../utils/contractTypes';
+import { BUDGET_TYPES, BUDGET_TYPE_ORDER } from '../../utils/budgetTypes';
 
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
 }
 
 // نوع العقد يُختار قبل إدخال أي بيانات، لأن التوصية (معايير المفاضلة) تتبعه
@@ -14,6 +15,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const [title, setTitle] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [contractType, setContractType] = useState<ContractType | null>(null);
+  const [budgetType, setBudgetType] = useState<BudgetType | null>(null);
   const [bidderNamesText, setBidderNamesText] = useState('');
 
   if (!isOpen) return null;
@@ -22,14 +24,15 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     setTitle('');
     setReferenceNumber('');
     setContractType(null);
+    setBudgetType(null);
     setBidderNamesText('');
     onClose();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !contractType) return;
-    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), contractType, bidderNames: bidderNamesText.split(/\r?\n/) });
+    if (!title.trim() || !contractType || !budgetType) return;
+    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/) });
     close();
   };
 
@@ -79,6 +82,35 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             </div>
             <p className="text-[11px] text-slate-500 mt-1.5">
               عقود الخدمات الاستشارية غير مشمولة: تُقيَّم فنياً قبل فتح عروضها التجارية (ضوابط رقم 4 ثانياً/3).
+            </p>
+          </fieldset>
+
+          <fieldset>
+            <legend className="block text-xs font-bold text-slate-700 mb-2">نوع الموازنة <span className="text-rose-600">*</span></legend>
+            <div className="grid grid-cols-2 gap-2">
+              {BUDGET_TYPE_ORDER.map(type => (
+                <label
+                  key={type}
+                  className={`cursor-pointer rounded-xl border-2 px-3 py-3 text-center text-sm font-black transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-2 ${
+                    budgetType === type
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-900'
+                      : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="budgetType"
+                    value={type}
+                    checked={budgetType === type}
+                    onChange={() => setBudgetType(type)}
+                    className="sr-only"
+                  />
+                  {BUDGET_TYPES[type].label}
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              يحدد صلاحية قبول العطاء الذي يزيد على الكلفة التخمينية والموافقة المطلوبة له في التوصية (ضوابط رقم 2 رابعاً).
             </p>
           </fieldset>
 
@@ -132,7 +164,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             </button>
             <button
               type="submit"
-              disabled={!title.trim() || !contractType}
+              disabled={!title.trim() || !contractType || !budgetType}
               className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               إنشاء المناقصة

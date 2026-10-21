@@ -12,6 +12,7 @@ import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
+import { budgetApprovalNote } from '../utils/budgetTypes';
 import { isOfferFinal } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
@@ -82,6 +83,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
   // التوصية من المحرك المشترك مع المحضر المطبوع (utils/recommendation.ts)
   const rec = buildRecommendation(project);
+  const approval = rec.kind === 'award' && rec.primary
+    ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
 
   return (
     <div className="space-y-6 mb-8">
@@ -381,6 +384,14 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                   </span>
                 )}
               </div>
+              {approval?.kind === 'note' && (
+                <div className="text-xs font-bold text-slate-700 mt-1">{approval.text}</div>
+              )}
+              {approval?.kind === 'missing' && (
+                <div className="text-xs font-bold text-amber-700 mt-1">
+                  حدّد نوع الموازنة في إعدادات المناقصة لتظهر هنا الموافقة المطلوبة لقبول العطاء (ضوابط رقم (2) رابعاً).
+                </div>
+              )}
             </div>
           </div>
 

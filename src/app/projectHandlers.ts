@@ -12,7 +12,8 @@ import {
   resetAllData
 } from '../utils/storageService';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
-import { TenderProject, ContractType } from '../types/tender';
+import { BUDGET_TYPES } from '../utils/budgetTypes';
+import { TenderProject, ContractType, BudgetType } from '../types/tender';
 
 interface ProjectHandlersArgs {
   projects: TenderProject[];
@@ -42,9 +43,9 @@ export function createProjectHandlers({
 
   // Create New Project
   // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
-  const handleCreateProject = ({ title, referenceNumber, contractType, bidderNames }: { title: string; referenceNumber: string; contractType: ContractType; bidderNames: string[] }) => {
+  const handleCreateProject = ({ title, referenceNumber, contractType, budgetType, bidderNames }: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => {
     const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
-    const blank = createNewTenderProject({ title, referenceNumber: refNo, contractType, bidderNames });
+    const blank = createNewTenderProject({ title, referenceNumber: refNo, contractType, budgetType, bidderNames });
 
     const newProj: TenderProject = {
       ...blank,
@@ -53,7 +54,7 @@ export function createProjectHandlers({
         timestamp: new Date().toISOString(),
         userName: 'المهندس أسامة خليل هاشم',
         action: 'إنشاء مناقصة جديدة',
-        details: `تم إنشاء المناقصة (${title}) بنجاح — نوع العقد: ${CONTRACT_TYPES[contractType].label}`
+        details: `تم إنشاء المناقصة (${title}) بنجاح — نوع العقد: ${CONTRACT_TYPES[contractType].label} — نوع الموازنة: ${BUDGET_TYPES[budgetType].label}`
           + ` — الشركات: ${blank.bidders.map(b => b.name).join('، ')}`
       }]
     };

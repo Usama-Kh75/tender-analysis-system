@@ -100,10 +100,13 @@ export interface AuditLogEntry {
  */
 export type ContractType = 'works' | 'supply' | 'services';
 
+export type BudgetType = 'investment' | 'operating';
+
 export interface TenderProject {
   id: string;
   title: string;
   contractType?: ContractType;        // غير محدد في المناقصات المنشأة قبل الإصدار 1.4.0
+  budgetType?: BudgetType;            // غير محدد في المناقصات المنشأة قبل الإصدار 1.18.0
   referenceNumber: string;
   entityName: string;                 // الجهة المعلنة (الوزارة / المحافظة / الشركة)
   committeeChairman: string;          // رئيس لجنة التحليل

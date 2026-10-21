@@ -22,7 +22,7 @@ const mk = (id: string, rows: Partial<BOQItem>[]): Bidder => {
   return { id, name: id, submissionDate: '2026-01-01', items: c.items, totals: c.totals, status: 'pending' };
 };
 const project = (): TenderProject => ({
-  ...createNewTenderProject({ title: 'ت', referenceNumber: '1', contractType: 'works', bidderNames: ['x'] }),
+  ...createNewTenderProject({ title: 'ت', referenceNumber: '1', contractType: 'works', budgetType: 'operating', bidderNames: ['x'] }),
   bidders: [mk('A', [corrected('20', true), corrected('21', false), clean]), mk('B', [clean])],
   activeBidderId: 'A'
 });

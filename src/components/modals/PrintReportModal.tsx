@@ -5,6 +5,7 @@ import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
 import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
+import { budgetApprovalNote, budgetTypeInfo } from '../../utils/budgetTypes';
 import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, isOfferFinal, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
 import { correctionSignatures } from '../../utils/bidderAuditEngine';
@@ -58,6 +59,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const showWeighted = weightedOverride ?? weightingNeeded;
   const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin, tableShown: showWeighted });
   // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح والتوقيع؛ يبقى تفصيلها في سجل التدقيق
+  const approval = rec.kind === 'award' && rec.primary
+    ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
   const adopted = rec.kind === 'award' && rec.chosenByCommittee;
   const subjectLabel = {
     award: 'للعطاء الموصى به',
@@ -141,6 +144,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             <div className="text-xs text-slate-600 mt-1 font-semibold">
               مشروع / طلبية: {project.title}
               {contractTypeInfo(project.contractType) && <> — نوع العقد: {contractTypeInfo(project.contractType)!.label}</>}
+              {budgetTypeInfo(project.budgetType) && <> — نوع الموازنة: {budgetTypeInfo(project.budgetType)!.label}</>}
             </div>
           </div>
 
@@ -325,7 +329,13 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                     ? `، وهو العطاء الذي اختارته اللجنة من بين العطاءات ${rec.exactTie ? 'المتساوية' : 'المتقاربة'} في مبالغها`
                     : '، لكونه أوطأ العطاءات المؤهلة تجارياً'}
                 ، مع مراعاة نتائج التقييم الفني والقانوني{rec.primary.id === subject.id ? pricingText : ''}، واعتماد الأسعار والمفردات الموزونة عند إصدار أوامر التغيير وفق المادة (25)/ثالثاً. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
+                {approval?.kind === 'note' && <> {approval.text}</>}
               </p>
+            )}
+            {approval?.kind === 'missing' && (
+              <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
+                💡 حدّد نوع الموازنة (استثمارية أو تشغيلية) في إعدادات المناقصة لتذكر التوصية صلاحية قبول العطاء الذي يزيد على الكلفة التخمينية والموافقة المطلوبة له (ضوابط رقم (2) رابعاً). (هذه الملاحظة لا تظهر في الطباعة)
+              </div>
             )}
 
             {rec.kind === 'tie' && (

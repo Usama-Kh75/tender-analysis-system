@@ -85,6 +85,7 @@ export function createNewTenderProject(opts: {
   title: string;
   referenceNumber: string;
   contractType: TenderProject['contractType'];
+  budgetType: TenderProject['budgetType'];
   bidderNames: string[];
 }): TenderProject {
   const now = Date.now();
@@ -108,6 +109,7 @@ export function createNewTenderProject(opts: {
     id: `project-${now}`,
     title: opts.title,
     contractType: opts.contractType,
+    budgetType: opts.budgetType,
     referenceNumber: opts.referenceNumber,
     entityName: '',
     committeeChairman: '',
@@ -292,9 +294,20 @@ export function refreshWeightedPrices(project: TenderProject): TenderProject {
   return changed ? { ...project, bidders } : project;
 }
 
+// نوع الموازنة أُضيف في 1.18.0، وكل مناقصات المستخدم قبله على الموازنة التشغيلية (قراره 2026-10-21)، فتأخذه
+// المناقصة التي لا نوع لها مرة واحدة مع قيد في السجل، ويُغيَّر من الإعدادات. القيمة غير المعروفة (من إصدار أحدث) لا تُمس
+export function defaultLegacyBudgetType(project: TenderProject): TenderProject {
+  if (project.budgetType !== undefined) return project;
+  return addAuditLog(
+    { ...project, budgetType: 'operating', updatedAt: new Date().toISOString() },
+    'تعديل إعدادات المناقصة',
+    'حُدد نوع الموازنة (تشغيلية) تلقائياً لمناقصة أُنشئت قبل إضافة هذا الحقل؛ يُغيَّر من إعدادات المناقصة إن كانت استثمارية'
+  );
+}
+
 // كل مشروع يُحمَّل أو يُستعاد: توحيد أرقام الفقرات والحقول المشتركة ثم إعادة فحص العلامات المخزنة
 const normalizeLoadedProject = (project: TenderProject) =>
-  refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project)))));
+  defaultLegacyBudgetType(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project))))));
 
 // نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
 const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';

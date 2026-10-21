@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { X, Settings, Save, ShieldAlert, DownloadCloud, UploadCloud, FileJson2, Trash2, RotateCcw, Plus, Users } from 'lucide-react';
-import type { TenderProject, ContractType } from '../../types/tender';
+import type { TenderProject, ContractType, BudgetType } from '../../types/tender';
 import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER, contractTypeInfo } from '../../utils/contractTypes';
+import { BUDGET_TYPES, BUDGET_TYPE_ORDER, budgetTypeInfo } from '../../utils/budgetTypes';
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
@@ -39,6 +40,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const [deviationThreshold, setDeviationThreshold] = useState(project.deviationThreshold || 20);
   const [contractType, setContractType] = useState<ContractType | ''>(contractTypeInfo(project.contractType) ? project.contractType! : '');
 
+  const [budgetType, setBudgetType] = useState<BudgetType | ''>(budgetTypeInfo(project.budgetType) ? project.budgetType! : '');
+
   if (!isOpen) return null;
 
   const handleAddMember = () => {
@@ -63,7 +66,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       committeeMembers: committeeMembers.map(m => m.trim()).filter(Boolean),
       currency,
       deviationThreshold: Number(deviationThreshold) || 20,
-      ...(contractType ? { contractType } : {})
+      ...(contractType ? { contractType } : {}),
+      ...(budgetType ? { budgetType } : {})
     });
     onClose();
   };
@@ -117,6 +121,24 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
             </select>
             <p className="text-[11px] text-slate-500 mt-1">
               يحدد معايير المفاضلة في التوصية عند تساوي العطاءات أو تقاربها (ضوابط رقم 5). الخدمات الاستشارية غير مشمولة.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="settings-budget-type" className="block text-xs font-bold text-slate-700 mb-1">نوع الموازنة</label>
+            <select
+              id="settings-budget-type"
+              value={budgetType}
+              onChange={(e) => setBudgetType(e.target.value as BudgetType)}
+              className={`w-full bg-white border rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${budgetType ? 'border-slate-300' : 'border-rose-400'}`}
+            >
+              {!budgetType && <option value="" disabled>— اختر نوع الموازنة —</option>}
+              {BUDGET_TYPE_ORDER.map(type => (
+                <option key={type} value={type}>{BUDGET_TYPES[type].label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              يحدد صلاحية قبول العطاء الذي يزيد على الكلفة التخمينية والموافقة المطلوبة له في التوصية (ضوابط رقم 2 رابعاً).
             </p>
           </div>
 
