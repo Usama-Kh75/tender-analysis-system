@@ -312,8 +312,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 {/* حكم النص وحده يوحي بأن اللجنة قبلت العطاء كما هو، فيُثبت قرارها بعده */}
                 {offerFinal && <> <strong>وقرّرت اللجنة{balance.verdict === 'accept-as-is' ? ' مع ذلك' : ''} اعتماد العرض الموزون المثبت في (رابعاً).</strong></>}
                 </>}
+                {/* بعد الاختيار تبقى جملتا التقريب وحدهما، فلهما عنوان ولا تبدأ الثانية بواو بلا معطوف عليه */}
+                {adopted && <strong>تقريب الأسعار الموزونة:</strong>}
                 {showWeighted && adjustedCount > 0 && <> سُوّيت فروقات تقريب الأسعار الموزونة بتحميل أجزاء من الفلس على مفرد ({adjustedCount}) فقرة ليساوي مجموعها مبلغ العطاء.</>}
-                {showWeighted && Math.abs(residual) >= 0.005 && <> وبقي فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
+                {showWeighted && Math.abs(residual) >= 0.005 && <> {adjustedCount > 0 || !adopted ? 'وبقي' : 'بقي'} فرق تقريب قدره ({formatNumber(residual)}) تعذّرت تسويته بكميات الفقرات.</>}
               </div>
             )}
           </div>
