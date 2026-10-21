@@ -100,7 +100,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 طباعة جدول الأسعار الموزونة
               </label>
               {/* منطقة إعلان ثابتة يتغير نصها، فيقرأ قارئ الشاشة التنبيه لحظة إلغاء المربع والتركيز عليه */}
-              <span id="weighted-table-warning" role="status" className="text-[11px] font-bold text-amber-400 empty:hidden">
+              <span id="weighted-table-warning" role="status" className="text-[11px] font-bold text-amber-400">
                 {weightingNeeded && !showWeighted ? 'نص التوصية يحيل إلى الأسعار الموزونة: أرفق جدولها بالمحضر' : ''}
               </span>
             </div>
