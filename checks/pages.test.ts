@@ -32,11 +32,12 @@ test('معاينة الفواصل: لكل صفحة من - إلى وعدد الف
   const its = items(6).map((it, k) => ({ ...it, enteredBidderTotal: k === 1 ? 500 : undefined })) as BOQItem[];
   const rows = previewPageRanges(its, [7, 7, 8, 8, 8, 10]);
   assert.deepEqual(rows, [
-    { page: 7, from: '1', to: '2', itemCount: 2, stated: 510 },
-    { page: 8, from: '3', to: '5', itemCount: 3, stated: 120 },
-    { page: 10, from: '6', to: '6', itemCount: 1, stated: 60 }
+    { page: 7, from: '1', to: '2', itemCount: 2, stated: 510, corrected: 30 },
+    { page: 8, from: '3', to: '5', itemCount: 3, stated: 120, corrected: 120 },
+    { page: 10, from: '6', to: '6', itemCount: 1, stated: 60, corrected: 60 }
   ]);
   assert.equal(rows.reduce((s, r) => s + r.stated, 0), 690);
+  assert.equal(rows.reduce((s, r) => s + r.corrected, 0), 210);
   assert.deepEqual(previewPageRanges(items(2), [undefined, undefined]), []);
 });
 

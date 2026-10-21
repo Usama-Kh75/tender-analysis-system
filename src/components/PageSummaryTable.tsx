@@ -22,9 +22,14 @@ export const PageSummaryTable: React.FC<Props> = ({ items, showOffer, offerFinal
   const n = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 2);
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-3 bg-slate-50 border-b border-slate-200 font-black text-sm text-slate-900 flex items-center justify-between">
+      <div className="p-3 bg-slate-50 border-b border-slate-200 font-black text-sm text-slate-900 flex flex-wrap items-center justify-between gap-2">
         <span>ملخص صفحات العطاء ({summary.rows.filter(r => r.page !== null).length} صفحة)</span>
-        {showOffer && !offerFinal && <span className="text-xs text-amber-700">العرض الموزون غير نهائي</span>}
+        <div className="flex items-center gap-3">
+          {showOffer && !offerFinal && <span className="text-xs text-amber-700">العرض الموزون غير نهائي</span>}
+          <button type="button" onClick={onOpenPageBreaks} title="تعديل صفحات العطاء: رقم كل صفحة ورقم أول فقرة فيها" className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer">
+            <FileStack className="w-3.5 h-3.5" /> فواصل الصفحات
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs text-right border-collapse">

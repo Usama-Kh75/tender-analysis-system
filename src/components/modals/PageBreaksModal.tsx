@@ -43,7 +43,7 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="فواصل الصفحات">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="p-4 bg-slate-950 text-white flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold"><FileStack className="w-5 h-5 text-amber-400" /> فواصل صفحات عطاء ({bidderName})</div>
           <button onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"><X className="w-5 h-5" /></button>
@@ -83,6 +83,7 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
                     <th className="p-2 text-center">إلى فقرة</th>
                     <th className="p-2 text-center">عدد الفقرات</th>
                     <th className="p-2 text-center">مجموع الصفحة (كما دوّنه المجهز)</th>
+                    <th className="p-2 text-center">بعد التصحيح الحسابي</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono font-bold text-slate-900">
@@ -93,6 +94,9 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
                       <td className="p-2 text-center">{r.to}</td>
                       <td className="p-2 text-center">{r.itemCount}</td>
                       <td className="p-2 text-center">{n(r.stated)}</td>
+                      {Math.abs(r.corrected - r.stated) > 0.005
+                        ? <td className="p-2 text-center bg-amber-50 text-amber-900" title={`في الصفحة تصحيح حسابي: الفرق ${n(Math.round((r.corrected - r.stated) * 100) / 100)}`}>{n(r.corrected)}</td>
+                        : <td className="p-2 text-center">{n(r.corrected)}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -101,6 +105,7 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
                     <td className="p-2 text-center font-sans" colSpan={3}>المجموع</td>
                     <td className="p-2 text-center">{ranges.reduce((s, r) => s + r.itemCount, 0)}</td>
                     <td className="p-2 text-center">{n(Math.round(ranges.reduce((s, r) => s + r.stated, 0) * 100) / 100)}</td>
+                    <td className="p-2 text-center">{n(Math.round(ranges.reduce((s, r) => s + r.corrected, 0) * 100) / 100)}</td>
                   </tr>
                 </tfoot>
               </table>

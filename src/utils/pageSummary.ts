@@ -81,10 +81,11 @@ export function startPages(items: BOQItem[]): number[] {
 export interface PageSummaryRow { page: number | null; itemCount: number; stated: number; corrected: number; offer: number }
 export interface PageSummary { rows: PageSummaryRow[]; totals: { stated: number; corrected: number; offer: number }; unassigned: number }
 
-export interface PageRangeRow { page: number; from: string; to: string; itemCount: number; stated: number }
+export interface PageRangeRow { page: number; from: string; to: string; itemCount: number; stated: number; corrected: number }
 
 /**
- * معاينة فواصل الصفحات قبل الإسناد: لكل صفحة أول فقرة فيها وآخرها (بترتيب الجدول) وعددها ومبلغها كما دوّنه المجهز.
+ * معاينة فواصل الصفحات قبل الإسناد: لكل صفحة أول فقرة فيها وآخرها (بترتيب الجدول) وعددها ومبلغها كما دوّنه المجهز وبعد التصحيح الحسابي،
+ * فتطابق اللجنة مجاميع صفحات العطاء الورقي وتظهر الصفحة التي فيها تصحيح.
  * المبالغ من summarizePages نفسها فلا تختلف عن الملخص بعد الإسناد
  */
 export function previewPageRanges(items: BOQItem[], pages: (number | undefined)[]): PageRangeRow[] {
@@ -100,7 +101,7 @@ export function previewPageRanges(items: BOQItem[], pages: (number | undefined)[
   });
   return summary.rows.flatMap(r => {
     const b = r.page === null ? undefined : bounds.get(r.page);
-    return r.page !== null && b ? [{ page: r.page, from: b.from, to: b.to, itemCount: r.itemCount, stated: r.stated }] : [];
+    return r.page !== null && b ? [{ page: r.page, from: b.from, to: b.to, itemCount: r.itemCount, stated: r.stated, corrected: r.corrected }] : [];
   });
 }
 
