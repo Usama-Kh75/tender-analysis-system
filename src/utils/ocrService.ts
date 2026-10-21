@@ -139,7 +139,7 @@ function extractJsonArray(text: string): any[] {
   if (arrayMatch) {
     try {
       return JSON.parse(arrayMatch[0]);
-    } catch (e) {
+    } catch {
       // محاولة تنظيف إضافية
     }
   }
@@ -153,7 +153,7 @@ function extractJsonArray(text: string): any[] {
   try {
     const parsed = JSON.parse(clean);
     return Array.isArray(parsed) ? parsed : (parsed.items || parsed.table || []);
-  } catch (e) {
+  } catch {
     // 3. محاولة استخراج كائنات فردية إذا كانت المصفوفة مقطوعة
     const objectMatches = text.match(/\{[^{}]*\}/g);
     if (objectMatches && objectMatches.length > 0) {
@@ -161,7 +161,7 @@ function extractJsonArray(text: string): any[] {
       for (const objStr of objectMatches) {
         try {
           items.push(JSON.parse(objStr));
-        } catch (_) {}
+        } catch {}
       }
       if (items.length > 0) return items;
     }
@@ -478,7 +478,7 @@ export async function extractBOQWithGeminiVision(
     try {
       const checkRes = await testGeminiApiKey(cleanKey);
       if (checkRes.success) models = checkRes.models;
-    } catch (_) {}
+    } catch {}
   }
   if (models.length === 0) models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
 

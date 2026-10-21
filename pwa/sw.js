@@ -34,7 +34,7 @@ self.addEventListener('message', e => {
         await c.put('./', res);
         ok = true;
       }
-    } catch (err) { }
+    } catch { }
     e.ports[0].postMessage(ok);
   })());
 });
@@ -51,7 +51,7 @@ self.addEventListener('install', e => {
       try {
         const res = await fetch(f, { cache: 'reload' });
         if (res.ok) await c.put(f, res);
-      } catch (err) { }
+      } catch { }
     }));
     await self.skipWaiting();
   })());
@@ -110,7 +110,7 @@ self.addEventListener('fetch', e => {
         try {
           const c = await caches.open(SHELL);
           return (await c.match('./index.html')) || (await c.match('./'));
-        } catch (err) { return undefined; }
+        } catch { return undefined; }
       };
       const timeout = new Promise(resolve => setTimeout(resolve, 3000));
       try {
@@ -119,7 +119,7 @@ self.addEventListener('fetch', e => {
         if (res && !res.ok) return (await cached()) || res;
         if (res) return res;
         return await network; // لا نسخة محفوظة بعد: ننتظر الشبكة مهما طالت
-      } catch (err) {
+      } catch {
         return (await cached()) || Response.error();
       }
     })());

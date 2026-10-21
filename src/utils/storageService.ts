@@ -488,7 +488,7 @@ export function parseAllProjectsBackupFile(file: File): Promise<TenderProject[]>
         }
 
         resolve(projects.map(normalizeLoadedProject));
-      } catch (err) {
+      } catch {
         reject(new Error('تعذر قراءة الملف: تأكد من أنه ملف نسخة احتياطية (JSON) سليم'));
       }
     };
@@ -514,7 +514,7 @@ export function parseProjectBackupFile(file: File): Promise<TenderProject> {
         }
 
         resolve(normalizeLoadedProject(project));
-      } catch (err) {
+      } catch {
         reject(new Error('تعذر قراءة الملف: تأكد من أنه ملف نسخة احتياطية (JSON) سليم'));
       }
     };

@@ -69,7 +69,7 @@ export const SmartTableImportModal: React.FC<SmartTableImportModalProps> = ({
   const [newBidderName, setNewBidderName] = useState<string>('');
   const [pastedText, setPastedText] = useState<string>('');
   const [sourceFileName, setSourceFileName] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [, setIsProcessing] = useState<boolean>(false);
   const [auditReport, setAuditReport] = useState<BidderAuditReport | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // نوع الجدول الحالي لقراءة ملف Excel غير المتزامنة: إن غيّره المستخدم أثناء القراءة لا تُبنى الأعمدة بالنوع القديم.

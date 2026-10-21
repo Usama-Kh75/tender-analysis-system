@@ -13,7 +13,7 @@ const cents = (v: number) => Math.round(v * 100);
 test('تسوية التقريب: تحريك متعاكس لفقرتين يغلق فلساً لا تغلقه فقرة واحدة', () => {
   // بعد التقريب: 1650×3.33 و1651×3.33؛ الهدف فلس زائد: +0.01 على 1651 (يزيد 16.51) و−0.01 على 1650 (ينقص 16.50)
   const items = [{ quantity: 1650, estimatedTotal: 1650 * 3.33 }, { quantity: 1651, estimatedTotal: 1651 * 3.33 }];
-  const target = (cents(1650 * 3.33) * 0 + 1650 * 333 + 1651 * 333 + 1) / 100;
+  const target = (1650 * 333 + 1651 * 333 + 1) / 100;
   const r = settleWeightedPrices(items, 1, target);
   assert.equal(r.residual, 0);
   assert.equal(cents(r.total), cents(target));
