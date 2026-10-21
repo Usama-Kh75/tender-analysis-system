@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Table2, Pencil, Award, BarChart3, Building2, Plus } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
+import { budgetTypeInfo } from '../utils/budgetTypes';
 
 interface ProjectHeaderProps {
   project: TenderProject;
@@ -80,6 +81,19 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               className="bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold px-3.5 py-1 rounded-full border border-rose-300 cursor-pointer transition"
             >
               ⚠️ حدد نوع العقد
+            </button>
+          )}
+          {budgetTypeInfo(currentProject.budgetType) ? (
+            <span className="bg-teal-50 text-teal-900 text-xs font-bold px-3.5 py-1 rounded-full border border-teal-200">
+              نوع الموازنة: {budgetTypeInfo(currentProject.budgetType)!.label}
+            </span>
+          ) : (
+            <button
+              onClick={onOpenSettings}
+              title="نوع الموازنة يحدد صلاحية قبول العطاء الزائد على الكلفة التخمينية (ضوابط رقم 2 رابعاً)"
+              className="bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold px-3.5 py-1 rounded-full border border-rose-300 cursor-pointer transition"
+            >
+              ⚠️ حدد نوع الموازنة
             </button>
           )}
         </div>
