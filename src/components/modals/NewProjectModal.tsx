@@ -47,7 +47,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold">مناقصة / طلبية جديدة</h2>
-              <p className="text-xs text-slate-400">يُحدد نوع العقد أولاً لتُصاغ التوصية وفق ضوابطه</p>
+              <p className="text-xs text-slate-400">يُحدد نوع العقد ونوع الموازنة أولاً لتُصاغ التوصية وفق ضوابطهما</p>
             </div>
           </div>
           <button onClick={close} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">

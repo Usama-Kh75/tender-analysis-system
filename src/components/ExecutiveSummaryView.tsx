@@ -351,7 +351,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
         {/* Footer Recommendation Statement */}
         <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
               <Award className="w-6 h-6" />
             </div>
