@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
-import { buildRecommendation, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
+import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
@@ -391,6 +391,13 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                   </span>
                 )}
               </div>
+              {/* مرحلة التحليل: التساوي لأصغر فئة نقدية يجيز استكمال المبادرات (ضوابط رقم (5))، فتُنبَّه اللجنة إلى مخاطبة
+                  المجهزين قبل المفاضلة. التقارب لغاية 1% يُفاضَل فيه بما قُدّم فلا يشمله. طلب المستخدم 2026-10-21 */}
+              {rec.kind === 'tie' && equalPriceBids(rec.closeBids).length > 1 && (
+                <div className="text-xs font-bold text-amber-800 mt-1">
+                  📌 الأسعار متساوية لأصغر فئة نقدية: تُخاطَب الشركات ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتها لغرض المفاضلة إن لم تقدّمها ابتداءً، وتصبح المبادرات جزءاً من العطاء، ويُستقطع مبلغ ما لا يُلتزم به عند التنفيذ حسب الأسعار السائدة ({preferenceReference(project.contractType).clause}).
+                </div>
+              )}
               {approval?.kind === 'note' && (
                 <div className="text-xs font-bold text-slate-700 mt-1">{approval.text}</div>
               )}

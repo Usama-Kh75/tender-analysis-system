@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
-import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
+import { buildRecommendation, equalPriceBids, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
 import { budgetApprovalNote, budgetTypeInfo } from '../../utils/budgetTypes';
 import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, isOfferFinal, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
@@ -362,7 +362,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   )}
                 </p>
                 <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
-                  💡 بعد إجراء المفاضلة: اختر العطاء الفائز من «خلاصة الترسية» بزر «اختيار للترسية»، فتتحول هذه الفقرة إلى توصية بالإحالة عليه. (هذه الملاحظة لا تظهر في الطباعة)
+                  💡 {equalPriceBids(rec.closeBids).length > 1 && <>قبل المفاضلة: خاطب مقدمي العطاءات المتساوية ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتهم إن لم تُقدَّم ابتداءً ({pref.clause}). </>}بعد إجراء المفاضلة: اختر العطاء الفائز من «خلاصة الترسية» بزر «اختيار للترسية»، فتتحول هذه الفقرة إلى توصية بالإحالة عليه. (هذه الملاحظة لا تظهر في الطباعة)
                 </div>
               </div>
             )}

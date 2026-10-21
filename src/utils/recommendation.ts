@@ -26,6 +26,16 @@ const SAME_AMOUNT_TOLERANCE = 0.01;
 
 export type RecommendationKind = 'award' | 'tie' | 'referral' | 'retender' | 'no-estimate';
 
+/**
+ * العطاءات المتقاربة التي يساوي مبلغها مبلغ عطاء آخر منها لأصغر فئة نقدية: لها وحدها تُستكمل المبادرات إن لم
+ * تُقدَّم ابتداءً (ضوابط رقم (5) ثانياً/2 وثالثاً/2 ورابعاً/2). قد تكون بعض المتقاربة لا كلها (اثنان متساويان وثالث
+ * ضمن 1%)، فلا يكفي exactTie
+ */
+export function equalPriceBids(closeBids: Bidder[]): Bidder[] {
+  return closeBids.filter(b => closeBids.some(o => o.id !== b.id
+    && Math.abs(o.totals.totalBidderAmount - b.totals.totalBidderAmount) < SAME_AMOUNT_TOLERANCE));
+}
+
 export interface Recommendation {
   kind: RecommendationKind;
   /** العطاءات المؤهلة تجارياً (ضمن الحدود وغير مستبعدة من اللجنة)، مرتبة من الأوطأ */
