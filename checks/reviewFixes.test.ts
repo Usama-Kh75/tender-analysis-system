@@ -60,6 +60,10 @@ test('استئناف العرض: المعدَّل يبقى، وبالمعادل�
 test('صياغة المحضر: لا تُنسب إلى سادساً/5 ما لا تقوله', () => {
   assert.match(pricingClause('accept-as-is', { final: true, origin: 'corrected' }), /بقرار اللجنة/);
   assert.match(pricingClause('accept-as-is', { final: false }), /كما هي/);
+  // سبب عدم اللجوء إلى الموزون يُذكر مع أسعار العطاء كما هي فقط، لا مع عرض موزون معتمد
+  assert.match(pricingClause('accept-as-is', { final: false }), /لعدم تجاوز الفقرات غير المتوازنة نسبة \(10%\)/);
+  assert.doesNotMatch(pricingClause('accept-as-is', { final: true, origin: 'corrected' }), /10%|كما هو|اختياراً/);
+  assert.doesNotMatch(pricingClause('accept-as-is', { final: true, origin: 'formula' }), /10%|كما هو|اختياراً/);
   assert.match(pricingClause('weighting-required', { final: true, origin: 'corrected' }), /المسعّر من جهة التعاقد معدلاً بنسبة مبلغ العطاء/);
   assert.notEqual(pricingClause('weighting-required', { final: true, origin: 'corrected' }), pricingClause('weighting-required', { final: true, origin: 'formula' }));
   assert.match(pricingClause('weighting-required', { final: false }), /ختم الجداول المعدلة/);
