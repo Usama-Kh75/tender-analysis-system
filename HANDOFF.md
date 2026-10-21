@@ -125,6 +125,7 @@
 │   │   ├── ocrService.ts       # محرك الذكاء الاصطناعي Gemini Vision والرؤية الحاسوبية
 │   │   ├── excelService.ts     # خدمات معالجة وتوليد ملفات Excel
 │   │   └── storageService.ts   # التخزين المحلي الآمن وإدارة المشاريع (LocalStorage)
+│   ├── app/                    # معالجات التعديل (دوال مصنع) ومخزن المناقصات useProjectStore
 │   ├── App.tsx                 # نقطة الدخول الرئيسية وإدارة الحالة المشتركة
 │   └── main.tsx                # نقطة تشغيل التطبيق
 ├── نظام_تحليل_العطاءات.html    # التطبيق الكامل كملف مستقل أحادي (Standalone Single File)
