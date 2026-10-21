@@ -95,7 +95,11 @@ export const PageBreaksModal: React.FC<Props> = ({ isOpen, onClose, items, bidde
                       <td className="p-2 text-center">{r.itemCount}</td>
                       <td className="p-2 text-center">{n(r.stated)}</td>
                       {Math.abs(r.corrected - r.stated) > 0.005
-                        ? <td className="p-2 text-center bg-amber-50 text-amber-900" title={`في الصفحة تصحيح حسابي: الفرق ${n(Math.round((r.corrected - r.stated) * 100) / 100)}`}>{n(r.corrected)}</td>
+                        ? <td className="p-2 text-center bg-amber-50 text-amber-900">
+                            {n(r.corrected)}
+                            {/* الفرق مكتوب بالكلمة لا بالإشارة: يُقرأ على الهاتف وبلا لون، ولا تنقلب «-» في السطر العربي */}
+                            <div className="text-[10px] font-sans">{r.corrected > r.stated ? 'زيادة' : 'نقصان'} {n(Math.round(Math.abs(r.corrected - r.stated) * 100) / 100)}</div>
+                          </td>
                         : <td className="p-2 text-center">{n(r.corrected)}</td>}
                     </tr>
                   ))}
