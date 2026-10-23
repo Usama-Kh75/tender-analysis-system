@@ -6,6 +6,7 @@ import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicT
 import { toLatinDigits, percentDecimals } from './calculations';
 import { summarizePages } from './pageSummary';
 import { isOfferEdited, offerStatus } from './weightedOffer';
+import { tenderDetailParts } from './tenderDetails';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -219,6 +220,7 @@ const projectLine = (project: TenderProject) =>
   `المناقصة: ${project.title}`
   + (project.referenceNumber ? ` — رقم المناقصة: ${project.referenceNumber}` : '')
   + (project.entityName ? ` — الجهة: ${project.entityName}` : '')
+  + tenderDetailParts(project).map(part => ` — ${part}`).join('')
   + ` — تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}`;
 
 const HEADER_ROWS = 4; // عنوان، مناقصة، شرح، سطر فارغ، ثم رؤوس الأعمدة

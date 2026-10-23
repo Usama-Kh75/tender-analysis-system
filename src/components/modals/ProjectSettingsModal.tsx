@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { X, Settings, Save, ShieldAlert, DownloadCloud, UploadCloud, FileJson2, Trash2, RotateCcw, Plus, Users } from 'lucide-react';
-import type { TenderProject, ContractType, BudgetType } from '../../types/tender';
+import type { TenderProject, ContractType, BudgetType, InvitationType } from '../../types/tender';
 import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER, contractTypeInfo } from '../../utils/contractTypes';
 import { BUDGET_TYPES, BUDGET_TYPE_ORDER, budgetTypeInfo } from '../../utils/budgetTypes';
+import { INVITATION_TYPES, INVITATION_TYPE_ORDER, invitationTypeInfo, ANNOUNCEMENT_ORDER, announcementLabel, analyzedBidsCount, receivedBidsCountOf } from '../../utils/tenderDetails';
+import { toLatinDigits } from '../../utils/calculations';
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
@@ -42,7 +44,21 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
 
   const [budgetType, setBudgetType] = useState<BudgetType | ''>(budgetTypeInfo(project.budgetType) ? project.budgetType! : '');
 
+  const [announcementNo, setAnnouncementNo] = useState<number | ''>(announcementLabel(project.announcementNo) ? project.announcementNo! : '');
+  const [invitationType, setInvitationType] = useState<InvitationType | ''>(invitationTypeInfo(project.invitationType) ? project.invitationType! : '');
+  const [beneficiaryEntity, setBeneficiaryEntity] = useState(project.beneficiaryEntity ?? '');
+  const [receivedBidsCount, setReceivedBidsCount] = useState(String(receivedBidsCountOf(project) ?? ''));
+
   if (!isOpen) return null;
+
+  // العطاءات المستلمة لا تقل عن المحلَّلة تجارياً، وإلا تناقض المحضر مع جدول «أولاً»
+  const analyzed = analyzedBidsCount(project);
+  const receivedText = toLatinDigits(receivedBidsCount.trim());
+  const received = receivedText === '' ? undefined : Number(receivedText);
+  const receivedError = received === undefined ? null
+    : !Number.isInteger(received) || received < 1 ? 'أدخل عدداً صحيحاً موجباً، أو اتركه فارغاً.'
+    : received < analyzed ? `لا يقل عن عدد العطاءات المحلَّلة تجارياً في هذه المناقصة (${analyzed}).`
+    : null;
 
   const handleAddMember = () => {
     setCommitteeMembers(prev => [...prev, '']);
@@ -58,6 +74,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (receivedError) return;
     onSaveSettings({
       title,
       referenceNumber,
@@ -67,7 +84,12 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       currency,
       deviationThreshold: Number(deviationThreshold) || 20,
       ...(contractType ? { contractType } : {}),
-      ...(budgetType ? { budgetType } : {})
+      ...(budgetType ? { budgetType } : {}),
+      // الاختيارية تُمسح صراحةً حين تُفرَّغ
+      announcementNo: announcementNo || undefined,
+      invitationType: invitationType || undefined,
+      beneficiaryEntity: beneficiaryEntity.trim() || undefined,
+      receivedBidsCount: received
     });
     onClose();
   };
@@ -171,6 +193,74 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
               onChange={(e) => setEntityName(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
+          </div>
+
+          <div role="group" aria-labelledby="settings-details-title" aria-describedby="settings-details-note" className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+            <div>
+              <h3 id="settings-details-title" className="text-xs font-bold text-slate-800">بيانات إضافية (اختيارية)</h3>
+              <p id="settings-details-note" className="text-[11px] text-slate-500 mt-0.5">تظهر في رأس المحضر المطبوع وبطاقة المناقصة إن أُدخلت، ولا تؤثر في التحليل.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="settings-announcement" className="block text-xs font-bold text-slate-700 mb-1">الإعلان</label>
+                <select
+                  id="settings-announcement"
+                  value={announcementNo}
+                  onChange={(e) => setAnnouncementNo(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="">— غير محدد —</option>
+                  {ANNOUNCEMENT_ORDER.map(no => (
+                    <option key={no} value={no}>{announcementLabel(no)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="settings-invitation-type" className="block text-xs font-bold text-slate-700 mb-1">أسلوب الدعوة</label>
+                <select
+                  id="settings-invitation-type"
+                  value={invitationType}
+                  onChange={(e) => setInvitationType(e.target.value as InvitationType | '')}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="">— غير محدد —</option>
+                  {INVITATION_TYPE_ORDER.map(type => (
+                    <option key={type} value={type}>{INVITATION_TYPES[type].label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="settings-beneficiary" className="block text-xs font-bold text-slate-700 mb-1">الجهة المستفيدة</label>
+              <input
+                id="settings-beneficiary"
+                type="text"
+                value={beneficiaryEntity}
+                onChange={(e) => setBeneficiaryEntity(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="settings-received-bids" className="block text-xs font-bold text-slate-700 mb-1">عدد العطاءات المستلمة</label>
+              <input
+                id="settings-received-bids"
+                type="text"
+                inputMode="numeric"
+                value={receivedBidsCount}
+                onChange={(e) => setReceivedBidsCount(e.target.value)}
+                aria-invalid={receivedError ? true : undefined}
+                aria-describedby="settings-received-bids-note"
+                className={`w-full bg-white border rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${receivedError ? 'border-rose-400' : 'border-slate-300'}`}
+              />
+              {/* الخطأ وحده يُعلَن لقارئ الشاشة؛ الإرشاد لا يُقرأ تنبيهاً عند زوال الخطأ أو عند فتح النافذة */}
+              {receivedError ? (
+                <p id="settings-received-bids-note" role="alert" className="text-[11px] mt-1 text-rose-700 font-bold">{receivedError}</p>
+              ) : (
+                <p id="settings-received-bids-note" className="text-[11px] mt-1 text-slate-500">
+                  المحلَّلة تجارياً الآن: ({analyzed}). أدخله إن وردت عطاءات استُبعدت قبل التحليل التجاري.
+                </p>
+              )}
+            </div>
           </div>
 
           <div>
@@ -386,7 +476,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm cursor-pointer"
+              disabled={!!receivedError}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
               حفظ التعديلات

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx-js-style'; // SheetJS 0.18.5 نفسها، ومعها
 import { BOQItem, TenderProject, Bidder } from '../types/tender';
 import { hasBidAmounts } from './recommendation';
 import { percentDecimals } from './calculations';
+import { tenderDetailParts } from './tenderDetails';
 
 // أسماء أوراق Excel محدودة بـ 31 محرفاً ولا تقبل الرموز \ / ? * [ ]
 function sanitizeSheetName(name: string, usedNames: Set<string>): string {
@@ -82,7 +83,7 @@ function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive
   ]);
 
   return XLSX.utils.aoa_to_sheet([
-    [`مشروع: ${project.title} - رقم الطلبية/المناقصة: ${project.referenceNumber}`],
+    [`مشروع: ${project.title} - رقم الطلبية/المناقصة: ${project.referenceNumber}${tenderDetailParts(project).map(part => ` — ${part}`).join('')}`],
     [`المجهز: ${bidder.name}${isActive ? ' (النشط حالياً)' : ''} - تاريخ التحليل: ${new Date().toLocaleDateString('ar-EG')}`],
     [],
     headers,

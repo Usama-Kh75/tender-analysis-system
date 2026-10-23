@@ -9,6 +9,7 @@ import { budgetApprovalNote, budgetTypeInfo } from '../../utils/budgetTypes';
 import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, isOfferFinal, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
 import { correctionSignatures } from '../../utils/bidderAuditEngine';
+import { tenderDetailParts } from '../../utils/tenderDetails';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -90,7 +91,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
         <div className="p-4 bg-slate-950 text-white flex items-center justify-between no-print border-b border-amber-500/30">
           <div className="flex items-center gap-2">
             <Printer className="w-5 h-5 text-amber-400" />
-            <h2 className="text-base font-bold">معاينة وطباعة محضر لجنة فتح وتحليل العطاءات والترسية</h2>
+            <h2 className="text-base font-bold">معاينة وطباعة محضر التحليل</h2>
           </div>
           
           <div className="flex items-center gap-3">
@@ -136,19 +137,26 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               </div>
 
               <div className="text-left text-xs font-bold text-slate-700">
-                <div>العدد: {project.referenceNumber}</div>
-                <div>التاريخ: {new Date().toLocaleDateString('ar-EG')}</div>
+                {/* العدد رقم محضر لجنة التحليل، والتاريخ يوم توقيعه: يُكتبان باليد (قرار أسامة 2026-10-23) */}
+                <div>العدد: <span className="inline-block w-24 border-b border-dotted border-slate-500"></span></div>
+                <div>التاريخ: <span className="inline-block w-24 border-b border-dotted border-slate-500"></span></div>
               </div>
             </div>
 
+            {/* لجنة التحليل لا تفتح العطاءات ولا ترسي (لجنة الفتح مستقلة، والتحليل توصية)؛ رقم الطلبية في العنوان */}
             <h2 className="text-lg font-black text-slate-900 mt-3">
-              محضر لجنة فتح وتحليل العطاءات والترسية النهائية
+              محضر تحليل طلبية{project.referenceNumber?.trim() && <> (<bdi>{project.referenceNumber.trim()}</bdi>)</>}
             </h2>
             <div className="text-xs text-slate-600 mt-1 font-semibold">
               مشروع / طلبية: {project.title}
               {contractTypeInfo(project.contractType) && <> — نوع العقد: {contractTypeInfo(project.contractType)!.label}</>}
               {budgetTypeInfo(project.budgetType) && <> — نوع الموازنة: {budgetTypeInfo(project.budgetType)!.label}</>}
             </div>
+            {tenderDetailParts(project).length > 0 && (
+              <div className="text-xs text-slate-600 mt-1 font-semibold">
+                {tenderDetailParts(project).join(' — ')}
+              </div>
+            )}
           </div>
 
           {/* 1. جدول خلاصة كافة العروض والموقف التجاري */}

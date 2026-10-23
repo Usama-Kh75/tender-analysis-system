@@ -5,6 +5,7 @@ import { formatNumber, formatPercent } from '../../utils/calculations';
 import { hasBidAmounts, hasNoEstimate } from '../../utils/recommendation';
 import { localDate } from '../../utils/localDate';
 import { contractTypeInfo } from '../../utils/contractTypes';
+import { tenderDetailParts } from '../../utils/tenderDetails';
 
 interface ProjectsBrowserModalProps {
   isOpen: boolean;
@@ -100,6 +101,7 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                     {project.referenceNumber && <span>الرقم: <bdi>{project.referenceNumber}</bdi></span>}
                     {typeLabel && <span>{typeLabel}</span>}
                     {project.entityName && <span>{project.entityName}</span>}
+                    {tenderDetailParts(project, { withCounts: false }).map(part => <span key={part}>{part}</span>)}
                     {created && <span>أُنشئت <bdi>{created}</bdi></span>}
                     {updated && <span>آخر تعديل <bdi>{updated}</bdi></span>}
                   </span>

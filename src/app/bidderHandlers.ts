@@ -5,9 +5,16 @@ import { correctionSignatures } from '../utils/bidderAuditEngine';
 import { localDate } from '../utils/localDate';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
+import { announcementLabel, invitationTypeInfo, receivedBidsCountOf } from '../utils/tenderDetails';
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
 import { withoutBidderPrices } from './itemFields';
+
+/** جزء سجل التدقيق لحقل اختياري تغيّرت قيمته؛ فارغ إن لم تتغيّر. */
+function detailChange(label: string, before: string | undefined, after: string | undefined, paren = false): string {
+  if (before === after) return '';
+  return ` — ${label}: ${after === undefined ? 'غير محدد' : paren ? `(${after})` : after}`;
+}
 
 export function createBidderHandlers(ctx: EditContext, { closeSettings }: { closeSettings: () => void }) {
   const { currentProject, activeBidder, saveProject, blockedByOffer } = ctx;
@@ -210,6 +217,11 @@ ${lockReason}`);
           ? ` — نوع العقد: ${CONTRACT_TYPES[updated.contractType].label}` : '')
         + (updated.budgetType && updated.budgetType !== currentProject.budgetType
           ? ` — نوع الموازنة: ${BUDGET_TYPES[updated.budgetType].label}` : '')
+        // الاختيارية: جزء لكل حقل تغيّرت قيمته، و«غير محدد» عند المسح
+        + detailChange('الإعلان', announcementLabel(currentProject.announcementNo), announcementLabel(updated.announcementNo))
+        + detailChange('أسلوب الدعوة', invitationTypeInfo(currentProject.invitationType)?.label, invitationTypeInfo(updated.invitationType)?.label)
+        + detailChange('الجهة المستفيدة', currentProject.beneficiaryEntity?.trim() || undefined, updated.beneficiaryEntity?.trim() || undefined)
+        + detailChange('عدد العطاءات المستلمة', receivedBidsCountOf(currentProject)?.toString(), receivedBidsCountOf({ ...currentProject, receivedBidsCount: updated.receivedBidsCount })?.toString(), true)
     );
 
     saveProject(updatedProj);

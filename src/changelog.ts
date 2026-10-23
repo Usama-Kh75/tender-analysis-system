@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.0',
+    date: '2026-10-23',
+    notes: [
+      'تسجّل مرة الإعلان وأسلوب الدعوة والجهة المستفيدة وعدد العطاءات المستلمة في إعدادات المناقصة، فتُطبع في رأس المحضر.'
+    ]
+  },
+  {
     version: '1.18.0',
     date: '2026-10-21',
     notes: [

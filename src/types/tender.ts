@@ -102,6 +102,9 @@ export type ContractType = 'works' | 'supply' | 'services';
 
 export type BudgetType = 'investment' | 'operating';
 
+/** أسلوب التعاقد (المادة 6)، للعرض فقط. */
+export type InvitationType = 'general' | 'limited' | 'twoStage' | 'direct' | 'singleSource';
+
 export interface TenderProject {
   id: string;
   title: string;
@@ -109,6 +112,11 @@ export interface TenderProject {
   budgetType?: BudgetType;            // غير محدد في المناقصات المنشأة قبل الإصدار 1.18.0
   referenceNumber: string;
   entityName: string;                 // الجهة المعلنة (الوزارة / المحافظة / الشركة)
+  // بيانات اختيارية للعرض فقط (منذ 1.19.0، انظر utils/tenderDetails.ts)
+  announcementNo?: number;            // مرة الإعلان: 1 = الأول، 2 = الثاني …
+  invitationType?: InvitationType;
+  receivedBidsCount?: number;         // العطاءات المستلمة، وقد تزيد على المحلَّلة تجارياً
+  beneficiaryEntity?: string;
   committeeChairman: string;          // رئيس لجنة التحليل
   committeeMembers: string[];         // أعضاء اللجنة
   currency: string;                   // العملة (د.ع / $ / ر.س ...)
