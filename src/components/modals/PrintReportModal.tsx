@@ -467,7 +467,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       type="button"
                       aria-disabled={draft?.trim() === systemText.trim()}
                       onClick={() => { if (draft?.trim() !== systemText.trim()) discardDraft(systemText); }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-slate-100"
                     >
                       البدء من صياغة النظام الحالية
                     </button>
