@@ -435,7 +435,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             )}
             {/* يبقى ظاهراً أثناء التحرير: فيه ما تغيّر مما تحتاجه الصياغة الجديدة */}
             {savedEdit && editChanges.length > 0 && (
-              <div role="alert" className="no-print mb-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 font-bold text-[11px]">
+              <div id="basis-change-alert" role="alert" className="no-print mb-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 font-bold text-[11px]">
                 ⚠️ صاغت اللجنة هذه التوصية ثم تغيّر ما بُنيت عليه: {editChanges.join('؛ ')}. راجع الصياغة أو استعد صياغة النظام قبل الطباعة. (هذه الملاحظة لا تظهر في الطباعة)
               </div>
             )}
@@ -448,8 +448,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   rows={9}
                   autoFocus
                   aria-label="صياغة التوصية"
-                  aria-describedby="recommendation-edit-hint"
-                  className="w-full resize-y text-xs leading-relaxed p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  aria-describedby={editChanges.length > 0 ? 'basis-change-alert recommendation-edit-hint' : 'recommendation-edit-hint'}
+                  className="w-full min-h-[8rem] resize-y text-xs leading-relaxed p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
                 <p id="recommendation-edit-hint" className="text-[11px] text-slate-600 font-semibold">
                   تعديل الصياغة لا يضيف إلى التوصية شروطاً ولا يغيّر سندها. كل سطر فقرة. قائمة النصوص المستند إليها وملاحظات المحضر تبقى كما يصوغها النظام.
@@ -461,8 +461,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <button type="button" onClick={() => discardDraft(null)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">
                     إلغاء
                   </button>
-                  {savedEdit && draft !== systemText && (
-                    <button type="button" onClick={() => discardDraft(systemText)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">
+                  {/* يُعطَّل ولا يُخفى حين يطابق النص صياغة النظام، فلا يسقط تركيز لوحة المفاتيح */}
+                  {savedEdit && (
+                    <button type="button" disabled={draft === systemText} onClick={() => discardDraft(systemText)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                       البدء من صياغة النظام الحالية
                     </button>
                   )}
