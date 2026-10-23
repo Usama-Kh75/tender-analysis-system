@@ -1,46 +1,80 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer } from 'lucide-react';
-import { TenderProject, Bidder } from '../../types/tender';
-import { formatNumber, formatPercent, formatCurrency, tafqeetArabic } from '../../utils/calculations';
-import { buildRecommendation, equalPriceBids, hasBidAmounts, isCommerciallyExcluded, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
-import { contractTypeInfo, preferenceReference } from '../../utils/contractTypes';
-import { budgetApprovalNote, budgetTypeInfo } from '../../utils/budgetTypes';
-import { assessBalance, correctedBalanceRows, offerStatus, isOfferEdited, isOfferFinal, pricingClause, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
+import { X, Printer, PenLine, RotateCcw } from 'lucide-react';
+import { TenderProject, Bidder, RecommendationEdit } from '../../types/tender';
+import { formatNumber, formatPercent, formatCurrency } from '../../utils/calculations';
+import { equalPriceBids, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
+import { contractTypeInfo } from '../../utils/contractTypes';
+import { budgetTypeInfo } from '../../utils/budgetTypes';
+import { offerStatus, isOfferEdited, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
 import { correctionSignatures } from '../../utils/bidderAuditEngine';
 import { tenderDetailParts } from '../../utils/tenderDetails';
+import { localDate } from '../../utils/localDate';
+import { recommendationPieces, recommendationEditChanges, savedRecommendationEdit, type RecommendationBlock } from '../../utils/recommendationText';
 import { LegalTextsList, ThresholdBasisSentence } from '../LegalTexts';
-import { uniqueLegalKeys } from '../../utils/legalTexts';
 
 interface PrintReportModalProps {
   isOpen: boolean;
   onClose: () => void;
   project: TenderProject;
   activeBidder: Bidder;
+  // صياغة اللجنة للتوصية، أو null لاستعادة صياغة النظام (recommendationHandlers.ts)
+  onSaveRecommendationEdit?: (edit: RecommendationEdit | null, systemText: string) => void;
+  // محرر الصياغة مفتوح: يمنع App التحديث حتى يُحفظ أو يُلغى (blockingWork)
+  onEditingChange?: (editing: boolean) => void;
 }
+
+// كلمات الشرط: التوصية لا تُقيَّد بشروط (قرار أسامة 2026-10-23)، فيُسأل عنها إن لم تكن في صياغة النظام
+const CONDITION_WORDS = ['بشرط', 'شريطة', 'مشروط', 'شرط أن'];
+
+/** نص التوصية كما يصوغه النظام، بمقاطعه العريضة */
+const RecommendationBlocks: React.FC<{ blocks: RecommendationBlock[] }> = ({ blocks }) => (
+  <>
+    {blocks.map((b, i) => b.type === 'p' ? (
+      <p key={i}>
+        {b.runs.map((r, j) => r.underline ? <span key={j} className="text-slate-800 font-bold underline">{r.text}</span>
+          : r.strong ? <strong key={j}>{r.text}</strong>
+          : <React.Fragment key={j}>{r.text}</React.Fragment>)}
+      </p>
+    ) : (
+      <ul key={i} className="list-disc pr-6 my-1.5 font-bold">
+        {b.items.map((item, j) => <li key={j}>{item}</li>)}
+      </ul>
+    ))}
+  </>
+);
 
 export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   isOpen,
   onClose,
   project,
-  activeBidder
+  activeBidder,
+  onSaveRecommendationEdit,
+  onEditingChange
 }) => {
   // تجاوز المستخدم لطباعة جدول الأسعار الموزونة؛ null = القيمة الافتراضية (تتبع نص التوصية)
   const [weightedOverride, setWeightedOverride] = useState<boolean | null>(null);
+  // نص محرر الصياغة؛ null = المحرر مغلق
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = draft !== null;
+  useEffect(() => {
+    onEditingChange?.(editing);
+    return () => onEditingChange?.(false);
+  }, [editing, onEditingChange]);
   if (!isOpen) return null;
 
+  // المحرر لا يُطبع: يُطبع المحفوظ وحده، فيُنبَّه قبل الطباعة إن بقي فيه ما لم يُحفظ
   const handlePrint = () => {
+    if (draftDirty && !window.confirm('في محرر الصياغة تعديل لم يُحفظ، فيُطبع المحضر بالصياغة المحفوظة. أتطبع مع ذلك؟')) return;
     window.print();
   };
 
-  // التوصية تُحسب من كل العطاءات (لا من التبويب المفتوح لحظة الطباعة) — انظر utils/recommendation.ts
-  const rec = buildRecommendation(project);
-  const subject = rec.primary ?? activeBidder;
-  // حد الفقرة المنحرفة، وحد استبعاد العطاء بانحرافه الكلي (منفصلان)
-  const threshold = project.deviationThreshold;
-  const exclusion = exclusionThresholdOf(project);
-  const pref = preferenceReference(project.contractType);
+  // التوصية وما يتبعها من مصدر واحد (utils/recommendationText.ts)
+  const {
+    rec, subject, threshold, exclusion, pref, balance, offer, offerFinal, weightingNeeded, showWeighted,
+    approval, legalKeys, blocks, systemText, basis
+  } = recommendationPieces(project, activeBidder, weightedOverride);
   const money = (b: Bidder) => formatCurrency(b.totals.totalBidderAmount, project.currency);
   // المبلغ قبل التصحيح الحسابي وبعده: عمودان متى سُجّل المبلغ المدون لأي عطاء. الترتيب والتوصية على
   // المبلغ بعد التصحيح (ضوابط رقم (4) خامساً/ب/6)
@@ -48,36 +82,63 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // توقيع كل مجهز إزاء تصحيحات اللجنة في عطائه (ضوابط رقم (4) خامساً/ب/3)، للعطاءات التي فيها تصحيح
   const signatures = project.bidders.filter(hasBidAmounts)
     .map(b => ({ bidder: b, ...correctionSignatures(b.items) })).filter(s => s.corrected > 0);
-  const words = (b: Bidder) => tafqeetArabic(b.totals.totalBidderAmount, 'دينار عراقي');
-  // توازن العطاء موضوع المحضر (سادساً/5)، وعرضه الموزون، وصفحاته
-  const balance = assessBalance(correctedBalanceRows(subject.items), threshold, exclusion);
-  const offer = subject.weightedOffer && subject.weightedOffer.status !== 'paused' ? subject.weightedOffer : undefined;
+  // العرض الموزون للعطاء موضوع المحضر، وصفحاته
   const offerState = offer ? offerStatus(subject) : null;
-  const offerFinal = isOfferFinal(subject);
   const editedItems = offer ? subject.items.filter(isOfferEdited) : [];
   const pages = summarizePages(subject.items);
   const adjustedCount = subject.items.filter(i => i.weightedAdjustment).length;
   const residual = subject.totals.weightedRoundingResidual ?? 0;
-  // مفعّل افتراضياً حين يحيل نص التوصية إلى جدول الأسعار الموزونة
-  // نص التسعير لا يُطبع إلا في توصية الإحالة على عطاء (لا في المفاضلة ولا التفاوض ولا إعادة الإعلان)
-  const weightingNeeded = rec.kind === 'award' && balance.verdict === 'weighting-required' && !offerFinal;
-  const showWeighted = weightedOverride ?? weightingNeeded;
   // النسبة السعرية أداة الأسعار الموزونة وحدها: حين تُعتمد أسعار المجهز كما هي لا تُذكر (قرار المستخدم 2026-10-21)
   const ratioShown = !!offer || balance.verdict === 'weighting-required' || showWeighted;
-  const pricingText = pricingClause(balance.verdict, { final: offerFinal, origin: offer?.origin, tableShown: showWeighted });
-  const approval = rec.kind === 'award' && rec.primary
-    ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
   // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح بحضور المجهز وتوقيعه، فلا تُطبع فقرة التصحيح أصلاً:
   // تسلسلها في أوليات المناقصة (سجل التدقيق وقيد الاختيار). قرار المستخدم 2026-10-21
   const adopted = rec.kind === 'award' && rec.chosenByCommittee;
-  // الفقرات المذكورة في قسم ثالثاً بترتيب ورودها، لتُطبع نصوصها الرسمية تحت التوصية
-  const legalKeys = uniqueLegalKeys(
-    rec.kind === 'award' ? ['art13_3a', pricingText.includes('سادساً/5') && 'ann4_6_5', 'art13_1', approval?.kind === 'note' && approval.ref, rec.closeBids.length > 1 && pref.legalKey]
-    : rec.kind === 'tie' ? [pref.legalKey, equalPriceBids(rec.closeBids).length > 1 && 'art15_4a']
-    : rec.kind === 'referral' ? ['art13_3a', 'art13_3b', 'art20_1']
-    : rec.kind === 'retender' ? (rec.retenderReason === 'lowest-below' ? ['art13_3a', 'art13_3b', 'art20_4'] : ['art20_3'])
-    : []
-  );
+
+  // صياغة اللجنة تُطبع بدل صياغة النظام ما دامت هناك توصية (لا قبل الكلفة التخمينية)
+  const savedEdit = rec.kind !== 'no-estimate' ? savedRecommendationEdit(project) : undefined;
+  const editChanges = savedEdit ? recommendationEditChanges(savedEdit, { basis, systemText }) : [];
+  const editable = !!onSaveRecommendationEdit && rec.kind !== 'no-estimate';
+  const draftDirty = draft !== null && draft.trim() !== (savedEdit?.text ?? systemText).trim();
+
+  const saveDraft = () => {
+    if (draft === null || !onSaveRecommendationEdit) return;
+    const text = draft.replace(/\r\n/g, '\n').trim();
+    if (!text) {
+      window.alert(savedEdit
+        ? 'الصياغة فارغة. لطباعة صياغة النظام اضغط «إلغاء» ثم «استعادة صياغة النظام».'
+        : 'الصياغة فارغة. لطباعة صياغة النظام اضغط «إلغاء».');
+      return;
+    }
+    const added = CONDITION_WORDS.filter(w => text.includes(w) && !systemText.includes(w));
+    if (added.length && !window.confirm(`في الصياغة (${added.join('، ')}). التوصية لا تُقيَّد بشروط، وتعديل الصياغة لا يضيف إليها شرطاً. أتحفظ الصياغة كما هي؟`)) return;
+    if (text === systemText.trim()) {
+      // مطابقة لصياغة النظام: لا تعديل يُحفظ، ويُستعاد النظام إن كان هناك تعديل سابق
+      if (savedEdit) onSaveRecommendationEdit(null, systemText);
+    } else if (text !== savedEdit?.text || editChanges.length > 0) {
+      // حفظ الصياغة نفسها بعد تغيّر أساسها إقرار بها على الأساس الجديد، فيزول التنبيه
+      onSaveRecommendationEdit({ text, systemText, basis, editedAt: new Date().toISOString() }, systemText);
+    }
+    setDraft(null);
+  };
+
+  const restoreSystem = () => {
+    if (!onSaveRecommendationEdit || !savedEdit) return;
+    if (!window.confirm('تُحذف صياغة اللجنة ويُطبع المحضر بصياغة النظام. تبقى الصياغة المحذوفة في سجل التدقيق. أتستعيد صياغة النظام؟')) return;
+    onSaveRecommendationEdit(null, systemText);
+    setDraft(null);
+  };
+
+  const handleClose = () => {
+    if (draftDirty && !window.confirm('في محرر الصياغة تعديل لم يُحفظ. أتغلق المحضر وتتركه؟')) return;
+    onClose();
+  };
+
+  // ترك المسودة («إلغاء») أو استبدالها بصياغة النظام الحالية: بتأكيد إن كان فيها ما لم يُحفظ
+  const discardDraft = (next: string | null) => {
+    if (draftDirty && !window.confirm('في محرر الصياغة تعديل لم يُحفظ. أتتركه؟')) return;
+    setDraft(next);
+  };
+
   const subjectLabel = {
     award: 'للعطاء الموصى به',
     tie: 'لأوطأ العطاءات المتقاربة',
@@ -130,7 +191,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <Printer className="w-4 h-4" />
               طباعة فورية
             </button>
-            <button onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+            <button onClick={handleClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -345,21 +406,77 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* 3. توصية وقرار اللجنة القانوني */}
           <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed bg-slate-50">
             <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: توصية لجنة التحليل:</h4>
-            {/* كل صيغة مسندة إلى نص التعليمات رقم (1) لسنة 2025 — المراجع في utils/recommendation.ts */}
-            {rec.kind === 'award' && rec.primary && (
-              <p>
-                بعد التحليل التجاري والمالي للعطاءات والتدقيق الحسابي لجداول الكميات ومقارنتها بالكلفة التخمينية، واستناداً إلى المادة (13)/ثالثاً/أ، توصي لجنة التحليل
-                <strong> بإحالة المناقصة على العطاء المقدم من ({rec.primary.name}) </strong>
-                بمبلغ إجمالي قدره <strong>({money(rec.primary)})</strong> <span className="text-slate-800 font-bold underline">({words(rec.primary)})</span>
-                {rec.chosenNotLowest
-                  ? '، وهو العطاء الذي اختارته اللجنة من بين العطاءات المؤهلة'
-                  : rec.chosenByCommittee && rec.closeBids.length > 1
-                    ? `، وهو العطاء الذي اختارته اللجنة من بين العطاءات ${rec.exactTie ? 'المتساوية' : 'المتقاربة'} في مبالغها`
-                    : '، لكونه أوطأ العطاءات المؤهلة'}
-                ، مع مراعاة نتائج التقييم الفني والقانوني{rec.primary.id === subject.id ? pricingText : ''}. وتُرفع هذه التوصية إلى الجهة المخولة بالمصادقة على الإحالة وفق المادة (13)/أولاً.
-                {approval?.kind === 'note' && <> {approval.text}</>}
-              </p>
+
+            {/* صياغة اللجنة: إعادة صياغة فقط، لا تضيف شروطاً (قرار أسامة 2026-10-23). أدواتها لا تُطبع */}
+            {editable && !editing && (
+              <div className="no-print mb-2 flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                {savedEdit && (
+                  <span className="text-indigo-800">✎ تُطبع التوصية بصياغة اللجنة (عُدّلت في {localDate(new Date(savedEdit.editedAt))})</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDraft(savedEdit?.text ?? systemText)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 cursor-pointer"
+                >
+                  <PenLine className="w-3.5 h-3.5" />
+                  تعديل صياغة التوصية
+                </button>
+                {savedEdit && (
+                  <button
+                    type="button"
+                    onClick={restoreSystem}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    استعادة صياغة النظام
+                  </button>
+                )}
+              </div>
             )}
+            {/* يبقى ظاهراً أثناء التحرير: فيه ما تغيّر مما تحتاجه الصياغة الجديدة */}
+            {savedEdit && editChanges.length > 0 && (
+              <div role="alert" className="no-print mb-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 font-bold text-[11px]">
+                ⚠️ صاغت اللجنة هذه التوصية ثم تغيّر ما بُنيت عليه: {editChanges.join('؛ ')}. راجع الصياغة أو استعد صياغة النظام قبل الطباعة. (هذه الملاحظة لا تظهر في الطباعة)
+              </div>
+            )}
+            {editing && (
+              <div className="no-print mb-2 p-3 bg-white border border-indigo-300 rounded-lg space-y-2">
+                <textarea
+                  value={draft}
+                  onChange={e => setDraft(e.target.value)}
+                  dir="rtl"
+                  rows={9}
+                  autoFocus
+                  aria-label="صياغة التوصية"
+                  aria-describedby="recommendation-edit-hint"
+                  className="w-full resize-y text-xs leading-relaxed p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <p id="recommendation-edit-hint" className="text-[11px] text-slate-600 font-semibold">
+                  تعديل الصياغة لا يضيف إلى التوصية شروطاً ولا يغيّر سندها. كل سطر فقرة. قائمة النصوص المستند إليها وملاحظات المحضر تبقى كما يصوغها النظام.
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs font-bold">
+                  <button type="button" onClick={saveDraft} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer">
+                    حفظ الصياغة
+                  </button>
+                  <button type="button" onClick={() => discardDraft(null)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">
+                    إلغاء
+                  </button>
+                  {savedEdit && draft !== systemText && (
+                    <button type="button" onClick={() => discardDraft(systemText)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">
+                      البدء من صياغة النظام الحالية
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* أثناء التحرير يبقى النص المحفوظ للطباعة وحدها */}
+            <div className={editing ? 'hidden print:block' : undefined}>
+              {savedEdit
+                ? <p className="whitespace-pre-line">{savedEdit.text}</p>
+                : <RecommendationBlocks blocks={blocks} />}
+            </div>
+
             {approval?.kind === 'missing' && (
               <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
                 💡 حدّد نوع الموازنة (استثمارية أو تشغيلية) في إعدادات المناقصة لتذكر التوصية صلاحية قبول العطاء الذي يزيد على الكلفة التخمينية والموافقة المطلوبة له (ضوابط رقم (2) رابعاً). (هذه الملاحظة لا تظهر في الطباعة)
@@ -367,45 +484,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             )}
 
             {rec.kind === 'tie' && (
-              <div>
-                <p>
-                  بعد التحليل التجاري والمالي للعطاءات والتدقيق الحسابي لجداول الكميات ومقارنتها بالكلفة التخمينية، تبيّن أن العطاءات المؤهلة الآتية
-                  <strong>{rec.exactTie ? ' متساوية في مبالغها' : ` متقاربة في مبالغها لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`}</strong>:
-                </p>
-                <ul className="list-disc pr-6 my-1.5 font-bold">
-                  {rec.closeBids.map(b => (
-                    <li key={b.id}>{b.name} — {money(b)} ({words(b)})</li>
-                  ))}
-                </ul>
-                <p>
-                  وعليه توصي لجنة التحليل <strong>بالمفاضلة بين هذه العطاءات وفق {pref.clause}</strong>، والإحالة على العطاء الأفضل بنتيجتها، مع مراعاة نتائج التقييم الفني والقانوني.
-                  {/* سند استكمال المبادرات للمتساوية وحدها، ولو كان معها عطاء متقارب غير مساوٍ (equalPriceBids) */}
-                  {equalPriceBids(rec.closeBids).length > 1 && (
-                    <> وعند تساوي {rec.exactTie ? 'الأسعار' : `أسعار العطاءات (${equalPriceBids(rec.closeBids).map(b => b.name).join('، ')})`} لأصغر فئة نقدية فلجهة التعاقد استكمال المبادرات إن لم تُقدَّم ابتداءً لتصبح جزءاً من العطاء ({pref.clause}). وإذا تساوت الأسعار والشروط بعد ذلك، فلجهة التعاقد إرساء المناقصة على أكثر من متقدم إن كانت شروط المناقصة تنص على ذلك (المادة 15/رابعاً/أ).</>
-                  )}
-                </p>
-                <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
-                  💡 {equalPriceBids(rec.closeBids).length > 1 && <>قبل المفاضلة: خاطب مقدمي العطاءات المتساوية ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتهم إن لم تُقدَّم ابتداءً ({pref.clause}). </>}بعد إجراء المفاضلة: اختر العطاء الفائز من «خلاصة الترسية» بزر «اختيار للترسية»، فتتحول هذه الفقرة إلى توصية بالإحالة عليه. (هذه الملاحظة لا تظهر في الطباعة)
-                </div>
+              <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
+                💡 {equalPriceBids(rec.closeBids).length > 1 && <>قبل المفاضلة: خاطب مقدمي العطاءات المتساوية ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتهم إن لم تُقدَّم ابتداءً ({pref.clause}). </>}بعد إجراء المفاضلة: اختر العطاء الفائز من «خلاصة الترسية» بزر «اختيار للترسية»، فتتحول هذه الفقرة إلى توصية بالإحالة عليه. (هذه الملاحظة لا تظهر في الطباعة)
               </div>
-            )}
-
-            {rec.kind === 'referral' && rec.primary && (
-              <p>
-                بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{exclusion}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> وبانحراف ({formatPercent(rec.primary.totals.totalDeviationPercent, 2, exclusion)}) عن الكلفة التخمينية.
-                وعليه توصي لجنة التحليل <strong>برفع الموضوع إلى اللجنة المركزية للمصادقة على الإحالة للنظر في التفاوض لتخفيض الأسعار</strong>، استناداً إلى المادة (13)/ثالثاً/ب، علماً أن إجراء التفاوض ذاته ليس من اختصاص لجنة التحليل.
-                وإذا لم تؤدِّ المفاوضات إلى تخفيض الأسعار ضمن الحدود المقبولة، فلجهة التعاقد إعادة الإعلان أو الدعوة وفق المادة (20)/أولاً.
-              </p>
-            )}
-
-            {rec.kind === 'retender' && (
-              <p>
-                {rec.retenderReason === 'lowest-below' && rec.primary ? (
-                  <>بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±{exclusion}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من <strong>({rec.primary.name})</strong> بمبلغ <strong>({money(rec.primary)})</strong> ويقل عن الكلفة التخمينية بنسبة ({formatPercent(rec.primary.totals.totalDeviationPercent, 2, exclusion)})، فلا ينطبق عليه استثناء المادة (13)/ثالثاً/ب المشروط بزيادة أقل العطاءات على الحدود. وعليه توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/رابعاً.</>
-                ) : (
-                  <>استبعدت اللجنة جميع العطاءات المقدمة. وإذا كان استبعادها لعدم مطابقتها لشروط ومعايير المناقصة، توصي لجنة التحليل <strong>بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة</strong> استناداً إلى المادة (20)/ثالثاً.</>
-                )}
-              </p>
             )}
 
             {rec.kind === 'no-estimate' && (

@@ -102,6 +102,23 @@ export type ContractType = 'works' | 'supply' | 'services';
 
 export type BudgetType = 'investment' | 'operating';
 
+/**
+ * صياغة اللجنة لتوصية المحضر (منذ 1.21.0، انظر utils/recommendationText.ts). إعادة صياغة فقط: لا تضيف شروطاً
+ * ولا تغيّر سند التوصية. تُحفظ معها صياغة النظام وما بُنيت عليه، ليُنبَّه إن تغيّر بعدها
+ */
+export interface RecommendationEdit {
+  text: string;                       // ما يُطبع في (ثالثاً) بدل صياغة النظام
+  systemText: string;                 // صياغة النظام لحظة التعديل
+  basis: RecommendationBasis;
+  editedAt: string;
+}
+
+export interface RecommendationBasis {
+  kind: 'award' | 'tie' | 'referral' | 'retender' | 'no-estimate';
+  // العطاء المعني بالتوصية، أو العطاءات المتقاربة في المفاضلة، بمبالغها بعد التصحيح
+  bids: { id: string; name: string; amount: number }[];
+}
+
 /** أسلوب التعاقد (المادة 6)، للعرض فقط. */
 export type InvitationType = 'general' | 'limited' | 'twoStage' | 'direct' | 'singleSource';
 
@@ -123,6 +140,7 @@ export interface TenderProject {
   deviationThreshold: number;         // حد الفقرة المنحرفة (افتراضياً 20%)
   exclusionThreshold?: number;        // حد استبعاد العطاء بانحرافه الكلي؛ غائب = deviationThreshold (exclusionThresholdOf)
   thresholdBasis?: string;            // سند الحد المعتمد إن اختلف أحد الحدّين عن نص التعليمات (20%)
+  recommendationEdit?: RecommendationEdit;
   activeBidderId: string;
   bidders: Bidder[];
   auditLogs: AuditLogEntry[];

@@ -38,6 +38,9 @@ import { createOfferHandlers } from './app/offerHandlers';
 import { createImportHandlers } from './app/importHandlers';
 import { createBidderHandlers } from './app/bidderHandlers';
 import { createProjectHandlers } from './app/projectHandlers';
+import { createRecommendationHandlers } from './app/recommendationHandlers';
+import { downloadRecommendationEdits } from './utils/storageService';
+import { APP_VERSION } from './changelog';
 
 export function App() {
   const {
@@ -61,6 +64,7 @@ export function App() {
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
+  const [isRecEditing, setIsRecEditing] = useState(false);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
@@ -68,6 +72,7 @@ export function App() {
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
+    : isPrintOpen && isRecEditing ? 'صياغة التوصية'
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
@@ -116,6 +121,7 @@ export function App() {
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
+  const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
 
   const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
     applyPageBreaks(pages);
@@ -339,6 +345,7 @@ export function App() {
         activeProjectId={currentProject.id}
         onOpenProject={handleOpenFromBrowser}
         onDeleteProject={handleDeleteProject}
+        onExportRecommendationEdits={() => downloadRecommendationEdits(projects, APP_VERSION)}
         onNewProject={() => {
           setIsProjectsOpen(false);
           setIsNewProjectOpen(true);
@@ -352,6 +359,8 @@ export function App() {
         onClose={() => setIsPrintOpen(false)}
         project={currentProject}
         activeBidder={activeBidder}
+        onSaveRecommendationEdit={handleSaveRecommendationEdit}
+        onEditingChange={setIsRecEditing}
       />
 
     </div>

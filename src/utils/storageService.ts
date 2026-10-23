@@ -3,6 +3,7 @@ import { calculateBOQMetrics, normalizeItemNo } from './calculations';
 import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
 import { localDate } from './localDate';
 import { exclusionThresholdOf } from './recommendation';
+import { recommendationEditsExport } from './recommendationText';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
 const ACTIVE_PROJECT_KEY = 'antigravity_active_project_id_v2';
@@ -461,6 +462,12 @@ async function saveJsonFile(fileName: string, data: unknown, description = 'نس
 // ويبقى تأكيد ✕ قبل حذفها. كان التنزيل بالرابط يعدّها منزّلة ولو أُلغي أو مُنع
 export function downloadRecoveredData(entries: RecoveredData[]): Promise<boolean> {
   return saveJsonFile(`بيانات_مناقصات_تعذرت_قراءتها_${localDate()}.json`, entries, 'بيانات تعذّرت قراءتها (JSON)');
+}
+
+// التوصيات التي عدّلت اللجنة صياغتها في كل المناقصات، مع صياغة النظام (recommendationEditsExport): يُحفظ في مجلد
+// اللجنة ليُقترح منه تحسين الصياغة بإصدار مقصود. يعيد false إن ألغى المستخدم الحفظ
+export function downloadRecommendationEdits(projects: TenderProject[], appVersion: string): Promise<boolean> {
+  return saveJsonFile(`توصيات_معدلة_${localDate()}.json`, recommendationEditsExport(projects, appVersion), 'التوصيات المعدّلة (JSON)');
 }
 
 /**

@@ -13,6 +13,7 @@ import { formatNumber, formatCurrency, formatPercent } from '../utils/calculatio
 import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
+import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
@@ -93,6 +94,10 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   const rec = buildRecommendation(project);
   const approval = rec.kind === 'award' && rec.primary
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
+  // صياغة اللجنة للتوصية: هنا تُذكر وحدها مع تغيّر أساسها. تغيّر صياغة النظام يُفحص في المعاينة، لأن خيار جدول
+  // الأسعار الموزونة يغيّرها ولا يُعرف هنا
+  const savedEdit = rec.kind !== 'no-estimate' ? savedRecommendationEdit(project) : undefined;
+  const basisChanges = savedEdit ? recommendationEditChanges(savedEdit, { basis: recommendationBasis(rec), systemText: savedEdit.systemText }) : [];
 
   return (
     <div className="space-y-6 mb-8">
@@ -405,6 +410,12 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
               {approval?.kind === 'missing' && (
                 <div className="text-xs font-bold text-amber-700 mt-1">
                   حدّد نوع الموازنة في إعدادات المناقصة لتظهر هنا الموافقة المطلوبة لقبول العطاء (ضوابط رقم (2) رابعاً).
+                </div>
+              )}
+              {savedEdit && (
+                <div className="text-xs font-bold text-indigo-800 mt-1">
+                  ✎ تُطبع التوصية في المحضر بصياغة اللجنة
+                  {basisChanges.length > 0 && <span className="text-rose-700"> — وتغيّر ما بُنيت عليه: {basisChanges.join('؛ ')}. راجعها من «طباعة المحضر النهائي».</span>}
                 </div>
               )}
             </div>

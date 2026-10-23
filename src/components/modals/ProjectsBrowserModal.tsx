@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { X, FolderOpen, Plus, Trash2, FileDown } from 'lucide-react';
 import type { TenderProject } from '../../types/tender';
 import { formatNumber, formatPercent } from '../../utils/calculations';
 import { hasBidAmounts, hasNoEstimate, exclusionThresholdOf } from '../../utils/recommendation';
 import { localDate } from '../../utils/localDate';
 import { contractTypeInfo } from '../../utils/contractTypes';
 import { tenderDetailParts } from '../../utils/tenderDetails';
+import { savedRecommendationEdit } from '../../utils/recommendationText';
 
 interface ProjectsBrowserModalProps {
   isOpen: boolean;
@@ -16,6 +17,8 @@ interface ProjectsBrowserModalProps {
   onOpenProject: (projectId: string, bidderId?: string) => void;
   onDeleteProject: (projectId: string) => void;
   onNewProject: () => void;
+  // ملف بكل صياغات اللجنة للتوصيات مع صياغة النظام
+  onExportRecommendationEdits: () => void;
 }
 
 // تاريخ المناقصة بتوقيت الجهاز، وفارغ إن لم يُسجَّل
@@ -35,9 +38,11 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
   activeProjectId,
   onOpenProject,
   onDeleteProject,
-  onNewProject
+  onNewProject,
+  onExportRecommendationEdits
 }) => {
   if (!isOpen) return null;
+  const editedCount = projects.filter(p => savedRecommendationEdit(p)).length;
 
   const sorted = [...projects].sort((a, b) =>
     (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
@@ -169,14 +174,27 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
         </div>
 
         <div className="p-4 border-t border-slate-200 bg-white flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={onNewProject}
-            className="flex items-center gap-1.5 text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl cursor-pointer transition"
-          >
-            <Plus className="w-4 h-4 text-amber-400" />
-            مناقصة جديدة
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onNewProject}
+              className="flex items-center gap-1.5 text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl cursor-pointer transition"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              مناقصة جديدة
+            </button>
+            {editedCount > 0 && (
+              <button
+                type="button"
+                onClick={onExportRecommendationEdits}
+                title="ملف بصياغات اللجنة للتوصيات مع صياغة النظام، يُحفظ في مجلد اللجنة لاقتراح تحسين صياغة النظام"
+                className="flex items-center gap-1.5 text-sm font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 px-4 py-2 rounded-xl cursor-pointer transition"
+              >
+                <FileDown className="w-4 h-4" />
+                تصدير التوصيات المعدّلة ({editedCount})
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
