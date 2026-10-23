@@ -162,7 +162,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* 1. جدول خلاصة كافة العروض والموقف التجاري */}
           <div className="mb-6">
             <h3 className="font-black text-slate-900 text-xs mb-2 bg-slate-100 p-2 rounded border border-slate-300">
-              أولاً: خلاصة العروض التجارية المقدمة وموقف الاستبعاد والترسية:
+              أولاً: خلاصة العروض التجارية المقدمة وموقف الاستبعاد والتوصية:
             </h3>
 
             <table className="w-full text-xs text-right border-collapse border border-slate-400 mb-4">
@@ -332,7 +332,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
           {/* 3. توصية وقرار اللجنة القانوني */}
           <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed bg-slate-50">
-            <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: قرار وتوصية لجنة التحليل والترسية:</h4>
+            <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: توصية لجنة التحليل:</h4>
             {/* كل صيغة مسندة إلى نص التعليمات رقم (1) لسنة 2025 — المراجع في utils/recommendation.ts */}
             {rec.kind === 'award' && rec.primary && (
               <p>
