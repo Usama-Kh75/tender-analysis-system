@@ -461,9 +461,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <button type="button" onClick={() => discardDraft(null)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">
                     إلغاء
                   </button>
-                  {/* يُعطَّل ولا يُخفى حين يطابق النص صياغة النظام، فلا يسقط تركيز لوحة المفاتيح */}
+                  {/* يُعطَّل بـ aria-disabled حين يطابق النص صياغة النظام: disabled ولا الإخفاء يُسقطان تركيز لوحة المفاتيح */}
                   {savedEdit && (
-                    <button type="button" disabled={draft === systemText} onClick={() => discardDraft(systemText)} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button
+                      type="button"
+                      aria-disabled={draft?.trim() === systemText.trim()}
+                      onClick={() => { if (draft?.trim() !== systemText.trim()) discardDraft(systemText); }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                    >
                       البدء من صياغة النظام الحالية
                     </button>
                   )}
