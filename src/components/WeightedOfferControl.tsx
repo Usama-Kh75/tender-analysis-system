@@ -7,6 +7,7 @@ import { assessBalance, correctedBalanceRows, offerStatus, startOfferBlocker } f
 interface Props {
   bidder: Bidder;
   threshold: number;
+  exclusionThreshold?: number;
   onStart: (origin: 'corrected' | 'formula' | 'resume') => void;
   onPause: () => void;
   onAdopt: () => void;
@@ -98,14 +99,14 @@ const StartMenu: React.FC<Pick<Props, 'onStart'> & { paused: boolean; blocker: s
 
 // مدخل العرض الموزون في شريط الشركة المثبت: زر بدء بقائمة، ثم سطر حي (الفرق والاعتماد والإيقاف) أثناء المرحلة.
 // بطاقة التوازن التفصيلية تبقى فوق الجدول في WeightedOfferBar
-export const WeightedOfferControl: React.FC<Props> = ({ bidder, threshold, onStart, onPause, onAdopt, onUnadopt }) => {
-  const balance = assessBalance(correctedBalanceRows(bidder.items), threshold);
+export const WeightedOfferControl: React.FC<Props> = ({ bidder, threshold, exclusionThreshold = threshold, onStart, onPause, onAdopt, onUnadopt }) => {
+  const balance = assessBalance(correctedBalanceRows(bidder.items), threshold, exclusionThreshold);
   const offer = bidder.weightedOffer;
   if (balance.verdict === 'no-estimate') return null;
 
   if (!offer || offer.status === 'paused') {
     if (balance.verdict === 'excluded') return null;
-    return <StartMenu onStart={onStart} paused={offer?.status === 'paused'} blocker={startOfferBlocker(bidder, threshold)} />;
+    return <StartMenu onStart={onStart} paused={offer?.status === 'paused'} blocker={startOfferBlocker(bidder, exclusionThreshold)} />;
   }
 
   const status = offerStatus(bidder);

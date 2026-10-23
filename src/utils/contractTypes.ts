@@ -1,4 +1,5 @@
 import type { ContractType } from '../types/tender';
+import type { LegalKey } from './legalTexts';
 
 /**
  * ما يختلف بين أنواع العقود في التوصية التجارية: معايير المفاضلة عند تساوي الأسعار
@@ -11,23 +12,28 @@ export interface ContractTypeInfo {
   preferenceClause: string;
   /** أمثلة معايير المفاضلة كما وردت في الفقرة */
   preferenceExamples: string;
+  /** مفتاح نص الفقرة في LEGAL_TEXTS */
+  legalKey: LegalKey;
 }
 
 export const CONTRACT_TYPES: Record<ContractType, ContractTypeInfo> = {
   works: {
     label: 'أشغال (مقاولات عامة)',
     preferenceClause: 'ثانياً/2',
-    preferenceExamples: 'مدة العقد، أو مدة الصيانة، أو أية مبادرات أخرى'
+    preferenceExamples: 'مدة العقد، أو مدة الصيانة، أو أية مبادرات أخرى',
+    legalKey: 'ann5_works'
   },
   supply: {
     label: 'تجهيز',
     preferenceClause: 'ثالثاً/2',
-    preferenceExamples: 'خدمات ما بعد البيع الإضافية، أو مدة الصيانة، أو مدة الضمان، أو أية مبادرات أخرى'
+    preferenceExamples: 'خدمات ما بعد البيع الإضافية، أو مدة الصيانة، أو مدة الضمان، أو أية مبادرات أخرى',
+    legalKey: 'ann5_supply'
   },
   services: {
     label: 'خدمات غير استشارية',
     preferenceClause: 'رابعاً/2',
-    preferenceExamples: 'مدة العقد، أو تقديم الخدمات لمدة إضافية خارج مدة العقد، أو أية مبادرات أخرى'
+    preferenceExamples: 'مدة العقد، أو تقديم الخدمات لمدة إضافية خارج مدة العقد، أو أية مبادرات أخرى',
+    legalKey: 'ann5_services'
   }
 };
 
@@ -42,10 +48,10 @@ export function contractTypeInfo(type?: string): ContractTypeInfo | undefined {
 }
 
 /** مرجع معايير المفاضلة بحسب النوع، أو بصيغة عامة إن لم يُحدد النوع */
-export function preferenceReference(type?: string): { clause: string; examples: string } {
+export function preferenceReference(type?: string): { clause: string; examples: string; legalKey?: LegalKey } {
   const info = contractTypeInfo(type);
   if (info) {
-    return { clause: `ضوابط رقم (5) ${info.preferenceClause}`, examples: info.preferenceExamples };
+    return { clause: `ضوابط رقم (5) ${info.preferenceClause}`, examples: info.preferenceExamples, legalKey: info.legalKey };
   }
   return {
     clause: 'ضوابط رقم (5)',

@@ -5,6 +5,7 @@ import { correctionSignatures } from '../utils/bidderAuditEngine';
 import { localDate } from '../utils/localDate';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
+import { exclusionThresholdOf } from '../utils/recommendation';
 import { announcementLabel, invitationTypeInfo, receivedBidsCountOf } from '../utils/tenderDetails';
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
@@ -191,6 +192,13 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
     if (lockReason) window.alert(`لم يُغيَّر حد الانحراف (بقي ${currentProject.deviationThreshold}%): تغييره يعيد حكم توازن العطاءات.
 ${lockReason}`);
     const threshold = lockReason ? currentProject.deviationThreshold : requested;
+    // حد استبعاد العطاء قد يستبعد عطاءً له عرض موزون فعّال أو معتمد، فيُقفل مثل حد الفقرة
+    const requestedExclusion = updated.exclusionThreshold ?? exclusionThresholdOf(currentProject);
+    const exclusionLock = requestedExclusion !== exclusionThresholdOf(currentProject) ? offerLockReason(currentProject, { shared: true }) : null;
+    if (exclusionLock) window.alert(`لم يُغيَّر حد استبعاد العطاء (بقي ${exclusionThresholdOf(currentProject)}%): تغييره قد يستبعد عطاءً له عرض موزون.
+${exclusionLock}`);
+    const exclusion = exclusionLock ? exclusionThresholdOf(currentProject) : requestedExclusion;
+    const basis = updated.thresholdBasis?.trim() || undefined;
 
     const recalculatedBidders = currentProject.bidders.map(b => {
       const recalc = calculateBOQMetrics(b.items, threshold);
@@ -205,6 +213,8 @@ ${lockReason}`);
       ...currentProject,
       ...updated,
       deviationThreshold: threshold,
+      exclusionThreshold: exclusion,
+      thresholdBasis: basis,
       bidders: recalculatedBidders,
       updatedAt: new Date().toISOString()
     };
@@ -213,6 +223,8 @@ ${lockReason}`);
       updatedProj,
       'تعديل إعدادات المناقصة',
       `تم تحديث إعدادات المناقصة وحد الانحراف إلى (${threshold}%)`
+        + (exclusion !== exclusionThresholdOf(currentProject) ? ` — حد استبعاد العطاء: (${exclusion}%)` : '')
+        + detailChange('سند الحد المعتمد', currentProject.thresholdBasis?.trim() || undefined, basis)
         + (updated.contractType && updated.contractType !== currentProject.contractType
           ? ` — نوع العقد: ${CONTRACT_TYPES[updated.contractType].label}` : '')
         + (updated.budgetType && updated.budgetType !== currentProject.budgetType

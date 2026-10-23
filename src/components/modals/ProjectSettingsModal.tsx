@@ -5,6 +5,7 @@ import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER, contractTypeInfo } from '../../uti
 import { BUDGET_TYPES, BUDGET_TYPE_ORDER, budgetTypeInfo } from '../../utils/budgetTypes';
 import { INVITATION_TYPES, INVITATION_TYPE_ORDER, invitationTypeInfo, ANNOUNCEMENT_ORDER, announcementLabel, analyzedBidsCount, receivedBidsCountOf } from '../../utils/tenderDetails';
 import { toLatinDigits } from '../../utils/calculations';
+import { exclusionThresholdOf } from '../../utils/recommendation';
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const [committeeMembers, setCommitteeMembers] = useState<string[]>(project.committeeMembers || []);
   const [currency, setCurrency] = useState(project.currency);
   const [deviationThreshold, setDeviationThreshold] = useState(project.deviationThreshold || 20);
+  const [exclusionThreshold, setExclusionThreshold] = useState(exclusionThresholdOf(project) || 20);
+  const [thresholdBasis, setThresholdBasis] = useState(project.thresholdBasis ?? '');
   const [contractType, setContractType] = useState<ContractType | ''>(contractTypeInfo(project.contractType) ? project.contractType! : '');
 
   const [budgetType, setBudgetType] = useState<BudgetType | ''>(budgetTypeInfo(project.budgetType) ? project.budgetType! : '');
@@ -83,6 +86,9 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       committeeMembers: committeeMembers.map(m => m.trim()).filter(Boolean),
       currency,
       deviationThreshold: Number(deviationThreshold) || 20,
+      exclusionThreshold: Number(exclusionThreshold) || 20,
+      // يُمسح إن فُرّغ
+      thresholdBasis: thresholdBasis.trim() || undefined,
       ...(contractType ? { contractType } : {}),
       ...(budgetType ? { budgetType } : {}),
       // الاختيارية تُمسح صراحةً حين تُفرَّغ
@@ -344,6 +350,43 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
             <p className="text-[11px] text-amber-700 mt-1">
               الفقرات التي يتجاوز انحرافها هذه النسبة تُصنف كـ <strong>"فقرة منحرفة"</strong> وتدخل في حساب الانحراف الجزئي.
             </p>
+
+            <div className="flex items-center gap-2 mt-4 mb-2">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <label className="text-xs font-bold text-amber-900">
+                حد استبعاد العطاء (±%):
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="5"
+                max="50"
+                step="1"
+                value={exclusionThreshold}
+                onChange={(e) => setExclusionThreshold(Number(e.target.value))}
+                className="flex-1 cursor-pointer"
+              />
+              <span className="bg-amber-600 text-white text-xs font-black px-2.5 py-1 rounded-lg font-mono">
+                {exclusionThreshold}%
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-700 mt-1">
+              العطاء الذي يزيد انحرافه الكلي عن الكلفة التخمينية أو يقل عنها بأكثر من هذه النسبة يُستبعد تجارياً. نص المادة (13)/ثالثاً/أ: (20%).
+            </p>
+
+            {(Number(deviationThreshold) !== 20 || Number(exclusionThreshold) !== 20) && (
+              <div className="mt-3">
+                <label className="block text-xs font-bold text-amber-900 mb-1">سند الحد المعتمد</label>
+                <input
+                  type="text"
+                  value={thresholdBasis}
+                  onChange={(e) => setThresholdBasis(e.target.value)}
+                  placeholder="مثال: كتاب … المرقم … في …"
+                  className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+              </div>
+            )}
           </div>
 
           {/* Backup & Restore */}

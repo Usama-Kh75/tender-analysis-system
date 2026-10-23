@@ -1,6 +1,7 @@
 import { calculateBOQMetrics } from '../utils/calculations';
 import { startOfferBlocker, offerFieldsFromCorrected, offerFieldsFromFormula, offerUnitPatch, offerStatus,
   pauseOfferPatch, resumeOfferPatch } from '../utils/weightedOffer';
+import { exclusionThresholdOf } from '../utils/recommendation';
 import { EditContext } from './editContext';
 
 export function createOfferHandlers(ctx: EditContext) {
@@ -8,7 +9,7 @@ export function createOfferHandlers(ctx: EditContext) {
 
   // بدء العرض الموزون (سادساً/5): من أسعار العطاء بعد التصحيح، أو بالمعادلة، أو استئناف عرض موقوف بتعديلاته
   const handleStartOffer = (origin: 'corrected' | 'formula' | 'resume') => {
-    const blocker = startOfferBlocker(activeBidder, currentProject.deviationThreshold);
+    const blocker = startOfferBlocker(activeBidder, exclusionThresholdOf(currentProject));
     if (blocker) { window.alert(blocker); return; }
     const prev = activeBidder.weightedOffer;
     if (origin !== 'resume' && activeBidder.items.some(i => i.offerTotal !== undefined) && !window.confirm(

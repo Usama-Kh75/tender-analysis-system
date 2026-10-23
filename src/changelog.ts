@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.20.0',
+    date: '2026-10-23',
+    notes: [
+      'تضبط حد استبعاد العطاء منفصلاً عن حد الفقرة المنحرفة في إعدادات المناقصة، وتكتب سند الحد إن اختلف عن نص التعليمات (20%).'
+    ]
+  },
+  {
     version: '1.19.0',
     date: '2026-10-23',
     notes: [

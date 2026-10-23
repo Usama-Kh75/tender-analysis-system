@@ -120,7 +120,9 @@ export interface TenderProject {
   committeeChairman: string;          // رئيس لجنة التحليل
   committeeMembers: string[];         // أعضاء اللجنة
   currency: string;                   // العملة (د.ع / $ / ر.س ...)
-  deviationThreshold: number;         // حد الانحراف المسموح (افتراضياً 20%)
+  deviationThreshold: number;         // حد الفقرة المنحرفة (افتراضياً 20%)
+  exclusionThreshold?: number;        // حد استبعاد العطاء بانحرافه الكلي؛ غائب = deviationThreshold (exclusionThresholdOf)
+  thresholdBasis?: string;            // سند الحد المعتمد إن اختلف أحد الحدّين عن نص التعليمات (20%)
   activeBidderId: string;
   bidders: Bidder[];
   auditLogs: AuditLogEntry[];

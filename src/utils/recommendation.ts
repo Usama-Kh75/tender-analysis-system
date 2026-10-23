@@ -38,7 +38,7 @@ export function equalPriceBids(closeBids: Bidder[]): Bidder[] {
 
 export interface Recommendation {
   kind: RecommendationKind;
-  /** العطاءات المؤهلة تجارياً (ضمن الحدود وغير مستبعدة من اللجنة)، مرتبة من الأوطأ */
+  /** العطاءات المؤهلة (ضمن الحدود وغير مستبعدة من اللجنة)، مرتبة من الأوطأ */
   eligible: Bidder[];
   /** العطاء المعني بالتوصية: الموصى به (award)، أو الأوطأ بين المتقاربة (tie)، أو المحال للتفاوض (referral)، أو أقل العطاءات (retender) */
   primary?: Bidder;
@@ -53,6 +53,13 @@ export interface Recommendation {
   /** سبب إعادة الإعلان المقترح (retender فقط) */
   retenderReason?: 'lowest-below' | 'all-rejected';
 }
+
+/**
+ * حد استبعاد العطاء بانحرافه الكلي (المادة 13/ثالثاً/أ). منفصل عن حد الفقرة المنحرفة (deviationThreshold)؛
+ * والمناقصة المحفوظة قبل الفصل لا حقل لها فيرجع إلى حد الفقرة (20% للجميع)، فلا ترحيل
+ */
+export const exclusionThresholdOf = (project: Pick<TenderProject, 'deviationThreshold' | 'exclusionThreshold'>): number =>
+  project.exclusionThreshold ?? project.deviationThreshold;
 
 export const isCommerciallyExcluded = (bidder: Bidder, threshold: number): boolean =>
   Math.abs(bidder.totals.totalDeviationPercent) > threshold;
@@ -73,7 +80,7 @@ const isRejectedByCommittee = (bidder: Bidder): boolean => bidder.status === 'di
 const byAmount = (a: Bidder, b: Bidder) => a.totals.totalBidderAmount - b.totals.totalBidderAmount;
 
 export function buildRecommendation(project: TenderProject): Recommendation {
-  const threshold = project.deviationThreshold;
+  const threshold = exclusionThresholdOf(project);
   const candidates = project.bidders.filter(b => hasBidAmounts(b) && !isRejectedByCommittee(b));
   const eligible = candidates.filter(b => !isCommerciallyExcluded(b, threshold)).sort(byAmount);
 

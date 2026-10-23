@@ -2,6 +2,7 @@ import { TenderProject, Bidder, AuditLogEntry, BOQItem } from '../types/tender';
 import { calculateBOQMetrics, normalizeItemNo } from './calculations';
 import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
 import { localDate } from './localDate';
+import { exclusionThresholdOf } from './recommendation';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
 const ACTIVE_PROJECT_KEY = 'antigravity_active_project_id_v2';
@@ -250,7 +251,7 @@ function latinizeItemNumbers(project: TenderProject): TenderProject {
 // الانحراف الكلي كان يُخزَّن بمنزلتين فيُستبعد بالمقارنة المقرَّبة: 20.004% تُخزَّن 20.00 فلا تتجاوز الحد.
 // تُعاد النسبة إلى دقتها من المبلغين المخزَّنين دون مس أي مبلغ أو علامة، ويُسجَّل في السجل فقط ما انقلب حكمه
 function refreshDeviationPrecision(project: TenderProject): TenderProject {
-  const threshold = project.deviationThreshold;
+  const threshold = exclusionThresholdOf(project);
   const flips: { bidder: Bidder; was: number; now: number }[] = [];
   const bidders = project.bidders.map(b => {
     const t = b.totals;

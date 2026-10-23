@@ -16,6 +16,8 @@ interface KPIStatsCardsProps {
   totals: TenderTotals;
   currency: string;
   deviationThreshold: number;
+  /** حد استبعاد العطاء بانحرافه الكلي؛ غائب = حد الفقرة */
+  exclusionThreshold?: number;
   /** المبلغ الإجمالي المدون في العطاء قبل التصحيح الحسابي (Bidder.statedTotal) */
   statedTotal?: number;
   /** فقرات مؤشرة بخطأ ضرب أو تعارض تفقيط لم تعالجها اللجنة بعد */
@@ -114,12 +116,13 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
   totals,
   currency,
   deviationThreshold,
+  exclusionThreshold = deviationThreshold,
   statedTotal,
   pendingAuditCount = 0,
   onChangeStatedTotal,
   offer
 }) => {
-  const isHighTotalDeviation = Math.abs(totals.totalDeviationPercent) > deviationThreshold;
+  const isHighTotalDeviation = Math.abs(totals.totalDeviationPercent) > exclusionThreshold;
   // بطاقتا الانحراف الجزئي والفقرات المنحرفة تتبعان العرض الموزون كما يتبعه الجدول، ورقم العطاء كما قُدّم
   // يبقى تحته مشطوباً فيظهر سبب التوزين. البطاقات الأخرى لا يغيّرها العرض (مجموعه = مبلغ العطاء عند الاعتماد)
   const partial = offer ?? totals;
@@ -213,7 +216,7 @@ export const KPIStatsCards: React.FC<KPIStatsCardsProps> = ({
         <div className={`text-lg font-black tracking-tight ${
           noEstimate ? 'text-slate-400' : isHighTotalDeviation ? 'text-rose-700' : 'text-emerald-700'
         }`}>
-          {noEstimate ? '—' : formatPercent(totals.totalDeviationPercent, 2, deviationThreshold)}
+          {noEstimate ? '—' : formatPercent(totals.totalDeviationPercent, 2, exclusionThreshold)}
         </div>
         {noEstimate ? pendingNote : (
           <div className="text-[11px] font-medium opacity-80 mt-1">

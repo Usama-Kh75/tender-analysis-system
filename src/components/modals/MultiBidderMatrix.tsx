@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../../types/tender';
 import { formatPercent, formatCurrency } from '../../utils/calculations';
-import { hasBidAmounts, hasNoEstimate, isCommerciallyExcluded } from '../../utils/recommendation';
+import { hasBidAmounts, hasNoEstimate, isCommerciallyExcluded, exclusionThresholdOf } from '../../utils/recommendation';
 
 interface MultiBidderMatrixProps {
   isOpen: boolean;
@@ -37,7 +37,7 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
   // ثم الأقل مبلغاً. كان الترتيب بأقرب انحراف إلى الصفر، فقبل الكلفة التخمينية (كل الانحرافات صفر)
   // تصير أول شركة في القائمة «الأفضل سعرياً» ولو كانت بلا مبالغ
   const noEstimate = hasNoEstimate(project);
-  const isOut = (b: Bidder) => b.status === 'disqualified' || isCommerciallyExcluded(b, project.deviationThreshold);
+  const isOut = (b: Bidder) => b.status === 'disqualified' || isCommerciallyExcluded(b, exclusionThresholdOf(project));
   const sortedBidders = [...project.bidders].sort((a, b) =>
     Number(!hasBidAmounts(a)) - Number(!hasBidAmounts(b))
     || Number(isOut(a)) - Number(isOut(b))
@@ -205,11 +205,11 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                       </td>
                       <td className="p-3 text-center">
                         <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-xs ${
-                          Math.abs(bidder.totals.totalDeviationPercent) > project.deviationThreshold
+                          Math.abs(bidder.totals.totalDeviationPercent) > exclusionThresholdOf(project)
                             ? 'bg-rose-100 text-rose-800'
                             : 'bg-emerald-100 text-emerald-800'
                         }`}>
-                          {formatPercent(bidder.totals.totalDeviationPercent, 2, project.deviationThreshold)}
+                          {formatPercent(bidder.totals.totalDeviationPercent, 2, exclusionThresholdOf(project))}
                         </span>
                       </td>
                       <td className="p-3 text-center font-bold text-amber-700">

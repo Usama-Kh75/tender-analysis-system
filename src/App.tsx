@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
-import { hasBidAmounts } from './utils/recommendation';
+import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
 import { exportTenderToExcel } from './utils/excelService';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
 
@@ -174,6 +174,7 @@ export function App() {
           totals={activeBidder.totals}
           currency={currentProject.currency}
           deviationThreshold={currentProject.deviationThreshold}
+          exclusionThreshold={exclusionThresholdOf(currentProject)}
           statedTotal={activeBidder.statedTotal}
           pendingAuditCount={activeBidder.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length}
           onChangeStatedTotal={handleUpdateStatedTotal}
@@ -189,7 +190,7 @@ export function App() {
             <>
             {hasBidAmounts(activeBidder) && (
               <div className="mb-4">
-                <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} />
+                <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)} />
               </div>
             )}
             <BOQTable
@@ -219,7 +220,7 @@ export function App() {
               onMarkUnreasonable={handleMarkUnreasonable}
               onMarkBidderSigned={handleMarkBidderSigned}
               offerControl={hasBidAmounts(activeBidder) ? (
-                <WeightedOfferControl bidder={activeBidder} threshold={currentProject.deviationThreshold}
+                <WeightedOfferControl bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)}
                   onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
               ) : undefined}
             />
@@ -242,7 +243,7 @@ export function App() {
             <ChartsView
               bidders={currentProject.bidders.filter(hasBidAmounts)}
               currency={currentProject.currency}
-              deviationThreshold={currentProject.deviationThreshold}
+              exclusionThreshold={exclusionThresholdOf(currentProject)}
             />
           )}
         </div>

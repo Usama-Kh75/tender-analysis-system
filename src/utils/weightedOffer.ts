@@ -34,7 +34,8 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 // صف لم يُملأ (الأول في مناقصة جديدة أو «+ إضافة فقرة»): ليس فقرة من جدول الكميات
 const isPlaceholder = (r: BalanceRow) => (r.description || '').startsWith('فقرة ') && !(r.estimatedTotal > 0) && !(r.amount > 0);
 
-export function assessBalance(rows: BalanceRow[], threshold: number): BalanceAssessment {
+// threshold: حد الفقرة المنحرفة؛ exclusionThreshold: حد استبعاد العطاء بانحرافه الكلي (يرجع إلى حد الفقرة إن لم يُعطَ)
+export function assessBalance(rows: BalanceRow[], threshold: number, exclusionThreshold: number = threshold): BalanceAssessment {
   const counted = rows.filter(r => !isPlaceholder(r));
   const est = counted.reduce((s, r) => s + r.estimatedTotal, 0);
   const amt = counted.reduce((s, r) => s + r.amount, 0);
@@ -46,7 +47,7 @@ export function assessBalance(rows: BalanceRow[], threshold: number): BalanceAss
   const belowCount = withEstimate.filter(r => deviation(r) < -threshold).length;
   const unbalancedPercent = counted.length > 0 ? round2((unbalancedCount / counted.length) * 100) : 0;
   const verdict: BalanceVerdict = !(est > 0) ? 'no-estimate'
-    : Math.abs(totalDeviationPercent) > threshold ? 'excluded'
+    : Math.abs(totalDeviationPercent) > exclusionThreshold ? 'excluded'
     // بالعدد لا بالنسبة المقرّبة: 201 من 2009 = 10.00498% تتجاوز الحد وإن قُرّبت 10.00
     : unbalancedCount * 100 > UNBALANCED_ITEMS_LIMIT_PERCENT * counted.length ? 'weighting-required'
     : 'accept-as-is';
@@ -63,10 +64,10 @@ export const offerBalanceRows = (items: BOQItem[]): BalanceRow[] =>
 export const isOfferLocked = (b: Bidder) => b.weightedOffer?.status === 'active' || b.weightedOffer?.status === 'adopted';
 
 /** سبب منع بدء العرض الموزون، أو null إن جاز */
-export function startOfferBlocker(b: Bidder, threshold: number): string | null {
+export function startOfferBlocker(b: Bidder, exclusionThreshold: number): string | null {
   if (!hasBidAmounts(b)) return 'لا مبالغ في هذا العطاء بعد.';
   if (!(b.totals.totalEstimatedAmount > 0)) return 'لم تُدخل الكلفة التخمينية بعد، فلا نسبة سعرية ولا انحراف.';
-  if (Math.abs(b.totals.totalDeviationPercent) > threshold) {
+  if (Math.abs(b.totals.totalDeviationPercent) > exclusionThreshold) {
     return `العطاء منحرف بمبلغه الكلي (${b.totals.totalDeviationPercent.toFixed(2)}%) عن الكلفة التخمينية فيُستبعد، ولا يُعدّ له عرض موزون (سادساً/5).`;
   }
   const pending = b.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length;

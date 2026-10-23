@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
-import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
+import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
@@ -32,6 +32,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 }) => {
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
+  const exclusionThreshold = exclusionThresholdOf(project);
   // شركات بلا مبالغ بعد لا تُعد عروضاً (انظر hasBidAmounts)
   const emptyBidders = project.bidders.filter(b => !hasBidAmounts(b));
 
@@ -55,14 +56,14 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
       // كان يُكتب «عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً» قبل أي مقارنة ممكنة
       commercialStatus = 'pending';
       commercialReason = 'بانتظار الكلفة التخمينية: لا يُحكم بالانحراف ولا بالتوازن قبل إدخالها';
-    } else if (Math.abs(totalDev) > project.deviationThreshold) {
+    } else if (Math.abs(totalDev) > exclusionThreshold) {
       commercialStatus = 'excluded';
-      commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${project.deviationThreshold}%) حيث بلغ (${formatPercent(totalDev, 2, project.deviationThreshold).replace('+', '')})`;
+      commercialReason = `مستبعد تجارياً: تجاوز الانحراف الإجمالي الحدود القانونية (±${exclusionThreshold}%) حيث بلغ (${formatPercent(totalDev, 2, exclusionThreshold).replace('+', '')})`;
     } else {
       commercialStatus = bidder.status === 'recommended' ? 'recommended' : 'qualified';
       // «متوازن» حكم على الفقرات (سادساً/5)، و«ضمن الحدود» حكم على المبلغ الكلي (13/ثالثاً/أ)؛ فلا يُكتب
       // «متوازن» لعطاء تتجاوز فقراته المنحرفة بالزيادة حد 10% من عددها
-      const balance = assessBalance(correctedBalanceRows(bidder.items), project.deviationThreshold);
+      const balance = assessBalance(correctedBalanceRows(bidder.items), project.deviationThreshold, exclusionThreshold);
       const guide = partialDev > 0 ? ` (انحراف جزئي استرشادي: ${partialDev.toFixed(2)}%)` : '';
       unbalancedItems = balance.verdict === 'weighting-required';
       commercialReason = (unbalancedItems
@@ -158,7 +159,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
-            <div className="text-slate-400 font-semibold mb-1">العطاءات المؤهلة تجارياً</div>
+            <div className="text-slate-400 font-semibold mb-1">العطاءات المؤهلة</div>
             <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-emerald-400'}`}>
               {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus !== 'excluded').length} عروض`}
             </div>
@@ -261,13 +262,13 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                     ) : (<>
                     <td className="p-3.5 text-center border-l border-slate-200 font-black">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
-                        Math.abs(bidder.totals.totalDeviationPercent) > project.deviationThreshold
+                        Math.abs(bidder.totals.totalDeviationPercent) > exclusionThreshold
                           ? 'bg-rose-100 text-rose-900 border border-rose-300'
                           : bidder.totals.totalDeviationPercent < 0
                           ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                           : 'bg-slate-100 text-slate-800'
                       }`}>
-                        {formatPercent(bidder.totals.totalDeviationPercent, 2, project.deviationThreshold)}
+                        {formatPercent(bidder.totals.totalDeviationPercent, 2, exclusionThreshold)}
                       </span>
                     </td>
 
@@ -366,7 +367,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 {rec.kind === 'award' && rec.primary && (
                   <>
                     الإحالة على: <span className="text-emerald-700 underline font-black">({rec.primary.name})</span> بمبلغ إجمالي <span className="font-mono">{formatCurrency(rec.primary.totals.totalBidderAmount, project.currency)}</span>
-                    {rec.chosenNotLowest ? ' — باختيار اللجنة، وليس الأوطأ (تُثبت المسوغات في التقرير — المادة 10/أولاً/هـ)' : ' — أوطأ العطاءات المؤهلة تجارياً'}
+                    {rec.chosenNotLowest ? ' — باختيار اللجنة، وليس الأوطأ (تُثبت المسوغات في التقرير — المادة 10/أولاً/هـ)' : ' — أوطأ العطاءات المؤهلة'}
                     {isOfferFinal(rec.primary) && '، باعتماد أسعار العرض الموزون المعتمد بقرار اللجنة'}.
                   </>
                 )}

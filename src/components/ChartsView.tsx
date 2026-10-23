@@ -17,7 +17,8 @@ import { formatNumber } from '../utils/calculations';
 interface ChartsViewProps {
   bidders: Bidder[];
   currency: string;
-  deviationThreshold: number;
+  /** حد استبعاد العطاء (±%) */
+  exclusionThreshold: number;
 }
 
 // اسم مختصر لمحور الرسم عند كثرة المجهزين، مع الاسم الكامل بالتلميح (Tooltip)
@@ -28,7 +29,7 @@ function shortenBidderName(name: string, maxLen: number = 14): string {
 export const ChartsView: React.FC<ChartsViewProps> = ({
   bidders,
   currency,
-  deviationThreshold
+  exclusionThreshold
 }) => {
   // المقارنة هنا على مستوى المجهزين (وليس فقرات الجدول) لأن جداول العطاءات
   // قد تتجاوز 500 فقرة، ما يجعل رسمها فقرة بفقرة غير مفيد تحليلياً وغير قابل للعرض
@@ -38,7 +39,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
     bidder: b.totals.totalBidderAmount,
     deviation: b.totals.totalDeviationPercent,
     deviatedCount: b.totals.deviatedItemsCount,
-    isExcluded: Math.abs(b.totals.totalDeviationPercent) > deviationThreshold
+    isExcluded: Math.abs(b.totals.totalDeviationPercent) > exclusionThreshold
   }));
 
   // الكلفة التخمينية واحدة ومشتركة لكل مشروع/طلبية — تُعرض كخط مرجعي واحد بدل تكرارها كعمود لكل مجهز
@@ -93,7 +94,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
       <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
         <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center justify-between">
           <span>نسبة الانحراف الكلي (لكل مجهز)</span>
-          <span className="text-xs text-rose-600 font-bold">حد الخطر: ±{deviationThreshold}%</span>
+          <span className="text-xs text-rose-600 font-bold">حد الخطر: ±{exclusionThreshold}%</span>
         </h4>
 
         <div className="h-72">

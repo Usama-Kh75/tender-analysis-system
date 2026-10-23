@@ -2,7 +2,7 @@ import React from 'react';
 import { X, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import type { TenderProject } from '../../types/tender';
 import { formatNumber, formatPercent } from '../../utils/calculations';
-import { hasBidAmounts, hasNoEstimate } from '../../utils/recommendation';
+import { hasBidAmounts, hasNoEstimate, exclusionThresholdOf } from '../../utils/recommendation';
 import { localDate } from '../../utils/localDate';
 import { contractTypeInfo } from '../../utils/contractTypes';
 import { tenderDetailParts } from '../../utils/tenderDetails';
@@ -130,7 +130,7 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                     {project.bidders.map(bidder => {
                       const priced = hasBidAmounts(bidder);
                       const deviation = bidder.totals.totalDeviationPercent;
-                      const beyond = Math.abs(deviation) > project.deviationThreshold;
+                      const beyond = Math.abs(deviation) > exclusionThresholdOf(project);
                       return (
                         <li key={bidder.id}>
                           <button
@@ -150,7 +150,7 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                                     title="الانحراف عن الكلفة التخمينية"
                                     className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${beyond ? 'text-rose-700 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}`}
                                   >
-                                    {formatPercent(deviation, 2, project.deviationThreshold)}
+                                    {formatPercent(deviation, 2, exclusionThresholdOf(project))}
                                   </bdi>
                                 )}
                               </span>

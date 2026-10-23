@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits, percentDecimals } from './calculations';
+import { exclusionThresholdOf } from './recommendation';
 import { summarizePages } from './pageSummary';
 import { isOfferEdited, offerStatus } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
@@ -425,7 +426,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
     line('المبلغ الإجمالي المدون في العطاء (قبل التصحيح)', statedTotal ? input(statedTotal) : 'غير مسجل في النظام'),
     ...(hasEstimate ? [
       line('الكلفة التخمينية', amount(t.totalEstimatedAmount)),
-      line('الانحراف الكلي', pct(t.totalDeviationPercent, percentDecimals(t.totalDeviationPercent, project.deviationThreshold))),
+      line('الانحراف الكلي', pct(t.totalDeviationPercent, percentDecimals(t.totalDeviationPercent, exclusionThresholdOf(project)))),
       line('الانحراف الجزئي', pct(t.partialDeviationPercent)),
       line('النسبة السعرية', ratio(t.overallPriceRatio)),
       line(`عدد الفقرات المنحرفة (أكثر من ${project.deviationThreshold}%)`, count(t.deviatedItemsCount)),

@@ -10,16 +10,17 @@ import {
 interface Props {
   bidder: Bidder;
   threshold: number;
+  exclusionThreshold?: number;
 }
 
 // حكم التوازن (سادساً/5) ومرحلة العرض الموزون للعطاء النشط: بطاقة معلومات فوق الجدول. أزرار البدء والاعتماد
 // والإيقاف في شريط الشركة المثبت (WeightedOfferControl) فلا تتكرر هنا
-export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold }) => {
-  const balance = assessBalance(correctedBalanceRows(bidder.items), threshold);
+export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, exclusionThreshold = threshold }) => {
+  const balance = assessBalance(correctedBalanceRows(bidder.items), threshold, exclusionThreshold);
   const offer = bidder.weightedOffer;
   const status = offerStatus(bidder);
-  const blocker = startOfferBlocker(bidder, threshold);
-  const offerBalance = offer ? assessBalance(offerBalanceRows(bidder.items), threshold) : null;
+  const blocker = startOfferBlocker(bidder, exclusionThreshold);
+  const offerBalance = offer ? assessBalance(offerBalanceRows(bidder.items), threshold, exclusionThreshold) : null;
   if (balance.verdict === 'no-estimate') return null;
 
   const verdictTone = balance.verdict === 'excluded' ? 'border-rose-300 bg-rose-50 text-rose-950'
