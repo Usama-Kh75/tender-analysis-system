@@ -6,6 +6,7 @@ import { localDate } from '../utils/localDate';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
 import { exclusionThresholdOf } from '../utils/recommendation';
+import { formatSheetDate } from '../utils/orderStatus';
 import { announcementLabel, invitationTypeInfo, receivedBidsCountOf } from '../utils/tenderDetails';
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
@@ -231,6 +232,7 @@ ${exclusionLock}`);
           ? ` — نوع الموازنة: ${BUDGET_TYPES[updated.budgetType].label}` : '')
         // الاختيارية: جزء لكل حقل تغيّرت قيمته، و«غير محدد» عند المسح
         + detailChange('الإعلان', announcementLabel(currentProject.announcementNo), announcementLabel(updated.announcementNo))
+        + detailChange('تاريخ الاستلام', formatSheetDate(currentProject.receivedAt) || undefined, formatSheetDate(updated.receivedAt) || undefined)
         + detailChange('أسلوب الدعوة', invitationTypeInfo(currentProject.invitationType)?.label, invitationTypeInfo(updated.invitationType)?.label)
         + detailChange('الجهة المستفيدة', currentProject.beneficiaryEntity?.trim() || undefined, updated.beneficiaryEntity?.trim() || undefined)
         + detailChange('عدد العطاءات المستلمة', receivedBidsCountOf(currentProject)?.toString(), receivedBidsCountOf({ ...currentProject, receivedBidsCount: updated.receivedBidsCount })?.toString(), true)

@@ -40,10 +40,10 @@ export function receivedBidsCountOf(project: TenderProject): number | undefined 
 }
 
 /** أجزاء البيانات المُدخلة بالترتيب، كل جزء نص مستقل. */
-export function tenderDetailParts(project: TenderProject, { withCounts = true }: { withCounts?: boolean } = {}): string[] {
+export function tenderDetailParts(project: TenderProject, { withCounts = true, withAnnouncement = true }: { withCounts?: boolean; withAnnouncement?: boolean } = {}): string[] {
   const parts: string[] = [];
   const announcement = announcementLabel(project.announcementNo);
-  if (announcement) parts.push(announcement);
+  if (announcement && withAnnouncement) parts.push(announcement);
   const invitation = invitationTypeInfo(project.invitationType);
   if (invitation) parts.push(`أسلوب الدعوة: ${invitation.label}`);
   const beneficiary = project.beneficiaryEntity?.trim();

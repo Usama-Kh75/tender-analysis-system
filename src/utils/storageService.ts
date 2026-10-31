@@ -4,6 +4,7 @@ import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
 import { localDate } from './localDate';
 import { exclusionThresholdOf } from './recommendation';
 import { recommendationEditsExport } from './recommendationText';
+import { sanitizeStatusLog, formatSheetDate } from './orderStatus';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
 const ACTIVE_PROJECT_KEY = 'antigravity_active_project_id_v2';
@@ -88,6 +89,8 @@ export function createNewTenderProject(opts: {
   referenceNumber: string;
   contractType: TenderProject['contractType'];
   budgetType: TenderProject['budgetType'];
+  announcementNo?: number;
+  receivedAt?: string;
   bidderNames: string[];
 }): TenderProject {
   const now = Date.now();
@@ -107,12 +110,20 @@ export function createNewTenderProject(opts: {
     };
   });
 
+  // تاريخ الاستلام الصالح يبدأ الموقف بقيد «قيد التحليل» بتاريخه، بلا فرع ولا مذكرة
+  const receivedAt = formatSheetDate(opts.receivedAt) ? opts.receivedAt : undefined;
+
   return {
     id: `project-${now}`,
     title: opts.title,
     contractType: opts.contractType,
     budgetType: opts.budgetType,
     referenceNumber: opts.referenceNumber,
+    announcementNo: opts.announcementNo,
+    ...(receivedAt ? {
+      receivedAt,
+      statusLog: [{ id: `status-${now}`, stage: 'analysis' as const, memoDate: receivedAt, recordedAt: new Date().toISOString() }]
+    } : {}),
     entityName: '',
     committeeChairman: '',
     committeeMembers: [],
@@ -307,9 +318,22 @@ export function defaultLegacyBudgetType(project: TenderProject): TenderProject {
   );
 }
 
+// حقول موقف الطلبية: سجل فاسد يُنظَّف، وتاريخ استلام غير صالح يُهمَل؛ المناقصة بلا هذه الحقول تبقى كما هي
+export function sanitizeStatusFields(project: TenderProject): TenderProject {
+  let next = project;
+  if (project.statusLog !== undefined) {
+    const clean = sanitizeStatusLog(project.statusLog);
+    // لا نسخة جديدة إن لم يتغير شيء
+    const same = Array.isArray(project.statusLog) && clean.length === project.statusLog.length && clean.every((e, i) => e === project.statusLog![i]);
+    if (!same) next = { ...next, statusLog: clean };
+  }
+  if (project.receivedAt !== undefined && formatSheetDate(project.receivedAt) === '') next = { ...next, receivedAt: undefined };
+  return next;
+}
+
 // كل مشروع يُحمَّل أو يُستعاد: توحيد أرقام الفقرات والحقول المشتركة ثم إعادة فحص العلامات المخزنة
 const normalizeLoadedProject = (project: TenderProject) =>
-  defaultLegacyBudgetType(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project))))));
+  defaultLegacyBudgetType(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project)))))));
 
 // نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
 const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';

@@ -20,6 +20,8 @@ import { SmartTableImportModal } from './components/modals/SmartTableImportModal
 import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
+import { StatusSheetModal } from './components/modals/StatusSheetModal';
+import { OrderStatusModal } from './components/modals/OrderStatusModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PageBreaksModal } from './components/modals/PageBreaksModal';
 import { PageSummaryTable } from './components/PageSummaryTable';
@@ -39,6 +41,7 @@ import { createImportHandlers } from './app/importHandlers';
 import { createBidderHandlers } from './app/bidderHandlers';
 import { createProjectHandlers } from './app/projectHandlers';
 import { createRecommendationHandlers } from './app/recommendationHandlers';
+import { createStatusHandlers } from './app/statusHandlers';
 import { downloadRecommendationEdits } from './utils/storageService';
 import { APP_VERSION } from './changelog';
 
@@ -59,6 +62,8 @@ export function App() {
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
@@ -70,6 +75,8 @@ export function App() {
   const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
     : isSmartImportOpen ? 'استيراد جدول'
     : isSettingsOpen ? 'إعدادات المناقصة'
+    : isStatusOpen ? 'موقف الطلبية'
+    : isStatusSheetOpen ? 'كشف موقف الطلبيات'
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
     : isPrintOpen && isRecEditing ? 'صياغة التوصية'
@@ -122,6 +129,7 @@ export function App() {
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
+  const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(ctx);
 
   const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
     applyPageBreaks(pages);
@@ -173,6 +181,7 @@ export function App() {
           onRenameBidder={handleUpdateBidderName}
           onAddBidder={handleAddNewBidder}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenStatus={() => setIsStatusOpen(true)}
         />
 
         {/* Dynamic KPI Cards */}
@@ -308,6 +317,17 @@ export function App() {
         onApply={handleApplyPageBreaks}
       />
 
+      <OrderStatusModal
+        // يُعاد إنشاؤه مع كل فتح ومع كل مناقصة فتبدأ حقوله من جديد
+        key={`${currentProject.id}-status-${isStatusOpen}`}
+        isOpen={isStatusOpen}
+        onClose={() => setIsStatusOpen(false)}
+        project={currentProject}
+        onAdd={handleAddStatus}
+        onEdit={handleEditStatus}
+        onDelete={handleDeleteStatus}
+      />
+
       <ProjectSettingsModal
         // يُعاد إنشاؤه مع كل فتح ومع كل مناقصة: حقوله تُهيأ من المشروع مرة واحدة عند الإنشاء،
         // وبدون ذلك تظهر بيانات مناقصة سابقة ويُكتب فوق الحالية عند الحفظ
@@ -346,10 +366,22 @@ export function App() {
         onOpenProject={handleOpenFromBrowser}
         onDeleteProject={handleDeleteProject}
         onExportRecommendationEdits={() => downloadRecommendationEdits(projects, APP_VERSION)}
+        onOpenStatusSheet={() => {
+          setIsProjectsOpen(false);
+          setIsStatusSheetOpen(true);
+        }}
         onNewProject={() => {
           setIsProjectsOpen(false);
           setIsNewProjectOpen(true);
         }}
+      />
+
+      <StatusSheetModal
+        // تاريخ الكشف يبدأ بتاريخ اليوم مع كل فتح
+        key={`status-sheet-${isStatusSheetOpen}`}
+        isOpen={isStatusSheetOpen}
+        onClose={() => setIsStatusSheetOpen(false)}
+        projects={projects}
       />
 
       <PrintReportModal

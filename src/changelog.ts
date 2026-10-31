@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.22.0',
+    date: '2026-11-01',
+    notes: [
+      'تسجّل موقف كل طلبية برقم المذكرة وتاريخها، وتطبع كشف موقف الطلبيات أو تصدّره إلى Excel.'
+    ]
+  },
+  {
     version: '1.21.0',
     date: '2026-10-23',
     notes: [

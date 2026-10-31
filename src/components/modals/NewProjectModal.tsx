@@ -3,17 +3,21 @@ import { X, FolderPlus } from 'lucide-react';
 import type { ContractType, BudgetType } from '../../types/tender';
 import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER } from '../../utils/contractTypes';
 import { BUDGET_TYPES, BUDGET_TYPE_ORDER } from '../../utils/budgetTypes';
+import { ANNOUNCEMENT_ORDER, announcementLabel } from '../../utils/tenderDetails';
+import { localDate } from '../../utils/localDate';
 
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; announcementNo: number; receivedAt: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
 }
 
 // نوع العقد يُختار قبل إدخال أي بيانات، لأن التوصية (معايير المفاضلة) تتبعه
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onCreate }) => {
   const [title, setTitle] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
+  const [announcementNo, setAnnouncementNo] = useState(1);
+  const [receivedAt, setReceivedAt] = useState(localDate());
   const [contractType, setContractType] = useState<ContractType | null>(null);
   const [budgetType, setBudgetType] = useState<BudgetType | null>(null);
   const [bidderNamesText, setBidderNamesText] = useState('');
@@ -23,6 +27,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const close = () => {
     setTitle('');
     setReferenceNumber('');
+    setAnnouncementNo(1);
+    setReceivedAt(localDate());
     setContractType(null);
     setBudgetType(null);
     setBidderNamesText('');
@@ -32,7 +38,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !contractType || !budgetType) return;
-    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/) });
+    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), announcementNo, receivedAt, contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/) });
     close();
   };
 
@@ -127,15 +133,39 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             />
           </div>
 
-          <div>
-            <label htmlFor="new-project-ref" className="block text-xs font-bold text-slate-700 mb-1">رقم الطلبية أو المناقصة</label>
-            <input
-              id="new-project-ref"
-              type="text"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label htmlFor="new-project-ref" className="block text-xs font-bold text-slate-700 mb-1">رقم الطلبية أو المناقصة</label>
+              <input
+                id="new-project-ref"
+                type="text"
+                value={referenceNumber}
+                onChange={(e) => setReferenceNumber(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="new-project-announcement" className="block text-xs font-bold text-slate-700 mb-1">الإعلان</label>
+              <select
+                id="new-project-announcement"
+                value={announcementNo}
+                onChange={(e) => setAnnouncementNo(Number(e.target.value))}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              >
+                {ANNOUNCEMENT_ORDER.map(no => <option key={no} value={no}>{announcementLabel(no)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="new-project-received" className="block text-xs font-bold text-slate-700 mb-1">تاريخ الاستلام</label>
+              <input
+                id="new-project-received"
+                type="date"
+                value={receivedAt}
+                onChange={(e) => setReceivedAt(e.target.value)}
+                required
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
           </div>
 
           <div>

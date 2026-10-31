@@ -3,6 +3,8 @@ import { Table2, Pencil, Award, BarChart3, Building2, Plus } from 'lucide-react'
 import { TenderProject, Bidder } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
+import { announcementLabel } from '../utils/tenderDetails';
+import { currentStatus, statusText } from '../utils/orderStatus';
 
 interface ProjectHeaderProps {
   project: TenderProject;
@@ -15,12 +17,13 @@ interface ProjectHeaderProps {
   onRenameBidder: (name: string) => void;
   onAddBidder: () => void;
   onOpenSettings: () => void;
+  onOpenStatus: () => void;
 }
 
 // بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، ومبدّل الشركة، والتبويبات الثلاثة
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project: currentProject, activeBidder, activeTab, onSelectTableTab, onSelectTab, onChangeProjectField,
-  onSelectBidder, onRenameBidder, onAddBidder, onOpenSettings
+  onSelectBidder, onRenameBidder, onAddBidder, onOpenSettings, onOpenStatus
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
@@ -65,6 +68,22 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               </button>
             </span>
           )}
+          {/* يميّز إعلانات الطلبية الواحدة؛ غير المحدد زر يفتح الإعدادات */}
+          <button
+            onClick={onOpenSettings}
+            title="تعديل الإعلان من إعدادات المناقصة"
+            className="bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold px-3.5 py-1 rounded-full border border-amber-200 cursor-pointer transition"
+          >
+            {announcementLabel(currentProject.announcementNo) ?? 'حدد الإعلان'}
+          </button>
+          {/* موقف الطلبية الحالي: آخر إدخال في سجل المواقف، وغير المحدد يفتح النافذة لتسجيله */}
+          <button
+            onClick={onOpenStatus}
+            title="موقف الطلبية: أين هي الآن وبأي مذكرة"
+            className="bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold px-3.5 py-1 rounded-full border border-amber-200 cursor-pointer transition"
+          >
+            {(() => { const s = currentStatus(currentProject); return s ? `الموقف: ${statusText(s) || 'غير محدد'}` : 'حدد الموقف'; })()}
+          </button>
           {currentProject.entityName && (
             <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
               {currentProject.entityName}

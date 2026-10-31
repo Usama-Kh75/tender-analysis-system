@@ -48,6 +48,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const [budgetType, setBudgetType] = useState<BudgetType | ''>(budgetTypeInfo(project.budgetType) ? project.budgetType! : '');
 
   const [announcementNo, setAnnouncementNo] = useState<number | ''>(announcementLabel(project.announcementNo) ? project.announcementNo! : '');
+  const [receivedAt, setReceivedAt] = useState(project.receivedAt ?? '');
   const [invitationType, setInvitationType] = useState<InvitationType | ''>(invitationTypeInfo(project.invitationType) ? project.invitationType! : '');
   const [beneficiaryEntity, setBeneficiaryEntity] = useState(project.beneficiaryEntity ?? '');
   const [receivedBidsCount, setReceivedBidsCount] = useState(String(receivedBidsCountOf(project) ?? ''));
@@ -93,6 +94,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       ...(budgetType ? { budgetType } : {}),
       // الاختيارية تُمسح صراحةً حين تُفرَّغ
       announcementNo: announcementNo || undefined,
+      receivedAt: receivedAt || undefined,
       invitationType: invitationType || undefined,
       beneficiaryEntity: beneficiaryEntity.trim() || undefined,
       receivedBidsCount: received
@@ -181,6 +183,30 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
               />
             </div>
             <div>
+              <label htmlFor="settings-announcement" className="block text-xs font-bold text-slate-700 mb-1">الإعلان</label>
+              <select
+                id="settings-announcement"
+                value={announcementNo}
+                onChange={(e) => setAnnouncementNo(e.target.value ? Number(e.target.value) : '')}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              >
+                <option value="">— غير محدد —</option>
+                {ANNOUNCEMENT_ORDER.map(no => (
+                  <option key={no} value={no}>{announcementLabel(no)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="settings-received" className="block text-xs font-bold text-slate-700 mb-1">تاريخ الاستلام</label>
+              <input
+                id="settings-received"
+                type="date"
+                value={receivedAt}
+                onChange={(e) => setReceivedAt(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">العملة المعتمدة</label>
               <input
                 type="text"
@@ -207,20 +233,6 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
               <p id="settings-details-note" className="text-[11px] text-slate-500 mt-0.5">تظهر في رأس المحضر المطبوع وبطاقة المناقصة إن أُدخلت، ولا تؤثر في التحليل.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="settings-announcement" className="block text-xs font-bold text-slate-700 mb-1">الإعلان</label>
-                <select
-                  id="settings-announcement"
-                  value={announcementNo}
-                  onChange={(e) => setAnnouncementNo(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="">— غير محدد —</option>
-                  {ANNOUNCEMENT_ORDER.map(no => (
-                    <option key={no} value={no}>{announcementLabel(no)}</option>
-                  ))}
-                </select>
-              </div>
               <div>
                 <label htmlFor="settings-invitation-type" className="block text-xs font-bold text-slate-700 mb-1">أسلوب الدعوة</label>
                 <select

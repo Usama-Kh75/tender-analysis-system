@@ -122,6 +122,21 @@ export interface RecommendationBasis {
 /** أسلوب التعاقد (المادة 6)، للعرض فقط. */
 export type InvitationType = 'general' | 'limited' | 'twoStage' | 'direct' | 'singleSource';
 
+/** موقف الطلبية: الإجراء الحالي وفرعه الاختياري (انظر utils/orderStatus.ts). */
+export type StatusStage = 'analysis' | 'audit' | 'returnedFromAudit' | 'reviewCommittee' | 'sentToContracts' | 'readvertise' | 'other';
+export type StatusBranch = 'technical' | 'commercial' | 'documents' | 'negotiation';
+
+export interface StatusEntry {
+  id: string;
+  stage: StatusStage;
+  branch?: StatusBranch;
+  customText?: string;   // مطلوب عند stage = 'other'
+  memoNo?: string;
+  memoDate: string;      // YYYY-MM-DD: تاريخ المذكرة أو الإجراء
+  note?: string;
+  recordedAt: string;
+}
+
 export interface TenderProject {
   id: string;
   title: string;
@@ -134,6 +149,8 @@ export interface TenderProject {
   invitationType?: InvitationType;
   receivedBidsCount?: number;         // العطاءات المستلمة، وقد تزيد على المحلَّلة تجارياً
   beneficiaryEntity?: string;
+  receivedAt?: string;                // تاريخ استلام الطلبية YYYY-MM-DD
+  statusLog?: StatusEntry[];          // موقف الطلبية؛ الحالي هو آخر عنصر
   committeeChairman: string;          // رئيس لجنة التحليل
   committeeMembers: string[];         // أعضاء اللجنة
   currency: string;                   // العملة (د.ع / $ / ر.س ...)

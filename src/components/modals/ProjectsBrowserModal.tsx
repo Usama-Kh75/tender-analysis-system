@@ -1,11 +1,11 @@
 import React from 'react';
-import { X, FolderOpen, Plus, Trash2, FileDown } from 'lucide-react';
+import { X, FolderOpen, Plus, Trash2, FileDown, ClipboardList } from 'lucide-react';
 import type { TenderProject } from '../../types/tender';
 import { formatNumber, formatPercent } from '../../utils/calculations';
 import { hasBidAmounts, hasNoEstimate, exclusionThresholdOf } from '../../utils/recommendation';
 import { localDate } from '../../utils/localDate';
 import { contractTypeInfo } from '../../utils/contractTypes';
-import { tenderDetailParts } from '../../utils/tenderDetails';
+import { tenderDetailParts, announcementLabel } from '../../utils/tenderDetails';
 import { savedRecommendationEdit } from '../../utils/recommendationText';
 
 interface ProjectsBrowserModalProps {
@@ -19,6 +19,8 @@ interface ProjectsBrowserModalProps {
   onNewProject: () => void;
   // ملف بكل صياغات اللجنة للتوصيات مع صياغة النظام
   onExportRecommendationEdits: () => void;
+  // كشف موقف الطلبيات الرسمي (معاينة وطباعة وExcel)
+  onOpenStatusSheet: () => void;
 }
 
 // تاريخ المناقصة بتوقيت الجهاز، وفارغ إن لم يُسجَّل
@@ -39,7 +41,8 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
   onOpenProject,
   onDeleteProject,
   onNewProject,
-  onExportRecommendationEdits
+  onExportRecommendationEdits,
+  onOpenStatusSheet
 }) => {
   if (!isOpen) return null;
   const editedCount = projects.filter(p => savedRecommendationEdit(p)).length;
@@ -104,9 +107,10 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                   </span>
                   <span className="text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1 mt-1">
                     {project.referenceNumber && <span>الرقم: <bdi>{project.referenceNumber}</bdi></span>}
+                    {announcementLabel(project.announcementNo) && <span>{announcementLabel(project.announcementNo)}</span>}
                     {typeLabel && <span>{typeLabel}</span>}
                     {project.entityName && <span>{project.entityName}</span>}
-                    {tenderDetailParts(project, { withCounts: false }).map(part => <span key={part}>{part}</span>)}
+                    {tenderDetailParts(project, { withCounts: false, withAnnouncement: false }).map(part => <span key={part}>{part}</span>)}
                     {created && <span>أُنشئت <bdi>{created}</bdi></span>}
                     {updated && <span>آخر تعديل <bdi>{updated}</bdi></span>}
                   </span>
@@ -182,6 +186,15 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
             >
               <Plus className="w-4 h-4 text-amber-400" />
               مناقصة جديدة
+            </button>
+            <button
+              type="button"
+              onClick={onOpenStatusSheet}
+              title="كشف رسمي بموقف كل طلبية: أين هي الآن ومنذ متى وبأي مذكرة"
+              className="flex items-center gap-1.5 text-sm font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 px-4 py-2 rounded-xl cursor-pointer transition"
+            >
+              <ClipboardList className="w-4 h-4" />
+              كشف الموقف
             </button>
             {editedCount > 0 && (
               <button
