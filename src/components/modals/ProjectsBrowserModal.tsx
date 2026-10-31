@@ -7,6 +7,7 @@ import { localDate } from '../../utils/localDate';
 import { contractTypeInfo } from '../../utils/contractTypes';
 import { tenderDetailParts, announcementLabel } from '../../utils/tenderDetails';
 import { savedRecommendationEdit } from '../../utils/recommendationText';
+import { currentStatus, statusText } from '../../utils/orderStatus';
 
 interface ProjectsBrowserModalProps {
   isOpen: boolean;
@@ -84,6 +85,7 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
             const typeLabel = contractTypeInfo(project.contractType)?.label;
             const created = dateOf(project.createdAt);
             const updated = dateOf(project.updatedAt);
+            const status = currentStatus(project);
             return (
               <section
                 key={project.id}
@@ -119,6 +121,12 @@ export const ProjectsBrowserModal: React.FC<ProjectsBrowserModalProps> = ({
                     {noEstimate
                       ? <span className="font-bold text-amber-700">بانتظار الكلفة التخمينية</span>
                       : <><bdi className="font-mono font-black text-slate-900">{formatNumber(estimate)}</bdi> {project.currency}</>}
+                  </span>
+                  <span className="block text-xs text-slate-600 mt-1">
+                    الموقف:{' '}
+                    {status
+                      ? <bdi className="font-bold text-amber-800">{statusText(status) || 'غير محدد'}</bdi>
+                      : <span className="text-slate-500">لم يُحدد</span>}
                   </span>
                 </button>
 

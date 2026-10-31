@@ -141,7 +141,10 @@ test('ورقة Excel: العنوان والرأس والصفوف', () => {
   assert.equal(ws.A1.v, 'موقف الطلبيات لغاية 01/11/2026');
   const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
   assert.deepEqual(data[1], ['ت', 'رقم الطلبية', 'الموضوع', 'الإعلان', 'تاريخ الاستلام', 'الإجراء', 'رقم المذكرة', 'التاريخ', 'الملاحظات']);
-  assert.equal(data.length - 2, rows.length);
+  // بعد صفوف الطلبيات: سطر فارغ ثم «رئيس اللجنة» ثم سطر التوقيع
+  assert.equal(data.length - 2, rows.length + 3);
+  assert.equal(data[2 + rows.length + 1][0], 'رئيس اللجنة');
+  assert.equal(data[2 + rows.length + 2][0], 'التوقيع: .....................');
   assert.equal(data[2][6], '77');
   assert.equal(data[2][7], '12/10/2026');
 });

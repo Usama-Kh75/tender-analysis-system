@@ -1,5 +1,5 @@
 // كشف موقف الطلبيات إلى Excel بأسلوب ملفات اللجنة (Arial، رأس أبيض غامق على 1F4E78، حدود رفيعة، RTL).
-// وثيقة رسمية: بلا توقيع. الصفوف من statusSheetRows نفسها التي تُبنى منها الطباعة
+// وثيقة رسمية: بتوقيع رئيس اللجنة وحده. الصفوف من statusSheetRows نفسها التي تُبنى منها الطباعة
 import * as XLSX from 'xlsx-js-style';
 import { formatSheetDate } from './orderStatus';
 import type { StatusSheetRow } from './orderStatus';
@@ -20,6 +20,8 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): 
     STATUS_SHEET_HEADERS,
     ...rows.map(r => [r.no, r.referenceNumber, r.title, r.announcement, r.receivedAt, r.action, r.memoNo, r.date, r.note])
   ];
+  const signRow = aoa.length + 1;
+  aoa.push([], ['رئيس اللجنة'], ['التوقيع: .....................']);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = WIDTHS.map(wch => ({ wch }));
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }];
@@ -46,6 +48,11 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): 
         ...(c === 0 ? {} : { numFmt: '@' })
       });
     }
+  }
+
+  // توقيع رئيس اللجنة تحت الجدول في العمود الأول، بلا حدود
+  for (const r of [signRow, signRow + 1]) {
+    style(r, 0, { font: { name: FONT, sz: 10, bold: r === signRow }, alignment: { horizontal: 'right', vertical: 'center' } });
   }
 
   const wb = XLSX.utils.book_new();

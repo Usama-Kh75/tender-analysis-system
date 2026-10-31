@@ -14,7 +14,7 @@ interface StatusSheetModalProps {
 
 const cell = 'border border-black px-2 py-1.5 align-middle';
 
-// معاينة كشف موقف الطلبيات وطباعته (A4 أفقي) وتصديره. وثيقة رسمية بلا توقيع، وعرض لما هو محفوظ بلا مجاميع
+// معاينة كشف موقف الطلبيات وطباعته (A4 أفقي) وتصديره. وثيقة رسمية بتوقيع رئيس اللجنة وحده (قرار أسامة 2026-11-01)، وعرض لما هو محفوظ بلا مجاميع
 export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onClose, projects }) => {
   const [asOf, setAsOf] = useState(localDate());
 
@@ -118,6 +118,14 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                 ))}
               </tbody>
             </table>
+          )}
+          {rows.length > 0 && (
+            <div className="break-inside-avoid break-before-avoid flex justify-start pt-8 text-center text-xs font-bold">
+              <div className="w-64 border-t border-slate-400 pt-2">
+                <div>رئيس اللجنة</div>
+                <div className="mt-6 text-slate-600">التوقيع: .....................</div>
+              </div>
+            </div>
           )}
         </div>
       </div>
