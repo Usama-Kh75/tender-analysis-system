@@ -9,6 +9,12 @@ export const isCommitteeCorrected = (item: BOQItem) =>
   || item.originalUnitPrice !== undefined
   || item.originalWrittenText !== undefined;
 
+// تصحيح اللجنة على الأرقام (المبلغ أو المفرد) لا على نص التفقيط: وحده يمكن أن يكون في الحقيقة خطأ قراءة لا خطأ مجهز،
+// فتعرض الشاشة لهذه الفقرة «اعتماد الأرقام كما كُتبت في الورقة» (handleAcceptAsReading)
+export const hasNumericCommitteeCorrection = (item: BOQItem) =>
+  ((item.enteredBidderTotal || 0) > 0 && Math.abs(item.bidderTotal - (item.enteredBidderTotal || 0)) > 0.01)
+  || item.originalUnitPrice !== undefined;
+
 // المجهز حضر ووقّع وختم إزاء تصحيح اللجنة (ضوابط رقم (4) خامساً/ب/3). التأشير على فقرة غير مصحَّحة لا يُحسب
 export const isSignedCorrection = (item: BOQItem) => !!item.bidderSignedAt && isCommitteeCorrected(item);
 

@@ -1,4 +1,4 @@
-import { committeeResolvedTextMismatch, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
+import { committeeResolvedTextMismatch, hasNumericCommitteeCorrection, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus,
@@ -191,6 +191,8 @@ interface BOQTableProps {
   onUpdateFields: (index: number, patch: Partial<BOQItem>, logAction?: string) => void;
   // تعديل الكمية أو المفرد أو المبلغ أو التفقيط يدوياً = تصحيح قراءة يعيد فحص الفقرة (handleCorrectReading في App.tsx)
   onCorrectReading: (index: number, field: ReadingField, value: number | string) => void;
+  // فقرة عليها تصحيح حسابي تبيّن أن خطأها قراءة النظام للورقة: الأرقام الحالية تصير المدوَّنة (handleAcceptAsReading في itemHandlers.ts)
+  onAcceptAsReading?: (index: number) => void;
   // تفقيط ناقص «آلاف»: تعتمده اللجنة بعد إضافتها دون أن يتغير رقم (handleAdoptTafqeetThousands في App.tsx)
   onAdoptTafqeetThousands: (index: number, correctedText: string) => void;
   onAddItem: () => void;
@@ -231,6 +233,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onEditOfferUnit,
   onMarkUnreasonable,
   onMarkBidderSigned,
+  onAcceptAsReading,
   offerControl
 }) => {
   const locked = offerMode !== 'none';
@@ -822,6 +825,15 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                             <Flag className="w-3 h-3" /> تأشير سعر غير معقول
                           </button>
                         ))}
+
+                        {/* الخطأ في قراءة الورقة لا في المجهز: الأرقام الحالية تصير ما كتبه المجهز */}
+                        {onAcceptAsReading && hasNumericCommitteeCorrection(item) && (
+                          <button type="button" onClick={() => onAcceptAsReading(actualIndex)}
+                            title="للحالة التي تكون فيها الأرقام المعتمدة هي المكتوبة فعلاً في الورقة وكانت القراءة هي الخطأ: تصير المدوَّنة ويزول التصحيح الحسابي"
+                            className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-indigo-700 cursor-pointer">
+                            <RotateCcw className="w-3 h-3" /> الأرقام كما في الورقة (خطأ قراءة لا خطأ مجهز)
+                          </button>
+                        )}
 
                         {/* توقيع المجهز إزاء تصحيح اللجنة (ضوابط رقم (4) خامساً/ب/3): على الفقرة المصحَّحة وحدها */}
                         {onMarkBidderSigned && isCommitteeCorrected(item) && (item.bidderSignedAt ? (

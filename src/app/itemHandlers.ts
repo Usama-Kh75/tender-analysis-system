@@ -2,7 +2,7 @@ import { calculateBOQMetrics } from '../utils/calculations';
 import { addAuditLog } from '../utils/storageService';
 import { hasBidAmounts } from '../utils/recommendation';
 import { exportBidderAuditToExcel } from '../utils/bidderAuditExcel';
-import { isCommitteeCorrected } from '../utils/bidderAuditEngine';
+import { hasNumericCommitteeCorrection, isCommitteeCorrected } from '../utils/bidderAuditEngine';
 import { Bidder, BOQItem, ReadingField, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
 import { READING_FIELD_LABELS, SHARED_ESTIMATE_FIELDS, withoutBidderPrices } from './itemFields';
@@ -214,6 +214,50 @@ export function createItemHandlers(ctx: EditContext) {
     saveProject(updatedProj);
   };
 
+  // «اعتماد الأرقام كما كُتبت في الورقة»: فقرة عليها تصحيح حسابي للجنة تبيّن أن الخطأ فيها قراءة النظام للورقة لا خطأ
+  // المجهز (القراءة الآلية كانت قد أخطأت في المفرد والمبلغ معاً). الأرقام المعتمدة الحالية تصير هي المدوَّنة، فيزول
+  // التصحيح الحسابي المزعوم ويسقط توقيع المجهز المؤشَّر إزاءه، ولا يُحسب الأمر خطأ مجهز. يُسجَّل بما كان مقروءاً قبله.
+  // التفقيط لا يُمس: تعديله بعدها تصحيح قراءة عادي بلا نافذة إلغاء
+  const handleAcceptAsReading = (index: number) => {
+    const before = activeBidder.items[index];
+    if (!before || !hasNumericCommitteeCorrection(before)) return;
+    if (blockedByOffer({ bidderId: activeBidder.id })) return;
+    const fmt = (v: unknown) => typeof v === 'number' ? v.toLocaleString('en-US') : '—';
+    const readUnit = before.originalUnitPrice ?? before.enteredUnitPrice;
+    const ok = window.confirm(
+      `الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}):\n`
+      + `المقروء من العطاء: المفرد (${fmt(readUnit)})، والمبلغ (${fmt(before.enteredBidderTotal)})\n`
+      + `المعتمد حالياً: المفرد (${fmt(before.enteredUnitPrice)})، والمبلغ (${fmt(before.bidderTotal)})\n\n`
+      + `هل المعتمد حالياً هو ما كتبه المجهز في الورقة فعلاً، وكانت القراءة هي الخطأ؟\n`
+      + `إن كان كذلك فتصير الأرقام الحالية هي المدوَّنة في العطاء، ويزول التصحيح الحسابي ويسقط تأشير توقيع المجهز إزاءه، `
+      + `ويُسجَّل ذلك في سجل التدقيق. أما إن كان المجهز هو من أخطأ فاضغط «إلغاء».`
+    );
+    if (!ok) return;
+    const updatedRaw = [...activeBidder.items];
+    updatedRaw[index] = {
+      ...before,
+      enteredBidderTotal: before.bidderTotal || undefined,
+      bidderUnitPrice: before.enteredUnitPrice || 0,
+      originalUnitPrice: undefined,
+      bidderSignedAt: undefined,
+      hasMathError: undefined,
+      hasTextDiscrepancy: undefined
+    };
+    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    const updatedProj = addAuditLog(
+      {
+        ...currentProject,
+        bidders: currentProject.bidders.map(b => b.id === activeBidder.id
+          ? { ...b, items: recalculation.items, totals: recalculation.totals } : b),
+        updatedAt: new Date().toISOString()
+      },
+      'تصحيح قراءة',
+      `اعتُبر المعتمد في الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) هو ما كتبه المجهز في الورقة، وكانت القراءة هي الخطأ: المفرد من (${fmt(readUnit)}) إلى (${fmt(before.enteredUnitPrice)})، والمبلغ من (${fmt(before.enteredBidderTotal)}) إلى (${fmt(before.bidderTotal)})${before.bidderSignedAt ? '، وسقط تأشير توقيع المجهز إزاء التصحيح الملغى' : ''}، وأُعيد فحصها`,
+      { itemNo: before.itemNo, bidderId: activeBidder.id, oldValue: before.enteredBidderTotal, newValue: before.bidderTotal }
+    );
+    saveProject(updatedProj);
+  };
+
   // تفقيط ناقص كلمة «آلاف» (readMissingThousands): تعتمد اللجنة التفقيط بعد إضافتها. الأرقام لا تتغير لأنها توافق
   // التفقيط المعدَّل أصلاً، وما كتبه المجهز يُحفظ في originalWrittenText دليلاً، فيبقى الخطأ مؤشراً في «واقع الحال»
   // ويعود إليه تصحيح القراءة. التصحيح قرار اللجنة ويُبلَّغ به المجهز (ضوابط رقم (4) خامساً/ب/3)
@@ -400,7 +444,7 @@ export function createItemHandlers(ctx: EditContext) {
   };
 
   return {
-    handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAdoptTafqeetThousands,
+    handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks
   };

@@ -121,7 +121,7 @@ export function App() {
   }
 
   const ctx = createEditContext(currentProject, activeBidder, setProjects);
-  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAdoptTafqeetThousands,
+  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handleStartOffer, handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
@@ -217,6 +217,7 @@ export function App() {
               onUpdateItem={handleUpdateItem}
               onUpdateFields={handleUpdateItemFields}
               onCorrectReading={handleCorrectReading}
+              onAcceptAsReading={handleAcceptAsReading}
               onAdoptTafqeetThousands={handleAdoptTafqeetThousands}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
