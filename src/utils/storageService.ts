@@ -332,8 +332,38 @@ export function sanitizeStatusFields(project: TenderProject): TenderProject {
 }
 
 // كل مشروع يُحمَّل أو يُستعاد: توحيد أرقام الفقرات والحقول المشتركة ثم إعادة فحص العلامات المخزنة
+/**
+ * معرّف الفقرة مفتاح صفها في الجدول ومرجع كل تعديل عليها (يُبحث عنه بـ findIndex). استنساخ فقرات مجهز جديد كان يولّد
+ * معرّفاً من الوقت وثلاثة حروف عشوائية، فتصادم بعضها في الطلبيات الكبيرة (5 أزواج في 464 فقرة)، فاختلط ترتيب الصفوف
+ * ووقع تعديل الفقرة الثانية على الأولى. عند كل تحميل واستعادة يأخذ كل معرّف مكرر داخل المجهز معرّفاً جديداً، ولا يُمس
+ * الأول ولا شيء غير المعرّف.
+ */
+export function uniqueItemIds(project: TenderProject): TenderProject {
+  let fixed = 0;
+  const bidders = project.bidders.map(b => {
+    const seen = new Set<string>();
+    let changed = false;
+    const items = b.items.map((item, index) => {
+      if (!seen.has(item.id)) { seen.add(item.id); return item; }
+      let id = `${item.id}-${index + 1}`;
+      for (let n = 2; seen.has(id); n++) id = `${item.id}-${index + 1}-${n}`;
+      seen.add(id);
+      changed = true;
+      fixed++;
+      return { ...item, id };
+    });
+    return changed ? { ...b, items } : b;
+  });
+  if (!fixed) return project;
+  return addAuditLog(
+    { ...project, bidders, updatedAt: new Date().toISOString() },
+    'إصلاح معرّفات الفقرات تلقائياً',
+    `وُجد (${fixed}) معرّف فقرة مكرراً داخل مجهز واحد، فأُعطيت الفقرات المكررة معرّفات جديدة. لم يتغير في أي فقرة رقمها ولا وصفها ولا سعرها`
+  );
+}
+
 const normalizeLoadedProject = (project: TenderProject) =>
-  defaultLegacyBudgetType(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(latinizeItemNumbers(project)))))));
+  defaultLegacyBudgetType(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(uniqueItemIds(latinizeItemNumbers(project))))))));
 
 // نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
 const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';

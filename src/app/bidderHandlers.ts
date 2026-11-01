@@ -48,10 +48,12 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
     if (!targetName) return;
 
     // استنساخ الفقرات بلا أي سعر لإدخال عطاء الشركة الخاص
-    const clonedItems = activeBidder.items.map(item => ({
+    // رقم الفقرة في المعرّف: الحروف العشوائية وحدها تتصادم في الطلبيات الكبيرة فيختلط ترتيب الصفوف
+    const stamp = Date.now();
+    const clonedItems = activeBidder.items.map((item, index) => ({
       ...withoutBidderPrices(item),
       pageNo: undefined,
-      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`
+      id: `item-${stamp}-${index + 1}`
     }));
 
     const recalc = calculateBOQMetrics(clonedItems, currentProject.deviationThreshold);
