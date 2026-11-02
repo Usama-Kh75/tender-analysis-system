@@ -188,8 +188,6 @@ export function App() {
       scrollToTable();
     } else if (target === 'award') {
       setActiveTab('analysis');
-    } else {
-      setActiveTab('status');
     }
   };
 

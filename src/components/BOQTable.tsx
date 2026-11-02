@@ -293,7 +293,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   };
 
   return (
-    <div className="space-y-4" style={{ '--bidder-bar-h': `${barHeight}px`, '--toolbar-h': `${toolbarHeight}px` } as React.CSSProperties}>
+    <div className="space-y-4" style={{ '--bidder-bar-h': `${barHeight}px`, '--toolbar-h': `${auditMode ? 0 : toolbarHeight}px` } as React.CSSProperties}>
 
       {/* Top Banner: Active Bidder Label & Actions Bar
           مثبت تحت الشريط العلوي (ارتفاعه 81px) أثناء التمرير في الجدول، فيبقى اسم الشركة وأدوات
@@ -362,8 +362,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
         {/* Table Toolbar
             على الشاشات العريضة (xl) يثبت تحت شريط الشركة، فيبقى البحث والمرشِّحات في متناول اليد أثناء التمرير
             وتثبت عناوين الأعمدة تحته. على الأضيق يلتف فيطول، فيبقى غير مثبت كشريط الشركة */}
-        <div ref={toolbarRef} className={`p-4 border-b flex flex-wrap items-center justify-between gap-3 xl:sticky xl:top-[calc(81px+var(--bidder-bar-h))] z-30 ${
-          auditMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
+        <div ref={toolbarRef} className={`p-4 border-b flex flex-wrap items-center justify-between gap-3 xl:top-[calc(81px+var(--bidder-bar-h))] z-30 ${
+          auditMode ? 'bg-amber-50 border-amber-200' : 'xl:sticky bg-slate-50 border-slate-200'
         }`}>
 
           {/* عرض التدقيق: إغلاقه، ومصدر الأرقام، ومرشحاته، وكشف Excel، والقاعدة وسندها */}
@@ -791,7 +791,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             </tbody>
 
             {/* Table Footer Totals */}
-            <tfoot className="bg-slate-900 text-white font-black text-xs sticky bottom-0 z-10 shadow-lg">
+            <tfoot className={`bg-slate-900 text-white font-black text-xs z-10 shadow-lg ${auditMode ? '' : 'sticky bottom-0'}`}>
               <tr>
                 <td colSpan={3} className="p-3 text-center border-l border-slate-800">
                   المجموع الكلي ({items.length} فقرة)

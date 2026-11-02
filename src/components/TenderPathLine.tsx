@@ -1,7 +1,7 @@
 import React from 'react';
 import type { TenderPath } from '../utils/tenderPath';
 
-export type PathTarget = 'estimate' | 'bids' | 'audit' | 'award' | 'status';
+export type PathTarget = 'estimate' | 'bids' | 'audit' | 'award';
 
 interface TenderPathLineProps {
   path: TenderPath;
@@ -41,10 +41,11 @@ export const TenderPathLine: React.FC<TenderPathLineProps> = ({ path, onGo }) =>
     : { key: 'award', text: 'التوصية: لم تُختر', tone: 'neutral' });
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-slate-100 text-xs">
+    <nav aria-label="مسار المناقصة" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-slate-100 text-xs">
       <span className="font-bold text-slate-500">مسار المناقصة:</span>
       {steps.map((s, i) => (
         <button
+          type="button"
           key={s.key}
           onClick={() => onGo(s.key)}
           className={`inline-flex items-start gap-2 font-bold px-1.5 py-0.5 rounded-md cursor-pointer transition text-right ${TONE[s.tone]}`}
@@ -54,6 +55,6 @@ export const TenderPathLine: React.FC<TenderPathLineProps> = ({ path, onGo }) =>
           <span>{s.text}</span>
         </button>
       ))}
-    </div>
+    </nav>
   );
 };
