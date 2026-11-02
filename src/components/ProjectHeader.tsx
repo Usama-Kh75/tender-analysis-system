@@ -1,32 +1,25 @@
 import React, { useState } from 'react';
-import { Pencil, Building2, Plus } from 'lucide-react';
-import { TenderProject, Bidder } from '../types/tender';
+import { Pencil, Settings } from 'lucide-react';
+import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { announcementLabel } from '../utils/tenderDetails';
-import { currentStatus, statusText } from '../utils/orderStatus';
+import { tenderPath } from '../utils/tenderPath';
+import { TenderPathLine, type PathTarget } from './TenderPathLine';
 
 interface ProjectHeaderProps {
   project: TenderProject;
-  activeBidder: Bidder;
   onChangeProjectField: (field: 'title' | 'referenceNumber', value: string) => void;
-  onSelectBidder: (id: string) => void;
-  onRenameBidder: (name: string) => void;
-  onAddBidder: () => void;
   onOpenSettings: () => void;
-  onOpenStatus: () => void;
+  onGo: (t: PathTarget) => void;
 }
 
-// بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، ومبدّل الشركة
+// بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، وسطر الموقف والمسار
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  project: currentProject, activeBidder, onChangeProjectField,
-  onSelectBidder, onRenameBidder, onAddBidder, onOpenSettings, onOpenStatus
+  project: currentProject, onChangeProjectField, onOpenSettings, onGo
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
-  const [isEditingBidderName, setIsEditingBidderName] = useState<boolean>(false);
-  const [tempBidderName, setTempBidderName] = useState<string>('');
-  const handleUpdateBidderName = onRenameBidder;
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
@@ -72,14 +65,6 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           >
             {announcementLabel(currentProject.announcementNo) ?? 'حدد الإعلان'}
           </button>
-          {/* موقف الطلبية الحالي: آخر إدخال في سجل المواقف، وغير المحدد يفتح النافذة لتسجيله */}
-          <button
-            onClick={onOpenStatus}
-            title="موقف الطلبية: أين هي الآن وبأي مذكرة"
-            className="bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold px-3.5 py-1 rounded-full border border-amber-200 cursor-pointer transition"
-          >
-            {(() => { const s = currentStatus(currentProject); return s ? `الموقف: ${statusText(s) || 'غير محدد'}` : 'حدد الموقف'; })()}
-          </button>
           {currentProject.entityName && (
             <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">
               {currentProject.entityName}
@@ -111,6 +96,14 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               ⚠️ حدد نوع الموازنة
             </button>
           )}
+          <button
+            onClick={onOpenSettings}
+            title="إعدادات المناقصة والنسب"
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-300 cursor-pointer transition"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            إعدادات المناقصة
+          </button>
         </div>
 
         <div className="text-xs text-slate-500 font-semibold">
@@ -153,78 +146,9 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             )}
           </div>
         </div>
-
-        {/* Right Controls: Active Bidder Switcher */}
-        <div className="flex items-center gap-3 flex-wrap">
-          
-          {/* Bidder Switcher, Inline Rename & Quick Add Button */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-2xl p-1.5 shadow-xs">
-            <div className="flex items-center gap-1 px-2">
-              <Building2 className="w-4 h-4 text-indigo-600" />
-              <span className="text-xs font-bold text-slate-600">الشركة:</span>
-            </div>
-
-            {!isEditingBidderName ? (
-              <>
-                <select
-                  value={activeBidder.id}
-                  onChange={(e) => {
-                    onSelectBidder(e.target.value);
-                  }}
-                  className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-black text-indigo-700 focus:outline-none cursor-pointer max-w-[220px] truncate"
-                >
-                  {currentProject.bidders.map(b => (
-                    <option key={b.id} value={b.id} className="text-slate-900">
-                      {b.name}{b.status === 'recommended' ? ' (★ موصى بالترسية)' : b.status === 'disqualified' ? ' (مستبعد)' : ''}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={() => {
-                    setTempBidderName(activeBidder.name);
-                    setIsEditingBidderName(true);
-                  }}
-                  className="p-1.5 text-slate-500 hover:text-indigo-700 hover:bg-white rounded-lg transition cursor-pointer"
-                  title="تعديل اسم الشركة النشطة حالياً"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </>
-            ) : (
-              <>
-                <input
-                  type="text"
-                  value={tempBidderName}
-                  onChange={(e) => setTempBidderName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (handleUpdateBidderName(tempBidderName.trim() || activeBidder.name), setIsEditingBidderName(false))}
-                  className="bg-white border border-indigo-400 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-black text-indigo-900 focus:outline-none ring-2 ring-indigo-500/20 w-56"
-                  autoFocus
-                />
-                <button
-                  onClick={() => {
-                    handleUpdateBidderName(tempBidderName.trim() || activeBidder.name);
-                    setIsEditingBidderName(false);
-                  }}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shrink-0 cursor-pointer"
-                >
-                  حفظ
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={() => onAddBidder()}
-              className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition cursor-pointer"
-              title="إضافة شركة / مقاول جديد للمناقصة"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ شركة جديدة</span>
-            </button>
-          </div>
-
-        </div>
       </div>
+
+      <TenderPathLine path={tenderPath(currentProject)} onGo={onGo} />
 
     </div>
   );

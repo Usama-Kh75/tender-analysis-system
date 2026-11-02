@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
 import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
+import { tenderPath } from './utils/tenderPath';
 import { exportTenderToExcel } from './utils/excelService';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
 
@@ -14,6 +15,9 @@ import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
+import { BidderCards } from './components/BidderCards';
+import type { PathTarget } from './components/TenderPathLine';
+import type { AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
 
 import { SmartTableImportModal } from './components/modals/SmartTableImportModal';
@@ -70,6 +74,10 @@ export function App() {
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
+  // عرض التدقيق على الجدول (يُربط بـBOQTable في Task 5): المرشح الابتدائي والفقرة المطلوب إبرازها
+  const [, setAuditMode] = useState(false);
+  const [, setAuditInitialFilter] = useState<AuditFilter>('all');
+  const [, setAuditFocusItemId] = useState<string | undefined>(undefined);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
@@ -136,6 +144,29 @@ export function App() {
     setIsPageBreaksOpen(false);
   };
 
+  // الانتقال من عناصر سطر المسار إلى أماكنها
+  const handleGo = (target: PathTarget) => {
+    const scrollToTable = () => setTimeout(() => {
+      document.getElementById('boq-table-container')?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+    if (target === 'estimate' || target === 'bids') {
+      setActiveTab('bids');
+      scrollToTable();
+    } else if (target === 'audit') {
+      const first = tenderPath(currentProject).audit.firstBidderId;
+      setActiveTab('bids');
+      if (first) selectBidder(first);
+      setAuditFocusItemId(undefined);
+      setAuditInitialFilter('pending');
+      setAuditMode(true);
+      scrollToTable();
+    } else if (target === 'award') {
+      setActiveTab('analysis');
+    } else {
+      setActiveTab('status');
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
       {recoveryNotice}
@@ -160,14 +191,20 @@ export function App() {
         {/* Project Header Info Banner */}
         <ProjectHeader
           project={currentProject}
-          activeBidder={activeBidder}
           onChangeProjectField={(field, value) =>
             setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, [field]: value, updatedAt: new Date().toISOString() } : p))}
-          onSelectBidder={selectBidder}
-          onRenameBidder={handleUpdateBidderName}
-          onAddBidder={handleAddNewBidder}
           onOpenSettings={() => setIsSettingsOpen(true)}
-          onOpenStatus={() => setIsStatusOpen(true)}
+          onGo={handleGo}
+        />
+
+        {activeTab === 'bids' && (
+          <>
+        <BidderCards
+          project={currentProject}
+          activeBidderId={activeBidder.id}
+          onSelect={selectBidder}
+          onRename={handleUpdateBidderName}
+          onAdd={handleAddNewBidder}
         />
 
         {/* Dynamic KPI Cards */}
@@ -184,6 +221,8 @@ export function App() {
             ...offerDeviationTotals(activeBidder.items, currentProject.deviationThreshold)
           } : undefined}
         />
+          </>
+        )}
 
         {/* Content based on Tab */}
         <div id="boq-table-container">
@@ -249,8 +288,13 @@ export function App() {
             />
             </>
           ) : (
-            // مؤقتاً إلى Task 7 (OrderStatusPanel)
-            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">قيد البناء</div>
+            // مؤقتاً إلى Task 7 (OrderStatusPanel): يبقى الموقف مفتوحاً بنافذته حتى يُبنى التبويب
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">
+              قيد البناء
+              <div className="mt-4">
+                <button onClick={() => setIsStatusOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-xl cursor-pointer">فتح موقف الطلبية</button>
+              </div>
+            </div>
           )}
         </div>
 
