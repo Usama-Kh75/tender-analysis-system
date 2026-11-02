@@ -13,7 +13,8 @@ import {
   Building2,
   FileSpreadsheet,
   Search,
-  Download
+  Download,
+  Printer
 } from 'lucide-react';
 import { AuditLogEntry, BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
@@ -158,6 +159,7 @@ interface BOQTableProps {
   onOpenSmartImport?: () => void;
   // جدول واقع الحال والجدول المعدل لهذا المجهز في ملف Excel (exportBidderAuditToExcel)
   onExportAudit?: () => void;
+  onOpenCorrectionNotice?: () => void;
   // العرض الموزون للعطاء النشط: active يُعدَّل فيه المفرد، adopted للعرض فقط، none الجدول العادي
   offerMode?: 'none' | 'active' | 'adopted';
   // عطاء آخر في المناقصة عرضه الموزون فعّال: الكمية والتخميني مقفلان (مشتركان)
@@ -194,6 +196,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onClearBidderPrices,
   onOpenSmartImport,
   onExportAudit,
+  onOpenCorrectionNotice,
   offerMode = 'none',
   sharedLocked = false,
   onEditOfferUnit,
@@ -416,6 +419,17 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 >
                   <Download className="w-4 h-4" />
                   <span>كشف التدقيق <bdi dir="ltr">(Excel)</bdi></span>
+                </button>
+              )}
+              {onOpenCorrectionNotice && correctedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onOpenCorrectionNotice}
+                  className={`${onExportAudit ? '' : 'mr-auto '}flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-black px-3.5 py-1.5 rounded-xl cursor-pointer border border-slate-300`}
+                  title="ورقة مطبوعة باسم المجهز بالفقرات التي صحّحتها اللجنة، ليحضر ويوقّع ويختم إزاءها"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>إشعار المجهز للتوقيع</span>
                 </button>
               )}
               <p className="w-full text-[11px] font-bold text-amber-900 leading-relaxed">

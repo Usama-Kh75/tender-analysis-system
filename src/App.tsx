@@ -23,6 +23,7 @@ import { SmartTableImportModal } from './components/modals/SmartTableImportModal
 import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
+import { CorrectionNoticeModal } from './components/modals/CorrectionNoticeModal';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
 import { OrderStatusPanel } from './components/OrderStatusPanel';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -77,6 +78,8 @@ export function App() {
   const [chartsOpen, setChartsOpen] = useState(false);
   // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
   const [auditProjectId, setAuditProjectId] = useState<string | null>(null);
+  // إشعار تصحيح المجهز: مفتاحه مناقصة ومجهز فيُغلق وحده إذا تغيّر أحدهما (نافذة عرض بلا إدخال: خارج blockingWork)
+  const [noticeKey, setNoticeKey] = useState<string | null>(null);
   const [auditInitialFilter, setAuditInitialFilter] = useState<AuditFilter>('pending');
   const [auditFocusItemId, setAuditFocusItemId] = useState<string | undefined>(undefined);
 
@@ -282,6 +285,7 @@ export function App() {
               onDuplicateItem={handleDuplicateItem}
               onClearBidderPrices={handleClearBidderPrices}
               onExportAudit={handleExportBidderAudit}
+              onOpenCorrectionNotice={() => setNoticeKey(`${currentProject.id}:${activeBidder.id}`)}
               onOpenSmartImport={() => {
                 // يُرفض قبل قراءة الملف لا بعدها: الإدراج مشترك فيرفضه قفل عرض أي مجهز، وكانت القراءة تضيع
                 if (ctx.blockedByOffer({ shared: true })) return;
@@ -438,6 +442,13 @@ export function App() {
           setIsProjectsOpen(false);
           setIsNewProjectOpen(true);
         }}
+      />
+
+      <CorrectionNoticeModal
+        isOpen={noticeKey === `${currentProject.id}:${activeBidder.id}`}
+        onClose={() => setNoticeKey(null)}
+        project={currentProject}
+        bidder={activeBidder}
       />
 
       <StatusSheetModal
