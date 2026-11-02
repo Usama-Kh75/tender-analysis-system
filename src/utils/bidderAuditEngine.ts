@@ -9,6 +9,14 @@ export const isCommitteeCorrected = (item: BOQItem) =>
   || item.originalUnitPrice !== undefined
   || item.originalWrittenText !== undefined;
 
+// أرقام المجهز كما دوّنها قبل أي تصحيح: المصدر الواحد لورقة «واقع الحال» في Excel ولعرض «كما قدّمه المجهز» على الشاشة
+export interface AsSubmitted { unit: number; total: number; writtenText?: string }
+export const asSubmitted = (item: BOQItem): AsSubmitted => ({
+  unit: item.originalUnitPrice ?? item.enteredUnitPrice ?? 0,
+  total: item.enteredBidderTotal || item.bidderTotal,
+  writtenText: item.originalWrittenText ?? item.writtenText
+});
+
 // تصحيح اللجنة على الأرقام (المبلغ أو المفرد) لا على نص التفقيط: وحده يمكن أن يكون في الحقيقة خطأ قراءة لا خطأ مجهز،
 // فتعرض الشاشة لهذه الفقرة «اعتماد الأرقام كما كُتبت في الورقة» (handleAcceptAsReading)
 export const hasNumericCommitteeCorrection = (item: BOQItem) =>

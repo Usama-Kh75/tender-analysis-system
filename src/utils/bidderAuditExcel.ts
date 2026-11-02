@@ -2,7 +2,7 @@
 // التصدير بمواصفات «عرض_المجهز_..._مطابق_للأصل.xlsx» التي اعتمدتها اللجنة. الاستيراد يبقى على xlsx
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
-import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
+import { asSubmitted, auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits, percentDecimals } from './calculations';
 import { exclusionThresholdOf } from './recommendation';
 import { summarizePages } from './pageSummary';
@@ -163,14 +163,12 @@ interface RowAnalysis {
 function analyseRow(item: BOQItem, bidderId: string, logs: AuditLogEntry[]): RowAnalysis {
   const corrected = isCommitteeCorrected(item);
   const adoption = corrected ? findAdoption(item, bidderId, logs) : undefined;
-  // التفقيط كما كتبه المجهز: اعتماد اللجنة تفقيطاً بعد إضافة «آلاف» يحفظ الأصل في originalWrittenText
-  const asWritten = item.originalWrittenText ?? item.writtenText;
+  // أرقام المجهز كما دوّنها (asSubmitted): اعتماد اللجنة تفقيطاً بعد إضافة «آلاف» يحفظ الأصل في originalWrittenText
+  const { unit, total: stated, writtenText: asWritten } = asSubmitted(item);
   const written = asWritten ? parseArabicTextToNumber(asWritten) : null;
-  const stated = item.enteredBidderTotal || item.bidderTotal;
   // اعتماد التفقيط سعراً للمفرد كان يكتب فوق المفرد المدون: إن لم يُحفظ الأصل فالمفرد الحالي هو التفقيط نفسه
   const unitLost = corrected && item.originalUnitPrice === undefined && !!adoption
     && adoption.action !== MATH_ADOPTION && written !== null && Math.abs((item.enteredUnitPrice || 0) - written) < 0.01;
-  const unit = item.originalUnitPrice ?? item.enteredUnitPrice ?? 0;
   const qty = item.quantity;
 
   const defects: string[] = [];
@@ -242,7 +240,7 @@ function buildAsIsSheet(project: TenderProject, bidder: Bidder, rows: RowAnalysi
       item.unit,
       input(item.quantity),
       unitLost ? 'غير محفوظ' : hasUnit ? input(unit) : '',
-      item.originalWrittenText ?? item.writtenText ?? '',
+      asSubmitted(item).writtenText ?? '',
       stated > 0 ? input(stated) : item.unpriced ? '-' : '',
       hasUnit && stated > 0 ? formula(`D${n}*E${n}`, product) : '',
       hasUnit && stated > 0 ? formula(`G${n}-H${n}`, stated - product) : '',
