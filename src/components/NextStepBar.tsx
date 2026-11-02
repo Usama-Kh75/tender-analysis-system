@@ -17,18 +17,18 @@ export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo }) => {
     ? 'bg-amber-50 border-amber-200 text-amber-900'
     : 'bg-slate-50 border-slate-200 text-slate-700';
   const btn = pendingWork
-    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+    ? 'bg-amber-700 hover:bg-amber-800 text-white'
     : 'bg-slate-700 hover:bg-slate-800 text-white';
   return (
     <nav aria-label="الخطوة التالية" className={`mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border px-3 py-2 text-xs ${tone}`}>
-      <span className="font-bold min-w-0 flex-1 basis-60">{step.text}</span>
-      <span className="flex flex-wrap items-center gap-2">
+      <span className="font-bold min-w-0 grow basis-60">{step.text}</span>
+      <span className="flex shrink-0 items-center gap-2">
         {step.actions.map(a => (
           <button
             type="button"
             key={a.label}
             onClick={() => onGo(a)}
-            className={`font-bold px-3 py-1.5 rounded-lg cursor-pointer transition ${btn}`}
+            className={`font-bold whitespace-nowrap px-3 py-1.5 rounded-lg cursor-pointer transition ${btn}`}
           >
             {a.label}
           </button>
