@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table2, Pencil, Award, BarChart3, Building2, Plus } from 'lucide-react';
+import { Pencil, Building2, Plus } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
@@ -9,9 +9,6 @@ import { currentStatus, statusText } from '../utils/orderStatus';
 interface ProjectHeaderProps {
   project: TenderProject;
   activeBidder: Bidder;
-  activeTab: 'table' | 'summary' | 'charts';
-  onSelectTableTab: () => void;
-  onSelectTab: (tab: 'summary' | 'charts') => void;
   onChangeProjectField: (field: 'title' | 'referenceNumber', value: string) => void;
   onSelectBidder: (id: string) => void;
   onRenameBidder: (name: string) => void;
@@ -20,9 +17,9 @@ interface ProjectHeaderProps {
   onOpenStatus: () => void;
 }
 
-// بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، ومبدّل الشركة، والتبويبات الثلاثة
+// بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، ومبدّل الشركة
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  project: currentProject, activeBidder, activeTab, onSelectTableTab, onSelectTab, onChangeProjectField,
+  project: currentProject, activeBidder, onChangeProjectField,
   onSelectBidder, onRenameBidder, onAddBidder, onOpenSettings, onOpenStatus
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
@@ -30,7 +27,6 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   const [isEditingBidderName, setIsEditingBidderName] = useState<boolean>(false);
   const [tempBidderName, setTempBidderName] = useState<string>('');
   const handleUpdateBidderName = onRenameBidder;
-  const handleSelectTableTab = onSelectTableTab;
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
@@ -158,7 +154,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: Active Bidder Switcher & Excel & 3 Main Tabs */}
+        {/* Right Controls: Active Bidder Switcher */}
         <div className="flex items-center gap-3 flex-wrap">
           
           {/* Bidder Switcher, Inline Rename & Quick Add Button */}
@@ -224,39 +220,6 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ شركة جديدة</span>
-            </button>
-          </div>
-
-          {/* View Tabs */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
-            <button
-              onClick={handleSelectTableTab}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                activeTab === 'table' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Table2 className="w-4 h-4" />
-              <span>الجدول المالي</span>
-            </button>
-
-            <button
-              onClick={() => onSelectTab('summary')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                activeTab === 'summary' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Award className="w-4 h-4 text-amber-900" />
-              <span>خلاصة الترسية والمقارنة 🏆</span>
-            </button>
-
-            <button
-              onClick={() => onSelectTab('charts')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                activeTab === 'charts' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>الرسوم البيانية</span>
             </button>
           </div>
 

@@ -31,7 +31,7 @@ import { ProjectsBrowserModal } from './components/modals/ProjectsBrowserModal';
 import { UpdateNotice } from './components/UpdateNotice';
 import { RecoveryNotice } from './components/RecoveryNotice';
 import { ForeignDomNotice } from './components/ForeignDomNotice';
-import { RESUMED_STATE } from './resume';
+import { RESUMED_STATE, type MainTab } from './resume';
 
 import { useProjectStore } from './app/useProjectStore';
 import { createEditContext } from './app/editContext';
@@ -51,7 +51,7 @@ export function App() {
     unsaved, recordBackup, downloadRecovered, dismissRecovered
   } = useProjectStore();
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
-  const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
+  const [activeTab, setActiveTab] = useState<MainTab>(RESUMED_STATE?.tab ?? 'bids');
 
   // Modals
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
@@ -86,7 +86,7 @@ export function App() {
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
 
   const { handleBackupAll, handleBackupProject, handleCreateProject, handleImportBackup, handleDeleteProject,
-    handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup, selectProject } = createProjectHandlers({
+    handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup } = createProjectHandlers({
     projects, setProjects, setActiveId, recordBackup, currentProject,
     closeSettings: () => setIsSettingsOpen(false),
     closeProjects: () => setIsProjectsOpen(false)
@@ -136,14 +136,6 @@ export function App() {
     setIsPageBreaksOpen(false);
   };
 
-  // Select Table Tab and Scroll
-  const handleSelectTableTab = () => {
-    setActiveTab('table');
-    setTimeout(() => {
-      document.getElementById('boq-table-container')?.scrollIntoView({ behavior: 'smooth' });
-    }, 50);
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
       {recoveryNotice}
@@ -151,15 +143,12 @@ export function App() {
 
       {/* Top Navbar */}
       <Navbar
-        project={currentProject}
-        projects={projects}
-        activeBidder={activeBidder}
-        onSelectProject={selectProject}
+        projectsCount={projects.length}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         onNewProject={() => setIsNewProjectOpen(true)}
         onOpenProjectsBrowser={() => setIsProjectsOpen(true)}
-        onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
         unsavedCount={unsaved.length}
         lastBackupAt={lastBackupTime(backupMarks)}
         onBackupAll={handleBackupAll}
@@ -172,9 +161,6 @@ export function App() {
         <ProjectHeader
           project={currentProject}
           activeBidder={activeBidder}
-          activeTab={activeTab}
-          onSelectTableTab={handleSelectTableTab}
-          onSelectTab={setActiveTab}
           onChangeProjectField={(field, value) =>
             setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, [field]: value, updatedAt: new Date().toISOString() } : p))}
           onSelectBidder={selectBidder}
@@ -201,7 +187,7 @@ export function App() {
 
         {/* Content based on Tab */}
         <div id="boq-table-container">
-          {activeTab === 'table' ? (
+          {activeTab === 'bids' ? (
             <>
             {hasBidAmounts(activeBidder) && (
               <div className="mb-4">
@@ -247,7 +233,8 @@ export function App() {
                 onOpenPageBreaks={() => setIsPageBreaksOpen(true)} />
             </div>
             </>
-          ) : activeTab === 'summary' ? (
+          ) : activeTab === 'analysis' ? (
+            <>
             <ExecutiveSummaryView
               project={currentProject}
               onSelectBidder={selectBidder}
@@ -255,12 +242,15 @@ export function App() {
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
             />
-          ) : (
             <ChartsView
               bidders={currentProject.bidders.filter(hasBidAmounts)}
               currency={currentProject.currency}
               exclusionThreshold={exclusionThresholdOf(currentProject)}
             />
+            </>
+          ) : (
+            // مؤقتاً إلى Task 7 (OrderStatusPanel)
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">قيد البناء</div>
           )}
         </div>
 
