@@ -55,18 +55,20 @@ export const TenderPathLine: React.FC<TenderPathLineProps> = ({ path, onGo }) =>
         {path.status === null ? 'حدد الموقف' : path.status || 'غير محدد'}
       </button>
 
-      <span className="w-px h-4 bg-slate-300" aria-hidden="true" />
-
-      <span className="font-bold text-slate-500">مسار المناقصة:</span>
+      {/* الفاصل مع العنوان في عنصر واحد كي يلتفا معاً */}
+      <span className="inline-flex items-center gap-3">
+        <span className="w-px h-4 bg-slate-300" aria-hidden="true" />
+        <span className="font-bold text-slate-500">مسار المناقصة:</span>
+      </span>
       {steps.map((s, i) => (
         <button
           key={s.key}
           onClick={() => onGo(s.key)}
-          className={`inline-flex items-center gap-2 font-bold px-1.5 py-0.5 rounded-md cursor-pointer transition whitespace-nowrap ${TONE[s.tone]}`}
+          className={`inline-flex items-start gap-2 font-bold px-1.5 py-0.5 rounded-md cursor-pointer transition text-right ${TONE[s.tone]}`}
         >
           {/* السهم داخل العنصر كي لا ينفصل عنه عند الالتفاف */}
-          {i > 0 && <span className="text-slate-400" aria-hidden="true">←</span>}
-          {s.text}
+          {i > 0 && <span className="text-slate-400 shrink-0" aria-hidden="true">←</span>}
+          <span>{s.text}</span>
         </button>
       ))}
     </div>

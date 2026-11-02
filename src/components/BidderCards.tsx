@@ -13,12 +13,13 @@ interface BidderCardsProps {
 
 // الشركات بطاقات، وعلى كل بطاقة حالة تدقيقها: ✓ مدقَّق (أخضر) أو N بانتظار قرار (كهرماني) أو لم تُدخل أسعاره
 export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd }) => {
-  const [editing, setEditing] = useState(false);
+  // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
 
   const commitRename = (current: string) => {
     onRename(tempName.trim() || current);
-    setEditing(false);
+    setEditingId(null);
   };
 
   return (
@@ -33,7 +34,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
               active ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200 hover:border-slate-400'
             }`}
           >
-            {active && editing ? (
+            {active && editingId === b.id ? (
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -41,9 +42,10 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                   onChange={(e) => setTempName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') commitRename(b.name);
-                    if (e.key === 'Escape') setEditing(false);
+                    if (e.key === 'Escape') setEditingId(null);
                   }}
                   className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-44"
+                  aria-label="اسم الشركة"
                   autoFocus
                 />
                 <button onClick={() => commitRename(b.name)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
@@ -74,7 +76,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                 </button>
                 {active && (
                   <button
-                    onClick={() => { setTempName(b.name); setEditing(true); }}
+                    onClick={() => { setTempName(b.name); setEditingId(b.id); }}
                     className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                     title="تعديل اسم الشركة"
                     aria-label="تعديل اسم الشركة"
