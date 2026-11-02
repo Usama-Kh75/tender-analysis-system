@@ -22,6 +22,10 @@ interface ExecutiveSummaryViewProps {
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
   onOpenPrint: () => void;
   onExportExcel: () => void;
+  // مقارنة المجهزين والرسوم: زرّان بجانب الطباعة (كانا في الشريط العلوي وتبويب مستقل)
+  onOpenMatrix: () => void;
+  chartsOpen: boolean;
+  onToggleCharts: () => void;
 }
 
 export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
@@ -29,7 +33,10 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   onSelectBidder,
   onUpdateBidderStatus,
   onOpenPrint,
-  onExportExcel
+  onExportExcel,
+  onOpenMatrix,
+  chartsOpen,
+  onToggleCharts
 }) => {
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
@@ -128,7 +135,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={onOpenPrint}
               className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer"
@@ -142,6 +149,23 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>تصدير Excel</span>
+            </button>
+            <button
+              onClick={onOpenMatrix}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer"
+              title="مقارنة كافة المجهزين"
+            >
+              <span>👥 مقارنة المجهزين</span>
+            </button>
+            <button
+              onClick={onToggleCharts}
+              aria-pressed={chartsOpen}
+              className={`flex items-center gap-2 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl border transition cursor-pointer ${
+                chartsOpen ? 'bg-slate-100 text-slate-900 border-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700'
+              }`}
+              title={chartsOpen ? 'إخفاء الرسوم البيانية' : 'إظهار الرسوم البيانية تحت الملخص'}
+            >
+              <span>📊 الرسوم</span>
             </button>
           </div>
 

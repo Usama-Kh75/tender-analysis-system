@@ -74,6 +74,7 @@ export function App() {
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
+  const [chartsOpen, setChartsOpen] = useState(false);
   // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
   const [auditProjectId, setAuditProjectId] = useState<string | null>(null);
   const [auditInitialFilter, setAuditInitialFilter] = useState<AuditFilter>('pending');
@@ -296,12 +297,17 @@ export function App() {
               onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
+              onOpenMatrix={() => setIsMultiBidderOpen(true)}
+              chartsOpen={chartsOpen}
+              onToggleCharts={() => setChartsOpen(o => !o)}
             />
-            <ChartsView
-              bidders={currentProject.bidders.filter(hasBidAmounts)}
-              currency={currentProject.currency}
-              exclusionThreshold={exclusionThresholdOf(currentProject)}
-            />
+            {chartsOpen && (
+              <ChartsView
+                bidders={currentProject.bidders.filter(hasBidAmounts)}
+                currency={currentProject.currency}
+                exclusionThreshold={exclusionThresholdOf(currentProject)}
+              />
+            )}
             </>
           ) : (
             // مؤقتاً إلى Task 7 (OrderStatusPanel): يبقى الموقف مفتوحاً بنافذته حتى يُبنى التبويب
