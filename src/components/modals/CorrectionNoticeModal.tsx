@@ -35,7 +35,7 @@ export const CorrectionNoticeModal: React.FC<CorrectionNoticeModalProps> = ({ is
       className="print-report-portal fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 print:static print:block print:bg-white print:p-0 print:backdrop-blur-none"
       role="dialog" aria-modal="true" aria-label="إشعار بالتصحيح الحسابي"
     >
-      <style>{'@media print { @page { size: A4 portrait; margin: 12mm; } .correction-notice-head th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }'}</style>
+      <style>{'@media print { @page { size: A4 portrait; margin: 12mm; } .correction-notice-head, .correction-notice-head th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }'}</style>
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden print:max-w-none print:max-h-none print:overflow-visible print:rounded-none print:shadow-none print:border-0 print:block">
 
         <div className="p-4 bg-slate-950 text-white flex items-center justify-between gap-3 flex-wrap no-print border-b border-amber-500/30">
