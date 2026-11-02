@@ -14,6 +14,7 @@ import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, excl
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
+import { rankingEffect } from '../utils/rankingEffect';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
@@ -459,6 +460,52 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
         </div>
 
       </div>
+
+      {(() => {
+        const effect = rankingEffect(project);
+        if (!effect) return null;
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-black text-slate-900 text-sm sm:text-base">أثر التصحيح الحسابي على الترتيب</h3>
+              <span className="text-xs text-slate-500 font-semibold">ضوابط رقم (4) خامساً/ب/6</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm text-right border-collapse">
+                <thead className="bg-slate-900 text-slate-100 text-xs font-black select-none">
+                  <tr>
+                    <th className="p-3.5 min-w-[180px] border-l border-slate-800">المجهز</th>
+                    <th className="p-3.5 text-center border-l border-slate-800">مبلغه كما قدّمه</th>
+                    <th className="p-3.5 text-center w-20 border-l border-slate-800">رتبته</th>
+                    <th className="p-3.5 text-center border-l border-slate-800">مبلغه بعد التصحيح</th>
+                    <th className="p-3.5 text-center w-20 border-l border-slate-800">رتبته</th>
+                    <th className="p-3.5 text-center w-40">التغيّر</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white font-medium">
+                  {[...effect.rows].sort((a, b) => a.rankAfter - b.rankAfter).map(r => (
+                    <tr key={r.bidderId} className={r.rankBefore !== r.rankAfter ? 'bg-amber-50/50 font-bold' : ''}>
+                      <td className="p-3.5 border-l border-slate-200">{r.name}</td>
+                      <td className="p-3.5 text-center font-mono border-l border-slate-200">{formatNumber(r.submittedTotal)}</td>
+                      <td className="p-3.5 text-center font-black border-l border-slate-200">{r.rankBefore}</td>
+                      <td className="p-3.5 text-center font-mono border-l border-slate-200">{formatNumber(r.correctedTotal)}</td>
+                      <td className="p-3.5 text-center font-black border-l border-slate-200">{r.rankAfter}</td>
+                      <td className="p-3.5 text-center">
+                        {r.rankBefore !== r.rankAfter
+                          ? <span className="text-amber-700">{r.rankBefore} ← {r.rankAfter}</span>
+                          : <span className="text-slate-400">{r.hasCorrections ? 'مصحَّح، الرتبة ثابتة' : '—'}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={`p-4 text-xs sm:text-sm font-black ${effect.changed ? 'text-amber-800' : 'text-slate-700'}`}>
+              {effect.changed ? 'غيّر التصحيح الحسابي ترتيب المجهزين' : 'لم يغيّر التصحيح الحسابي ترتيب المجهزين'}
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
