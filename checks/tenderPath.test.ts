@@ -1,10 +1,9 @@
-// سطر «الموقف + مسار المناقصة» وحالة كل شركة: يُستنتج من بيانات المناقصة ولا يُخزَّن (تبويبات العمل، 2026-11-02)
+// «الخطوة التالية» وحالة كل شركة: يُستنتج من بيانات المناقصة ولا يُخزَّن (تبويبات العمل، 2026-11-02)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject } from '../src/utils/storageService';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { statusText } from '../src/utils/orderStatus';
-import { bidderAuditState, tenderPath } from '../src/utils/tenderPath';
+import { bidderAuditState, nextStep, tenderPath } from '../src/utils/tenderPath';
 import type { Bidder, BOQItem, StatusEntry, TenderProject } from '../src/types/tender';
 
 const row = (id: string, bidderTotal: number, flags: Partial<BOQItem> = {}): Partial<BOQItem> => ({
@@ -67,9 +66,84 @@ test('التوصية: لا شيء قبل اختيار اللجنة، واسم ا
   assert.deepEqual(tenderPath(chosen).award, { name: 'أ' });
 });
 
-test('الموقف: null بلا سجل، ونص آخر إدخال', () => {
+const blankTender = () => createNewTenderProject({ title: 'ط', referenceNumber: '1', contractType: 'supply', budgetType: 'operating', bidderNames: ['أ', 'ب'] });
+const clean = (p: TenderProject): TenderProject => ({ ...p, bidders: p.bidders.map(b => ({ ...b, items: b.items.map(i => ({ ...i, hasMathError: false, hasTextDiscrepancy: false })) })) });
+const allIn = (): TenderProject => {
   const p = setup();
-  assert.equal(tenderPath(p).status, null);
+  return clean({ ...p, bidders: [p.bidders[0], p.bidders[1]] });
+};
+const chosen = (p: TenderProject): TenderProject => ({ ...p, bidders: p.bidders.map((b, i) => (i === 0 ? { ...b, status: 'recommended' as const } : b)) });
+
+test('الخطوة 1: بلا كلفة تخمينية، ولها الأولوية على المعلّق', () => {
+  const blank = blankTender();
+  const s = nextStep(blank)!;
+  assert.equal(s.kind, 'estimate');
+  assert.equal(s.text, 'الخطوة التالية: إدخال الكلفة التخمينية');
+  assert.deepEqual(s.actions, [{ label: 'إدخال الكلفة التخمينية', target: 'bids' }]);
+  // كلفة مفقودة مع معلّق ← estimate
+  const p0 = setup();
+  const noEst: TenderProject = { ...p0, bidders: [
+    bidder(p0.bidders[0], [row('1', 900, { estimatedTotal: 0 })]),
+    bidder(p0.bidders[1], [row('1', 950, { estimatedTotal: 0 })], [{ hasMathError: true }])
+  ] };
+  assert.equal(tenderPath(noEst).hasEstimate, false);
+  assert.equal(tenderPath(noEst).audit.pending > 0, true);
+  assert.equal(nextStep(noEst)!.kind, 'estimate');
+});
+
+test('الخطوة 2: فقرات بانتظار قرار، ويفتح أول شركة معلّقة', () => {
+  const p = setup();
+  const s = nextStep(p)!;
+  assert.equal(s.kind, 'audit');
+  assert.equal(s.text, 'الخطوة التالية: تصحيح الأخطاء الحسابية، 3 فقرة بانتظار قرار اللجنة');
+  assert.deepEqual(s.actions, [{ label: 'فتح التدقيق', target: 'audit', bidderId: p.bidders[1].id }]);
+});
+
+test('الخطوة 3: شركة بلا مبالغ باسمها', () => {
+  const p = clean(setup());
+  const s = nextStep(p)!;
+  assert.equal(s.kind, 'bids');
+  assert.equal(s.text, 'الخطوة التالية: إدخال عطاء «ج»');
+  assert.deepEqual(s.actions, [{ label: 'إدخال العطاء', target: 'bids', bidderId: p.bidders[2].id }]);
+});
+
+test('الخطوة 3: receivedBidsCount أكبر من الشركات', () => {
+  const p = { ...allIn(), receivedBidsCount: 3 };
+  const s = nextStep(p)!;
+  assert.equal(s.kind, 'bids');
+  assert.equal(s.text, 'الخطوة التالية: إدخال العطاء الباقي (2 من 3)');
+  assert.deepEqual(s.actions, [{ label: 'إدخال العطاء', target: 'bids' }]);
+});
+
+test('الخطوة 3: لا عطاء مدخلاً بعد وفيه كلفة ← إدخال عطاء، لا تدقيق ولا ترسية', () => {
+  const p = blankTender();
+  const withEst = { ...p, bidders: p.bidders.map(b => bidder(b, [row('1', 0)])) };
+  const s = nextStep(withEst)!;
+  assert.equal(s.kind, 'bids');
+  assert.equal(s.text, 'الخطوة التالية: إدخال عطاء «أ»');
+});
+
+test('الخطوة 4: عطاءات مدخلة بلا ترسية', () => {
+  const s = nextStep(allIn())!;
+  assert.equal(s.kind, 'award');
+  assert.equal(s.text, 'الخطوة التالية: دراسة العطاءات والتوصية بالإحالة');
+  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]);
+});
+
+test('الخطوة 5: الترسية مختارة بلا سجل موقف', () => {
+  const s = nextStep(chosen(allIn()))!;
+  assert.equal(s.kind, 'report');
+  assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل');
+  assert.deepEqual(s.actions, [
+    { label: 'فتح المحضر', target: 'analysis' },
+    { label: 'تسجيل الموقف', target: 'status' }
+  ]);
+  assert.equal(nextStep({ ...chosen(allIn()), statusLog: [] })!.kind, 'report');
+});
+
+test('الحالة الأخيرة: ترسية وسجل موقف ← null، والتراجع عن الترسية يعيد الخطوة 4', () => {
   const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
-  assert.equal(tenderPath({ ...p, statusLog: [e] }).status, statusText(e));
+  const done = { ...chosen(allIn()), statusLog: [e] };
+  assert.equal(nextStep(done), null);
+  assert.equal(nextStep({ ...done, bidders: done.bidders.map(b => ({ ...b, status: 'qualified' as const })) })!.kind, 'award');
 });

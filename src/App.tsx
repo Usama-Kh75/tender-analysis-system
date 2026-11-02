@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
 import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
-import { tenderPath } from './utils/tenderPath';
+import type { NextStepAction } from './utils/tenderPath';
 import { exportTenderToExcel } from './utils/excelService';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
 
@@ -16,7 +16,6 @@ import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
 import { BidderCards } from './components/BidderCards';
-import type { PathTarget } from './components/TenderPathLine';
 import { initialAuditFilter, type AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
 
@@ -169,25 +168,28 @@ export function App() {
     selectBidder(id);
   };
 
-  // الانتقال من عناصر سطر المسار إلى أماكنها
-  const handleGo = (target: PathTarget) => {
+  // الانتقال من أزرار «الخطوة التالية» إلى أماكنها
+  const handleGo = (action: NextStepAction) => {
     const scrollToTable = () => setTimeout(() => {
       document.getElementById('boq-table-container')?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
-    if (target === 'estimate' || target === 'bids') {
+    if (action.target === 'bids') {
       setActiveTab('bids');
+      if (action.bidderId) handlePickBidder(action.bidderId);
       scrollToTable();
-    } else if (target === 'audit') {
-      const first = tenderPath(currentProject).audit.firstBidderId;
+    } else if (action.target === 'audit') {
+      const first = action.bidderId;
       setActiveTab('bids');
-      if (first) selectBidder(first);
+      if (first) handlePickBidder(first);
       const target = currentProject.bidders.find(b => b.id === first) ?? activeBidder;
       setAuditFocusItemId(undefined);
       setAuditInitialFilter(initialAuditFilter(target.items));
       setAuditProjectId(currentProject.id);
       scrollToTable();
-    } else if (target === 'award') {
+    } else if (action.target === 'analysis') {
       setActiveTab('analysis');
+    } else {
+      setActiveTab('status');
     }
   };
 
@@ -218,6 +220,7 @@ export function App() {
           onChangeProjectField={(field, value) =>
             setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, [field]: value, updatedAt: new Date().toISOString() } : p))}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          showNextStep={activeTab !== 'status'}
           onGo={handleGo}
         />
 

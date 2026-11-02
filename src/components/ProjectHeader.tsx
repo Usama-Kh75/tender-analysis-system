@@ -4,19 +4,21 @@ import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { announcementLabel } from '../utils/tenderDetails';
-import { tenderPath } from '../utils/tenderPath';
-import { TenderPathLine, type PathTarget } from './TenderPathLine';
+import type { NextStepAction } from '../utils/tenderPath';
+import { NextStepBar } from './NextStepBar';
 
 interface ProjectHeaderProps {
   project: TenderProject;
   onChangeProjectField: (field: 'title' | 'referenceNumber', value: string) => void;
   onOpenSettings: () => void;
-  onGo: (t: PathTarget) => void;
+  /** الخطوة التالية تُعرض في تبويبي العطاءات والتحليل فقط */
+  showNextStep: boolean;
+  onGo: (a: NextStepAction) => void;
 }
 
-// بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، وسطر الموقف والمسار
+// بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، والخطوة التالية
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  project: currentProject, onChangeProjectField, onOpenSettings, onGo
+  project: currentProject, onChangeProjectField, onOpenSettings, showNextStep, onGo
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
@@ -148,7 +150,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         </div>
       </div>
 
-      <TenderPathLine path={tenderPath(currentProject)} onGo={onGo} />
+      {showNextStep && <NextStepBar project={currentProject} onGo={onGo} />}
 
     </div>
   );
