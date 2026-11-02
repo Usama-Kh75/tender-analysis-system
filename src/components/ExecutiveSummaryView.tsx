@@ -476,9 +476,9 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                   <tr>
                     <th className="p-3.5 min-w-[180px] border-l border-slate-800">المجهز</th>
                     <th className="p-3.5 text-center border-l border-slate-800">مبلغه كما قدّمه</th>
-                    <th className="p-3.5 text-center w-20 border-l border-slate-800">رتبته</th>
+                    <th className="p-3.5 text-center w-24 border-l border-slate-800">رتبته قبل التصحيح</th>
                     <th className="p-3.5 text-center border-l border-slate-800">مبلغه بعد التصحيح</th>
-                    <th className="p-3.5 text-center w-20 border-l border-slate-800">رتبته</th>
+                    <th className="p-3.5 text-center w-24 border-l border-slate-800">رتبته بعد التصحيح</th>
                     <th className="p-3.5 text-center w-40">التغيّر</th>
                   </tr>
                 </thead>
@@ -486,14 +486,14 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                   {[...effect.rows].sort((a, b) => a.rankAfter - b.rankAfter).map(r => (
                     <tr key={r.bidderId} className={r.rankBefore !== r.rankAfter ? 'bg-amber-50/50 font-bold' : ''}>
                       <td className="p-3.5 border-l border-slate-200">{r.name}</td>
-                      <td className="p-3.5 text-center font-mono border-l border-slate-200">{formatNumber(r.submittedTotal)}</td>
+                      <td className="p-3.5 text-center font-mono whitespace-nowrap border-l border-slate-200">{formatNumber(r.submittedTotal)}</td>
                       <td className="p-3.5 text-center font-black border-l border-slate-200">{r.rankBefore}</td>
-                      <td className="p-3.5 text-center font-mono border-l border-slate-200">{formatNumber(r.correctedTotal)}</td>
+                      <td className="p-3.5 text-center font-mono whitespace-nowrap border-l border-slate-200">{formatNumber(r.correctedTotal)}</td>
                       <td className="p-3.5 text-center font-black border-l border-slate-200">{r.rankAfter}</td>
                       <td className="p-3.5 text-center">
                         {r.rankBefore !== r.rankAfter
                           ? <span className="text-amber-700">{r.rankBefore} ← {r.rankAfter}</span>
-                          : <span className="text-slate-400">{r.hasCorrections ? 'مصحَّح، الرتبة ثابتة' : '—'}</span>}
+                          : <span className="text-slate-600 font-semibold">{r.hasCorrections ? 'مصحَّح، الرتبة ثابتة' : '—'}</span>}
                       </td>
                     </tr>
                   ))}

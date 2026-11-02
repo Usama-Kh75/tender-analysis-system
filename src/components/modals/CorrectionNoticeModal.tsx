@@ -76,7 +76,7 @@ export const CorrectionNoticeModal: React.FC<CorrectionNoticeModalProps> = ({ is
           ) : (
             <>
               <p className="text-sm leading-relaxed mb-4">
-                تبلّغ لجنة التحليل مقدّم العطاء ({bidder.name}) بوجود تصحيح حسابي في عطائه، ليحضر ويوقّع ويختم إزاء التصحيح الذي قامت به اللجنة — ضوابط رقم (4) خامساً/ب/3.
+                تبلّغ لجنة التحليل مقدّم العطاء (<bdi>{bidder.name}</bdi>) بوجود تصحيح حسابي في عطائه، ليحضر ويوقّع ويختم إزاء التصحيح الذي قامت به اللجنة — ضوابط رقم (4) خامساً/ب/3.
               </p>
               <table className="w-full border-collapse text-xs">
                 <thead>
@@ -98,7 +98,7 @@ export const CorrectionNoticeModal: React.FC<CorrectionNoticeModalProps> = ({ is
                       <td className={`${cell} text-center`}>{i + 1}</td>
                       <td className={`${cell} text-center`}><bdi>{r.itemNo}</bdi></td>
                       <td className={cell}>{r.description}</td>
-                      <td className={`${cell} text-center`}><bdi>{fmt(r.quantity)}</bdi></td>
+                      <td className={`${cell} text-center`}><bdi>{fmt(r.quantity)}</bdi> {r.unit}</td>
                       <td className={`${cell} text-center`}>{r.submittedUnit === null ? 'غير محفوظ' : <bdi>{fmt(r.submittedUnit)}</bdi>}</td>
                       <td className={`${cell} text-center`}><bdi>{fmt(r.submittedTotal)}</bdi></td>
                       <td className={`${cell} text-center`}><bdi>{fmt(r.adoptedUnit)}</bdi></td>
@@ -107,6 +107,13 @@ export const CorrectionNoticeModal: React.FC<CorrectionNoticeModalProps> = ({ is
                     </tr>
                   ))}
                   <tr className="break-inside-avoid font-black bg-slate-50">
+                    <td colSpan={5} className={`${cell} text-center`}>مجموع الفقرات المصحَّحة</td>
+                    <td className={`${cell} text-center`}><bdi>{fmt(rows.reduce((s, r) => s + r.submittedTotal, 0))}</bdi></td>
+                    <td className={cell}></td>
+                    <td className={`${cell} text-center`}><bdi>{fmt(rows.reduce((s, r) => s + r.adoptedTotal, 0))}</bdi></td>
+                    <td className={cell}></td>
+                  </tr>
+                  <tr className="break-inside-avoid font-black bg-slate-100">
                     <td colSpan={7} className={`${cell} text-center`}>فرق المجموع (المعتمد − كما قدّمه)</td>
                     <td className={`${cell} text-center`}><bdi dir="ltr">{diffText}</bdi></td>
                     <td className={cell}></td>
@@ -114,9 +121,10 @@ export const CorrectionNoticeModal: React.FC<CorrectionNoticeModalProps> = ({ is
                 </tbody>
               </table>
 
-              <div className="break-inside-avoid grid grid-cols-2 gap-8 pt-10 text-xs font-bold">
+              <div className="break-inside-avoid break-before-avoid grid grid-cols-2 gap-8 pt-10 text-xs font-bold">
                 <div className="border-t border-slate-400 pt-2 text-center">
                   <div>رئيس لجنة التحليل</div>
+                  {project.committeeChairman?.trim() && <div className="mt-2 font-black">{project.committeeChairman.trim()}</div>}
                   <div className="mt-6 text-slate-600">التوقيع: .....................</div>
                 </div>
                 <div className="border-t border-slate-400 pt-2 text-center space-y-4">
