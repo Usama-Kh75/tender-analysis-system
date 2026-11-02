@@ -15,8 +15,8 @@ const TONE: Record<Tone, string> = {
   neutral: 'text-slate-600 hover:bg-slate-100'
 };
 
-// سطر تحت العنوان في التبويبات الثلاثة: «الموقف» (حالة تلازم الطلبية، منفصلة بلا سهم)
-// ثم «مسار المناقصة» خطوات بينها أسهم. كل عنصر زر ينقل إلى مكانه.
+// سطر تحت العنوان في التبويبات الثلاثة: «مسار المناقصة» خطوات بينها أسهم، كل عنصر زر ينقل إلى مكانه.
+// الموقف لا يُعرض هنا (قرار أسامة 2026-11-02): كل ما يخصه في تبويبه.
 export const TenderPathLine: React.FC<TenderPathLineProps> = ({ path, onGo }) => {
   const steps: { key: PathTarget; text: string; tone: Tone }[] = [];
 
@@ -42,24 +42,7 @@ export const TenderPathLine: React.FC<TenderPathLineProps> = ({ path, onGo }) =>
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-slate-100 text-xs">
-      <span className="font-bold text-slate-500">الموقف:</span>
-      <button
-        onClick={() => onGo('status')}
-        title="الانتقال إلى تبويب الموقف"
-        className={`font-black px-2.5 py-1 rounded-full border cursor-pointer transition ${
-          path.status === null
-            ? 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
-            : 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
-        }`}
-      >
-        {path.status === null ? 'حدد الموقف' : path.status || 'غير محدد'}
-      </button>
-
-      {/* الفاصل مع العنوان في عنصر واحد كي يلتفا معاً */}
-      <span className="inline-flex items-center gap-3">
-        <span className="w-px h-4 bg-slate-300" aria-hidden="true" />
-        <span className="font-bold text-slate-500">مسار المناقصة:</span>
-      </span>
+      <span className="font-bold text-slate-500">مسار المناقصة:</span>
       {steps.map((s, i) => (
         <button
           key={s.key}
