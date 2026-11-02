@@ -25,7 +25,7 @@ import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
-import { OrderStatusModal } from './components/modals/OrderStatusModal';
+import { OrderStatusPanel } from './components/OrderStatusPanel';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PageBreaksModal } from './components/modals/PageBreaksModal';
 import { PageSummaryTable } from './components/PageSummaryTable';
@@ -66,7 +66,8 @@ export function App() {
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  // نموذج تبويب الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
+  const [isStatusDirty, setIsStatusDirty] = useState(false);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
@@ -84,7 +85,7 @@ export function App() {
   const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
     : isSmartImportOpen ? 'استيراد جدول'
     : isSettingsOpen ? 'إعدادات المناقصة'
-    : isStatusOpen ? 'موقف الطلبية'
+    : isStatusDirty ? 'موقف الطلبية'
     : isStatusSheetOpen ? 'كشف موقف الطلبيات'
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
@@ -310,13 +311,15 @@ export function App() {
             )}
             </>
           ) : (
-            // مؤقتاً إلى Task 7 (OrderStatusPanel): يبقى الموقف مفتوحاً بنافذته حتى يُبنى التبويب
-            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">
-              قيد البناء
-              <div className="mt-4">
-                <button onClick={() => setIsStatusOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-xl cursor-pointer">فتح موقف الطلبية</button>
-              </div>
-            </div>
+            <OrderStatusPanel
+              key={currentProject.id}
+              project={currentProject}
+              onAdd={handleAddStatus}
+              onEdit={handleEditStatus}
+              onDelete={handleDeleteStatus}
+              onOpenSheet={() => setIsStatusSheetOpen(true)}
+              onDirtyChange={setIsStatusDirty}
+            />
           )}
         </div>
 
@@ -372,17 +375,6 @@ export function App() {
         items={activeBidder.items}
         bidderName={activeBidder.name}
         onApply={handleApplyPageBreaks}
-      />
-
-      <OrderStatusModal
-        // يُعاد إنشاؤه مع كل فتح ومع كل مناقصة فتبدأ حقوله من جديد
-        key={`${currentProject.id}-status-${isStatusOpen}`}
-        isOpen={isStatusOpen}
-        onClose={() => setIsStatusOpen(false)}
-        project={currentProject}
-        onAdd={handleAddStatus}
-        onEdit={handleEditStatus}
-        onDelete={handleDeleteStatus}
       />
 
       <ProjectSettingsModal

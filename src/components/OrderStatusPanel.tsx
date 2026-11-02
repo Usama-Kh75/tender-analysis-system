@@ -1,24 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, MapPin } from 'lucide-react';
-import type { StatusBranch, StatusStage, TenderProject } from '../../types/tender';
-import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusText } from '../../utils/orderStatus';
-import { localDate } from '../../utils/localDate';
-import type { StatusInput } from '../../app/statusHandlers';
+import { Printer } from 'lucide-react';
+import type { StatusBranch, StatusStage, TenderProject } from '../types/tender';
+import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusText } from '../utils/orderStatus';
+import { localDate } from '../utils/localDate';
+import type { StatusInput } from '../app/statusHandlers';
 
-interface OrderStatusModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface OrderStatusPanelProps {
   project: TenderProject;
   onAdd: (input: StatusInput) => string | null;
   onEdit: (id: string, input: StatusInput) => string | null;
   onDelete: (id: string) => void;
+  onOpenSheet: () => void;
+  // نموذج فيه إدخال لم يُحفظ: يمنع «حفظ والتحديث» (blockingWork في App)
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 const fieldClass = 'w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none';
 const labelClass = 'block text-xs font-bold text-slate-700 mb-1';
 
-// نافذة موقف الطلبية: إضافة موقف جديد، وسجل المواقف (الأحدث أولاً) مع تعديل وحذف
-export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onClose, project, onAdd, onEdit, onDelete }) => {
+// تبويب موقف الطلبية: إضافة موقف جديد، وسجل المواقف (الأحدث أولاً) مع تعديل وحذف.
+// يُنشأ بـkey=معرّف المناقصة فيبدأ نموذجه فارغاً لكل مناقصة
+export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onAdd, onEdit, onDelete, onOpenSheet, onDirtyChange }) => {
   const [stage, setStage] = useState<StatusStage>('analysis');
   const [branch, setBranch] = useState<StatusBranch | ''>('');
   const [customText, setCustomText] = useState('');
@@ -30,15 +32,12 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
 
   const stageRef = useRef<HTMLSelectElement>(null);
 
-  // Escape يغلق النافذة، كما تُغلق بزر الإغلاق
+  // النموذج «متسخ» إن اختلف حقل عن قيمته الابتدائية أو كان تعديلاً جارياً
+  const dirty = editingId !== null || stage !== 'analysis' || branch !== '' || customText !== '' || memoNo !== '' || memoDate !== localDate() || note !== '';
   useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
 
   const branches = branchesOf(stage);
   // الأحدث إدخالاً أولاً: الأخير في المصفوفة هو الموقف الحالي
@@ -97,25 +96,19 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="موقف الطلبية">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold">موقف الطلبية</h2>
-              <p className="text-xs text-slate-400">أين الطلبية الآن وبأي مذكرة، والأخير في السجل هو الموقف الحالي</p>
-            </div>
-          </div>
-          <button onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden" aria-label="موقف الطلبية">
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-base sm:text-lg font-black text-slate-900">موقف الطلبية</h2>
+          <p className="text-xs text-slate-500">أين الطلبية الآن وبأي مذكرة، والأخير في السجل هو الموقف الحالي</p>
         </div>
-
-        <div className="p-6 space-y-5 bg-slate-50 flex-1 overflow-y-auto">
+        <button type="button" onClick={onOpenSheet} className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-black px-3.5 py-2 rounded-xl border border-slate-300 cursor-pointer">
+          <Printer className="w-4 h-4" />
+          <span>كشف الموقف</span>
+        </button>
+      </div>
+      <div>
+        <div className="p-6 space-y-5">
           <form onSubmit={handleSubmit} className="space-y-3">
             <h3 className="text-sm font-black text-slate-800">{editingId ? 'تعديل الموقف' : 'إضافة موقف جديد'}</h3>
 
@@ -185,7 +178,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
                     <div className="text-xs space-y-0.5 min-w-0 flex-1">
                       <div className="font-black text-slate-900">
                         {statusText(entry) || 'غير محدد'}
-                        {entry.id === currentId && <span className="mr-2 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5">الحالي</span>}
+                        {entry.id === currentId && <span className="mr-2 text-[10px] bg-blue-50 text-blue-800 border border-blue-300 rounded-full px-2 py-0.5">الموقف الحالي</span>}
                       </div>
                       <div className="text-slate-600">
                         {entry.memoNo ? <>مذكرة رقم <bdi>{entry.memoNo}</bdi> — </> : ''}<bdi>{formatSheetDate(entry.memoDate)}</bdi>
