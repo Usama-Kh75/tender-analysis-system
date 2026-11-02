@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { unitPriceOutliers } from './utils/unitOutliers';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
 import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
@@ -217,6 +218,7 @@ export function App() {
             )}
             <BOQTable
               items={activeBidder.items}
+              unitOutliers={unitPriceOutliers(currentProject).filter(row => row.bidderId === activeBidder.id)}
               totals={activeBidder.totals}
               currency={currentProject.currency}
               deviationThreshold={currentProject.deviationThreshold}
