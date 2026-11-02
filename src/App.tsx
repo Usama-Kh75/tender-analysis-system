@@ -74,10 +74,10 @@ export function App() {
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
-  // عرض التدقيق على الجدول (يُربط بـBOQTable في Task 5): المرشح الابتدائي والفقرة المطلوب إبرازها
-  const [, setAuditMode] = useState(false);
-  const [, setAuditInitialFilter] = useState<AuditFilter>('all');
-  const [, setAuditFocusItemId] = useState<string | undefined>(undefined);
+  // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
+  const [auditProjectId, setAuditProjectId] = useState<string | null>(null);
+  const [auditInitialFilter, setAuditInitialFilter] = useState<AuditFilter>('pending');
+  const [auditFocusItemId, setAuditFocusItemId] = useState<string | undefined>(undefined);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
@@ -91,6 +91,7 @@ export function App() {
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
+  const auditMode = !!currentProject && auditProjectId === currentProject.id;
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
 
   const { handleBackupAll, handleBackupProject, handleCreateProject, handleImportBackup, handleDeleteProject,
@@ -144,6 +145,16 @@ export function App() {
     setIsPageBreaksOpen(false);
   };
 
+  // فتح عرض التدقيق وإغلاقه؛ من شارة فقرة يُفتح بالمرشح «الكل» عند الفقرة نفسها
+  const handleAuditModeChange = (open: boolean, focusItemId?: string) => {
+    setAuditProjectId(open ? currentProject.id : null);
+    setAuditFocusItemId(open ? focusItemId : undefined);
+    if (open) {
+      const hasPending = activeBidder.items.some(i => i.hasMathError || i.hasTextDiscrepancy);
+      setAuditInitialFilter(focusItemId || !hasPending ? 'all' : 'pending');
+    }
+  };
+
   // الانتقال من عناصر سطر المسار إلى أماكنها
   const handleGo = (target: PathTarget) => {
     const scrollToTable = () => setTimeout(() => {
@@ -158,7 +169,7 @@ export function App() {
       if (first) selectBidder(first);
       setAuditFocusItemId(undefined);
       setAuditInitialFilter('pending');
-      setAuditMode(true);
+      setAuditProjectId(currentProject.id);
       scrollToTable();
     } else if (target === 'award') {
       setActiveTab('analysis');
@@ -234,6 +245,11 @@ export function App() {
               </div>
             )}
             <BOQTable
+              auditMode={auditMode}
+              onAuditModeChange={handleAuditModeChange}
+              auditFocusItemId={auditFocusItemId}
+              auditInitialFilter={auditInitialFilter}
+              bidderId={activeBidder.id}
               items={activeBidder.items}
               totals={activeBidder.totals}
               currency={currentProject.currency}
