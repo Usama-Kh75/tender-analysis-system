@@ -26,3 +26,6 @@ export function auditFilterMatch(i: BOQItem, f: AuditFilter, pinned: Set<string>
 export function isHandled(i: BOQItem, pinned: Set<string>): boolean {
   return pinned.has(i.id) && !isPending(i);
 }
+
+/** المرشح الذي يُفتح به عرض التدقيق: «بانتظار قرار» إن وُجدت فقرات معلّقة، وإلا «الكل» فلا يُعرض جدول فارغ */
+export const initialAuditFilter = (items: BOQItem[]): AuditFilter => (items.some(isPending) ? 'pending' : 'all');

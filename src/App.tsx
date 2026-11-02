@@ -17,7 +17,7 @@ import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
 import { BidderCards } from './components/BidderCards';
 import type { PathTarget } from './components/TenderPathLine';
-import type { AuditFilter } from './utils/tableFilters';
+import { initialAuditFilter, type AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
 
 import { SmartTableImportModal } from './components/modals/SmartTableImportModal';
@@ -93,6 +93,13 @@ export function App() {
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
+  // ضبط الحالة أثناء العرض: عرض التدقيق وفقرته المقصودة يخصان مناقصة بعينها، فلا يعودان وحدهما إذا رُجع إليها
+  const [prevProjectId, setPrevProjectId] = useState(currentProject?.id);
+  if (prevProjectId !== currentProject?.id) {
+    setPrevProjectId(currentProject?.id);
+    setAuditProjectId(null);
+    setAuditFocusItemId(undefined);
+  }
   const auditMode = !!currentProject && auditProjectId === currentProject.id;
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
 
@@ -152,9 +159,14 @@ export function App() {
     setAuditProjectId(open ? currentProject.id : null);
     setAuditFocusItemId(open ? focusItemId : undefined);
     if (open) {
-      const hasPending = activeBidder.items.some(i => i.hasMathError || i.hasTextDiscrepancy);
-      setAuditInitialFilter(focusItemId || !hasPending ? 'all' : 'pending');
+      setAuditInitialFilter(focusItemId ? 'all' : initialAuditFilter(activeBidder.items));
     }
+  };
+
+  // اختيار شركة من البطاقات أو الملخص: الفقرة المقصودة بالتدقيق تخص الشركة السابقة (معرّفات الفقرات قد تتكرر بين الشركات)
+  const handlePickBidder = (id: string) => {
+    if (id !== activeBidder.id) setAuditFocusItemId(undefined);
+    selectBidder(id);
   };
 
   // الانتقال من عناصر سطر المسار إلى أماكنها
@@ -169,8 +181,9 @@ export function App() {
       const first = tenderPath(currentProject).audit.firstBidderId;
       setActiveTab('bids');
       if (first) selectBidder(first);
+      const target = currentProject.bidders.find(b => b.id === first) ?? activeBidder;
       setAuditFocusItemId(undefined);
-      setAuditInitialFilter('pending');
+      setAuditInitialFilter(initialAuditFilter(target.items));
       setAuditProjectId(currentProject.id);
       scrollToTable();
     } else if (target === 'award') {
@@ -215,7 +228,7 @@ export function App() {
         <BidderCards
           project={currentProject}
           activeBidderId={activeBidder.id}
-          onSelect={selectBidder}
+          onSelect={handlePickBidder}
           onRename={handleUpdateBidderName}
           onAdd={handleAddNewBidder}
         />
@@ -252,6 +265,7 @@ export function App() {
               auditFocusItemId={auditFocusItemId}
               auditInitialFilter={auditInitialFilter}
               bidderId={activeBidder.id}
+              auditLogs={currentProject.auditLogs}
               items={activeBidder.items}
               totals={activeBidder.totals}
               currency={currentProject.currency}
@@ -294,7 +308,7 @@ export function App() {
             <>
             <ExecutiveSummaryView
               project={currentProject}
-              onSelectBidder={selectBidder}
+              onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
@@ -355,7 +369,7 @@ export function App() {
         isOpen={isMultiBidderOpen}
         onClose={() => setIsMultiBidderOpen(false)}
         project={currentProject}
-        onSelectBidder={selectBidder}
+        onSelectBidder={handlePickBidder}
         onAddNewBidder={handleAddNewBidder}
         onUpdateBidderStatus={handleUpdateBidderStatus}
         onDeleteBidder={handleDeleteBidder}

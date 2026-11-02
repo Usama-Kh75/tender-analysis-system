@@ -2,8 +2,8 @@
 // التصدير بمواصفات «عرض_المجهز_..._مطابق_للأصل.xlsx» التي اعتمدتها اللجنة. الاستيراد يبقى على xlsx
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
-import { asSubmitted, auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
-import { toLatinDigits, percentDecimals } from './calculations';
+import { ADOPTION_ACTIONS, asSubmitted, auditRowAmounts, findAdoption, isCommitteeCorrected, unitLostOf, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
+import { percentDecimals } from './calculations';
 import { exclusionThresholdOf } from './recommendation';
 import { summarizePages } from './pageSummary';
 import { isOfferEdited, offerStatus } from './weightedOffer';
@@ -22,18 +22,17 @@ import { tenderDetailParts } from './tenderDetails';
 
 // أزرار الاعتماد في BOQTable تسجّل هذه الإجراءات، وسند كل منها في ضوابط رقم (4) خامساً/ب
 const ADOPTIONS: Record<string, string> = {
-  'اعتماد تصحيح خطأ الضرب بقرار اللجنة':
+  [ADOPTION_ACTIONS.math]:
     'اعتماد حاصل ضرب سعر المفرد في الكمية (ضوابط رقم (4) خامساً/ب/2)',
-  'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة':
+  [ADOPTION_ACTIONS.unit]:
     'اعتماد سعر المفرد المكتوب كتابةً (ضوابط رقم (4) خامساً/ب/1) والمبلغ حاصل ضربه في الكمية (خامساً/ب/2)',
-  'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة':
+  [ADOPTION_ACTIONS.amount]:
     'اعتماد مبلغ الفقرة المكتوب كتابةً (ضوابط رقم (4) خامساً/ب/1)',
-  'اعتماد التفقيط بعد إضافة «آلاف» بقرار اللجنة':
+  [ADOPTION_ACTIONS.thousands]:
     'اعتماد التفقيط بعد إضافة كلمة «آلاف» الناقصة، فيوافق الأرقام المدونة (ضوابط رقم (4) خامساً/ب/3: تصحيح تبلّغه اللجنة للمجهز)',
-  'اعتماد المبلغ وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية':
+  [ADOPTION_ACTIONS.decimal]:
     'اعتماد مبلغ الفقرة كما دوّنه المجهز وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية (ضوابط رقم (4) خامساً/ب/2، الاستثناء)'
 };
-const MATH_ADOPTION = 'اعتماد تصحيح خطأ الضرب بقرار اللجنة';
 // حضور المجهز وتوقيعه وختمه إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)، كما أشّرته اللجنة في الجدول
 const signatureText = (item: BOQItem) => isSignedCorrection(item)
   ? 'وقّع المجهز وختم إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)'
@@ -142,12 +141,6 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
   return ws;
 }
 
-// آخر اعتماد للجنة على الفقرة (السجل من الأحدث): يطابق المجهز ورقم الفقرة والمبلغ الذي انتهى إليه. سجلات ما
-// قبل 1.12.0 بلا مجهز تُطابق بالرقم والمبلغ وحدهما، وإلا التبس تصحيح مجهزين انتهيا إلى المبلغ نفسه
-const findAdoption = (item: BOQItem, bidderId: string, logs: AuditLogEntry[]) =>
-  logs.find(l => ADOPTIONS[l.action] && (!l.bidderId || l.bidderId === bidderId)
-    && toLatinDigits(String(l.itemNo)) === toLatinDigits(String(item.itemNo)) && Math.abs(Number(l.newValue) - item.bidderTotal) < 0.01);
-
 interface RowAnalysis {
   item: BOQItem;
   corrected: boolean;
@@ -166,9 +159,8 @@ function analyseRow(item: BOQItem, bidderId: string, logs: AuditLogEntry[]): Row
   // أرقام المجهز كما دوّنها (asSubmitted): اعتماد اللجنة تفقيطاً بعد إضافة «آلاف» يحفظ الأصل في originalWrittenText
   const { unit, total: stated, writtenText: asWritten } = asSubmitted(item);
   const written = asWritten ? parseArabicTextToNumber(asWritten) : null;
-  // اعتماد التفقيط سعراً للمفرد كان يكتب فوق المفرد المدون: إن لم يُحفظ الأصل فالمفرد الحالي هو التفقيط نفسه
-  const unitLost = corrected && item.originalUnitPrice === undefined && !!adoption
-    && adoption.action !== MATH_ADOPTION && written !== null && Math.abs((item.enteredUnitPrice || 0) - written) < 0.01;
+  // اعتماد التفقيط سعراً للمفرد قبل أن يحفظ النظام الرقم الأصلي (المصدر المشترك مع الشاشة)
+  const unitLost = unitLostOf(item, adoption);
   const qty = item.quantity;
 
   const defects: string[] = [];

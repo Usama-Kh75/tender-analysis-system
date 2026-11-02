@@ -29,10 +29,10 @@ interface NavbarProps {
 }
 
 // ثلاثة تبويبات: لكل واحد سؤال واحد (مجهز واحد، المجهزون معاً، مسار الطلبية)
-const TABS: { id: MainTab; label: string; short: string; Icon: React.ElementType }[] = [
-  { id: 'bids', label: 'العطاءات', short: 'العطاءات', Icon: Table2 },
-  { id: 'analysis', label: 'التحليل والتوصية', short: 'التحليل', Icon: Award },
-  { id: 'status', label: 'الموقف', short: 'الموقف', Icon: MapPin }
+const TABS: { id: MainTab; label: string; Icon: React.ElementType }[] = [
+  { id: 'bids', label: 'العطاءات', Icon: Table2 },
+  { id: 'analysis', label: 'التحليل والتوصية', Icon: Award },
+  { id: 'status', label: 'الموقف', Icon: MapPin }
 ];
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -80,8 +80,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* التبويبات الثلاثة: المفتوح بخط سفلي أزرق وخلفية أفتح */}
-          <div role="tablist" aria-label="أقسام العمل" className="flex items-stretch h-full mx-1 sm:mx-3 min-w-0">
-            {TABS.map(({ id, label, short, Icon }) => {
+          <div role="tablist" aria-label="أقسام العمل" className="flex items-stretch h-full mx-1 sm:mx-3 min-w-0 overflow-x-auto">
+            {TABS.map(({ id, label, Icon }) => {
               const on = activeTab === id;
               return (
                 <button
@@ -90,20 +90,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-selected={on}
                   onClick={() => onSelectTab(id)}
                   title={label}
-                  className={`flex items-center gap-1.5 px-2 sm:px-4 text-xs sm:text-sm font-black whitespace-nowrap border-b-4 transition cursor-pointer ${
+                  aria-label={label}
+                  className={`flex items-center gap-1.5 px-2.5 lg:px-4 text-xs sm:text-sm font-black whitespace-nowrap border-b-4 transition cursor-pointer ${
                     on ? 'border-blue-400 bg-slate-800/80 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-900'
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${on ? 'text-blue-300' : ''}`} />
+                  {/* تحت lg أيقونة وحدها (مع aria-label وtitle)، وبعدها الاسم الكامل */}
                   <span className="hidden lg:inline">{label}</span>
-                  <span className="lg:hidden">{short}</span>
                 </button>
               );
             })}
           </div>
 
           {/* Left Side: Clean Action Tools */}
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
 
             {/* نسخة احتياطية شاملة: العدد = المناقصات التي تغيّرت منذ آخر نسخة تحويها */}
             <button

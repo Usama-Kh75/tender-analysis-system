@@ -1,4 +1,4 @@
-import { asSubmitted, isCommitteeCorrected } from '../utils/bidderAuditEngine';
+import { asSubmitted, findAdoption, isCommitteeCorrected, submittedFlags, submittedTotal, unitLostOf } from '../utils/bidderAuditEngine';
 import { AuditCell } from './AuditCell';
 import { MoreMenu } from './MoreMenu';
 import { auditFilterMatch, isHandled, isPending, pinPending, type AuditFilter, type NormalFilter } from '../utils/tableFilters';
@@ -15,7 +15,7 @@ import {
   Search,
   Download
 } from 'lucide-react';
-import { BOQItem, TenderTotals, ReadingField } from '../types/tender';
+import { AuditLogEntry, BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
 import { isOfferEdited, offerItemView } from '../utils/weightedOffer';
 
@@ -43,7 +43,7 @@ const useMeasuredHeight = (initial: number) => {
   return [ref, height] as const;
 };
 
-const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string; fractionDigits?: number; readOnly?: boolean }> = ({ value, onChange, className, label, placeholder = '0.00', fractionDigits, readOnly }) => {
+const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; className: string; label: string; placeholder?: string; fractionDigits?: number; readOnly?: boolean; readOnlyTitle?: string }> = ({ value, onChange, className, label, placeholder = '0.00', fractionDigits, readOnly, readOnlyTitle = 'مقفل أثناء العرض الموزون' }) => {
   const [draft, setDraft] = useState<string | null>(null);
   const cancelled = useRef(false);
   return (
@@ -53,7 +53,7 @@ const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; clas
       dir="ltr"
       aria-label={label}
       readOnly={readOnly}
-      title={readOnly ? 'مقفل أثناء العرض الموزون' : undefined}
+      title={readOnly ? readOnlyTitle : undefined}
       value={draft ?? (value ? displayAmount(value, fractionDigits) : '')}
       onFocus={() => { if (readOnly) return; cancelled.current = false; setDraft(value ? String(value) : ''); }}
       onChange={(e) => setDraft(e.target.value)}
@@ -75,9 +75,9 @@ const AmountInput: React.FC<{ value: number; onChange: (v: number) => void; clas
 
 // وصف الفقرة: يظهر ملفوفاً حتى ثلاثة أسطر من أوله (كان سطراً واحداً مقصوصاً)، والنقر عليه يفتح
 // حقل تعديل يعرض النص كاملاً. dir="auto" يُظهر الوصف الإنجليزي من اليسار بترتيبه الصحيح
-const DescriptionCell: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+const DescriptionCell: React.FC<{ value: string; onChange: (v: string) => void; readOnly?: boolean }> = ({ value, onChange, readOnly }) => {
   const [editing, setEditing] = useState(false);
-  if (editing) {
+  if (editing && !readOnly) {
     return (
       <textarea
         autoFocus
@@ -97,9 +97,9 @@ const DescriptionCell: React.FC<{ value: string; onChange: (v: string) => void }
       tabIndex={0}
       dir="auto"
       title={value}
-      onClick={() => setEditing(true)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(true); } }}
-      className="line-clamp-3 font-bold text-slate-900 text-xs leading-relaxed px-1.5 py-1 rounded cursor-text hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      onClick={() => { if (!readOnly) setEditing(true); }}
+      onKeyDown={(e) => { if (!readOnly && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setEditing(true); } }}
+      className={`line-clamp-3 font-bold text-slate-900 text-xs leading-relaxed px-1.5 py-1 rounded ${readOnly ? '' : 'cursor-text'} hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500`}
     >
       {value}
     </div>
@@ -175,6 +175,8 @@ interface BOQTableProps {
   auditInitialFilter: AuditFilter;
   // يُمسح تثبيت «بانتظار قرار» عند تبديل الشركة
   bidderId: string;
+  // سجل تدقيق المناقصة: يُعرف منه اعتماد التفقيط سعراً للمفرد قبل v1.12.0 في عرض «كما قدّمه المجهز»
+  auditLogs?: AuditLogEntry[];
 }
 
 export const BOQTable: React.FC<BOQTableProps> = ({
@@ -203,7 +205,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onAuditModeChange,
   auditFocusItemId,
   auditInitialFilter,
-  bidderId
+  bidderId,
+  auditLogs = []
 }) => {
   const locked = offerMode !== 'none';
   const sharedReadOnly = locked || sharedLocked;
@@ -491,9 +494,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <thead className="bg-slate-900 text-slate-100 uppercase text-xs font-black sticky top-0 xl:top-[calc(81px+var(--bidder-bar-h)+var(--toolbar-h))] z-20 shadow-xs select-none">
               <tr>
                 <th className="p-3 w-12 text-center border-l border-slate-800">ت</th>
-                <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة ✏️</th>
-                <th className="p-3 w-16 text-center border-l border-slate-800 bg-slate-800">العدد ✏️</th>
-                <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">{locked && !asSub ? 'سعر المفرد — العرض الموزون' : 'سعر المفرد للمجهز ✏️'}</th>
+                <th className="p-3 min-w-[160px] border-l border-slate-800">اسم المادة / وصف الفقرة{!asSub && ' ✏️'}</th>
+                <th className="p-3 w-16 text-center border-l border-slate-800 bg-slate-800">العدد{!asSub && ' ✏️'}</th>
+                <th className="p-3 w-28 text-center border-l border-slate-800 bg-indigo-950 text-indigo-200">{locked && !asSub ? 'سعر المفرد — العرض الموزون' : asSub ? 'سعر المفرد للمجهز' : 'سعر المفرد للمجهز ✏️'}</th>
                 <th className="p-3 w-32 text-center border-l border-slate-800 bg-indigo-900 text-indigo-100">{locked && !asSub ? 'مبلغ العرض الموزون' : 'مبلغ المجهز الإجمالي 💰'}</th>
                 {auditMode ? (
                   <th className="p-3 min-w-[180px] bg-amber-950 text-amber-200">{asSub ? 'التفقيط كما قدّمه المجهز' : 'تدقيق الأخطاء الحسابية والتفقيط'}</th>
@@ -516,10 +519,15 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 <tr>
                   <td colSpan={auditMode ? 6 : hasEstimate ? 10 : 7} className="p-12 text-center text-slate-400 font-bold bg-slate-50/50">
                     <div className="max-w-md mx-auto space-y-2">
+                      {items.length > 0 ? (<>
+                        <p className="text-base text-slate-700 font-black">لا فقرات تطابق المرشح</p>
+                        <button type="button" onClick={showAll} className="text-xs font-black text-indigo-700 hover:underline cursor-pointer">عرض الكل</button>
+                      </>) : (<>
                       <p className="text-base text-slate-700 font-black">الجدول فارغ حالياً</p>
                       <p className="text-xs text-slate-500">
                         استورد جدول الإكسل من الأعلى عبر <strong>[ استيراد جدول (Excel / Word) ]</strong> أو انقر <strong>(+ إضافة فقرة)</strong>.
                       </p>
+                      </>)}
                     </div>
                   </td>
                 </tr>
@@ -528,9 +536,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 const view = deviationView(item);
                 const isDeviated = view.isDeviated;
                 const isSaving = view.diffAmount < 0;
-                const hasError = isPending(item);
-                const handled = auditMode && isHandled(item, pinned);
                 const sub = asSubmitted(item);
+                // «كما قدّمه»: عيوب الورقة من أرقام المجهز لا من العلامات الحالية (كورقة «واقع الحال»)، فتبقى المصحَّحة بعيبها الأصلي
+                const unitLost = asSub && unitLostOf(item, findAdoption(item, bidderId, auditLogs));
+                const subFlags = asSub ? submittedFlags(item, unitLost) : null;
+                const hasError = subFlags ? subFlags.hasMathError || subFlags.hasTextDiscrepancy : isPending(item);
+                const handled = auditMode && !asSub && isHandled(item, pinned);
                 const corrected = isCommitteeCorrected(item);
 
                 // فقرة بلا مفرد مدون (جدول بلا عمود للمفرد، أو مُسح مفردها تصحيحاً للقراءة): يظهر المبلغ ÷ الكمية
@@ -545,7 +556,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     className={`hover:bg-blue-50/50 transition group ${
                       auditMode && auditFocusItemId === item.id ? 'ring-2 ring-inset ring-blue-500' : ''
                     } ${
-                      handled ? 'bg-emerald-50/60' : hasError ? 'bg-rose-50/50' : !auditMode && isDeviated ? 'bg-rose-50/20' : !auditMode && isSaving ? 'bg-emerald-50/15' : ''
+                      handled ? 'bg-emerald-50/60' : subFlags ? (subFlags.hasMathError ? 'bg-rose-50/50' : subFlags.hasTextDiscrepancy ? 'bg-amber-50/60' : '') : hasError ? 'bg-rose-50/50' : !auditMode && isDeviated ? 'bg-rose-50/20' : !auditMode && isSaving ? 'bg-emerald-50/15' : ''
                     }`}
                   >
                     {/* Item No
@@ -554,6 +565,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       <input
                         type="text"
                         value={item.itemNo}
+                        readOnly={asSub}
+                        title={asSub ? 'للقراءة فقط: كما قدّمه المجهز' : undefined}
                         onChange={(e) => onUpdateItem(actualIndex, 'itemNo', toLatinDigits(e.target.value))}
                         className="w-full min-w-[3rem] text-center bg-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded p-1 font-mono font-black"
                       />
@@ -564,6 +577,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                       <DescriptionCell
                         value={item.description}
                         onChange={(v) => onUpdateItem(actualIndex, 'description', v)}
+                        readOnly={asSub}
                       />
                       {/* العرض العادي للمراجعة: شارة على الفقرة المؤشَّرة تفتح التدقيق عند الفقرة نفسها */}
                       {!auditMode && hasError && (
@@ -596,6 +610,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         placeholder="1"
                         fractionDigits={2}
                         readOnly={sharedReadOnly || asSub}
+                        readOnlyTitle={asSub ? 'للقراءة فقط: كما قدّمه المجهز' : undefined}
                         className="w-14 text-center bg-white border border-slate-200 rounded-lg p-1 font-mono font-black text-slate-800 text-xs shadow-2xs focus:ring-1 focus:ring-indigo-500"
                       />
                     </td>
@@ -606,7 +621,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                         تعديل المفرد تصحيح قراءة لا يمس المبلغ المدون إلا إن كان فارغاً (handleCorrectReading) */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/30">
                       {asSub ? (
-                        <span className="font-mono font-black text-xs text-slate-800">{sub.unit > 0 ? displayAmount(sub.unit) : '-'}</span>
+                        <span className="font-mono font-black text-xs text-slate-800">{unitLost ? 'غير محفوظ' : sub.unit > 0 ? displayAmount(sub.unit) : '-'}</span>
                       ) : locked ? (
                         <OfferUnitCell item={item} editable={offerMode === 'active'} onChange={(v) => onEditOfferUnit?.(actualIndex, v)} />
                       ) : (
@@ -660,11 +675,17 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     </>)}
                     {auditMode && (
                     <td className="p-2 text-xs leading-tight">
-                      {asSub ? (
-                        sub.writtenText
+                      {asSub ? (<>
+                        {sub.writtenText
                           ? <div className="text-slate-800 font-semibold text-[11px] leading-relaxed">{sub.writtenText}</div>
-                          : <span className="text-slate-400 font-bold text-[11px]">لا تفقيط مقروء</span>
-                      ) : (
+                          : <span className="text-slate-400 font-bold text-[11px]">لا تفقيط مقروء</span>}
+                        {subFlags && (subFlags.hasMathError || subFlags.hasTextDiscrepancy) && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {subFlags.hasMathError && <span className="text-[10px] font-black text-rose-800 bg-rose-50 border border-rose-400 rounded-full px-2 py-0.5">🚨 خطأ ضرب</span>}
+                            {subFlags.hasTextDiscrepancy && <span className="text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-400 rounded-full px-2 py-0.5">⚠️ تعارض تفقيط</span>}
+                          </div>
+                        )}
+                      </>) : (
                         <AuditCell
                           item={item}
                           index={actualIndex}
@@ -779,7 +800,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                   -
                 </td>
                 <td className="p-3 text-center border-l border-slate-800 font-mono text-indigo-300 text-xs">
-                  {(locked ? items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0) : items.reduce((s, i) => s + i.bidderTotal, 0)).toLocaleString()} د.ع
+                  {(asSub ? submittedTotal(items) : locked ? items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0) : items.reduce((s, i) => s + i.bidderTotal, 0)).toLocaleString()} د.ع
                 </td>
                 {auditMode ? (
                   <td className="p-3 text-right text-amber-300">

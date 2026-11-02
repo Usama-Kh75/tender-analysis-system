@@ -1,5 +1,5 @@
-import { parseArabicNumber } from './calculations';
-import { BOQItem } from '../types/tender';
+import { parseArabicNumber, toLatinDigits } from './calculations';
+import { AuditLogEntry, BOQItem } from '../types/tender';
 
 // فقرة صحّحتها اللجنة (باعتماد حاصل الضرب أو المكتوب كتابةً): مبلغها المعتمد غير الذي دوّنه المجهز،
 // والأخير محفوظ في enteredBidderTotal دليلاً، أو حلّ التفقيط محل سعر المفرد المدون (originalUnitPrice).
@@ -16,6 +16,45 @@ export const asSubmitted = (item: BOQItem): AsSubmitted => ({
   total: item.enteredBidderTotal || item.bidderTotal,
   writtenText: item.originalWrittenText ?? item.writtenText
 });
+
+/** مجموع مبالغ المجهز كما دوّنها (asSubmitted): تذييل عرض «كما قدّمه المجهز» يطابق عموده لا المبالغ المعتمدة */
+export const submittedTotal = (items: BOQItem[]) => items.reduce((s, i) => s + asSubmitted(i).total, 0);
+
+// إجراءات اعتماد اللجنة التي تسجّلها أزرار BOQTable في سجل التدقيق (سند كل منها في bidderAuditExcel.ts)
+export const ADOPTION_ACTIONS = {
+  math: 'اعتماد تصحيح خطأ الضرب بقرار اللجنة',
+  unit: 'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة',
+  amount: 'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة',
+  thousands: 'اعتماد التفقيط بعد إضافة «آلاف» بقرار اللجنة',
+  decimal: 'اعتماد المبلغ وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية'
+} as const;
+const ADOPTION_LIST: string[] = Object.values(ADOPTION_ACTIONS);
+
+// آخر اعتماد للجنة على الفقرة (السجل من الأحدث): يطابق المجهز ورقم الفقرة والمبلغ الذي انتهى إليه. سجلات ما
+// قبل 1.12.0 بلا مجهز تُطابق بالرقم والمبلغ وحدهما، وإلا التبس تصحيح مجهزين انتهيا إلى المبلغ نفسه
+export const findAdoption = (item: BOQItem, bidderId: string, logs: AuditLogEntry[]) =>
+  logs.find(l => ADOPTION_LIST.includes(l.action) && (!l.bidderId || l.bidderId === bidderId)
+    && toLatinDigits(String(l.itemNo)) === toLatinDigits(String(item.itemNo)) && Math.abs(Number(l.newValue) - item.bidderTotal) < 0.01);
+
+/**
+ * اعتماد التفقيط سعراً للمفرد قبل v1.12.0 كان يكتب فوق المفرد المدون ولا يحفظ الأصل: إن لم يُحفظ originalUnitPrice
+ * فالمفرد الحالي هو التفقيط نفسه، ولا يُعرف ما دوّنه المجهز. المصدر الواحد لورقة «واقع الحال» وللشاشة
+ */
+export const unitLostOf = (item: BOQItem, adoption?: { action: string }) => {
+  if (!isCommitteeCorrected(item) || item.originalUnitPrice !== undefined || !adoption || adoption.action === ADOPTION_ACTIONS.math) return false;
+  const written = asSubmitted(item).writtenText ? parseArabicTextToNumber(asSubmitted(item).writtenText!) : null;
+  return written !== null && Math.abs((item.enteredUnitPrice || 0) - written) < 0.01;
+};
+
+/** عيوب الفقرة في عطاء المجهز كما قدّمه، من أرقامه لا من العلامات الحالية: تبقى الفقرة المصحَّحة مؤشَّرة بعيبها الأصلي */
+export const submittedFlags = (item: BOQItem, unitLost: boolean) => {
+  const { unit, total, writtenText } = asSubmitted(item);
+  if (item.unpriced || !(total > 0)) return { hasMathError: false, hasTextDiscrepancy: false };
+  if (unitLost) return { hasMathError: false, hasTextDiscrepancy: true };
+  const f = auditRowAmounts(item.quantity, unit, total, writtenText);
+  const written = writtenText ? parseArabicTextToNumber(writtenText) : null;
+  return { hasMathError: f.hasMathError, hasTextDiscrepancy: f.hasTextDiscrepancy && written !== null };
+};
 
 // تصحيح اللجنة على الأرقام (المبلغ أو المفرد) لا على نص التفقيط: وحده يمكن أن يكون في الحقيقة خطأ قراءة لا خطأ مجهز،
 // فتعرض الشاشة لهذه الفقرة «اعتماد الأرقام كما كُتبت في الورقة» (handleAcceptAsReading)
