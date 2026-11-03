@@ -183,6 +183,9 @@ export function createItemHandlers(ctx: EditContext) {
         enteredBidderTotal: next.bidderTotal || undefined,
         hasMathError: undefined,
         hasTextDiscrepancy: undefined,
+        // تعديل اللجنة قراءةَ فقرة المجهز النشط يُحسب خطأ قراءة مقيساً، وتزول به مطابقة القراءتين المعلّقة.
+        // الكمية مشتركة: فقرات غير النشط تبقى علاماتها كما هي
+        ...(b.id === activeBidder.id ? { readCorrected: item.readBy ? true : item.readCorrected, readCheck: undefined } : {}),
         // كما في ImageOcrModal: إدخال سعر لفقرة قُرئت «-» يعني أنها مسعّرة
         unpriced: (field === 'unitPrice' || field === 'total') && (value as number) > 0 ? undefined : next.unpriced
       };
@@ -211,6 +214,28 @@ export function createItemHandlers(ctx: EditContext) {
       { itemNo: before.itemNo, oldValue, newValue }
     );
 
+    saveProject(updatedProj);
+  };
+
+  // «طابقتُ الورقة»: اختلفت القراءتان في الفقرة فطابقتها اللجنة بالورقة واعتمدت أرقامها كما هي. لا يتغير رقم
+  const handleConfirmReadCheck = (index: number) => {
+    const before = activeBidder.items[index];
+    if (!before?.readCheck) return;
+    if (blockedByOffer({ bidderId: activeBidder.id })) return;
+    const updatedRaw = [...activeBidder.items];
+    updatedRaw[index] = { ...before, readCheck: undefined };
+    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    const updatedProj = addAuditLog(
+      {
+        ...currentProject,
+        bidders: currentProject.bidders.map(b => b.id === activeBidder.id
+          ? { ...b, items: recalculation.items, totals: recalculation.totals } : b),
+        updatedAt: new Date().toISOString()
+      },
+      'مطابقة قراءة بالورقة',
+      `طابقت اللجنة الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) بالورقة بعد اختلاف القراءتين، فاعتُمدت أرقامها كما هي`,
+      { itemNo: before.itemNo, bidderId: activeBidder.id }
+    );
     saveProject(updatedProj);
   };
 
@@ -426,7 +451,11 @@ export function createItemHandlers(ctx: EditContext) {
         unreasonablePrice: undefined,
         bidderSignedAt: undefined,
         offerUnitPrice: undefined,
-        offerTotal: undefined
+        offerTotal: undefined,
+        // الصف المكرر لم يُقرأ من عطاء
+        readBy: undefined,
+        readCheck: undefined,
+        readCorrected: undefined
       };
 
       const updatedRaw = [...b.items, dup];
@@ -444,7 +473,7 @@ export function createItemHandlers(ctx: EditContext) {
   };
 
   return {
-    handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleAdoptTafqeetThousands,
+    handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks
   };

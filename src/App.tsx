@@ -9,6 +9,8 @@ import { Navbar } from './components/Navbar';
 import { KPIStatsCards } from './components/KPIStatsCards';
 import { BOQTable } from './components/BOQTable';
 import { WeightedOfferBar } from './components/WeightedOfferBar';
+import { ReadingReliabilityCard } from './components/ReadingReliabilityCard';
+import { readingReliability } from './utils/readingReliability';
 import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
@@ -121,7 +123,7 @@ export function App() {
   }
 
   const ctx = createEditContext(currentProject, activeBidder, setProjects);
-  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleAdoptTafqeetThousands,
+  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handleStartOffer, handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
@@ -206,6 +208,11 @@ export function App() {
             {hasBidAmounts(activeBidder) && (
               <div className="mb-4">
                 <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)} />
+              </div>
+            )}
+            {readingReliability(activeBidder) && (
+              <div className="mb-4 no-print">
+                <ReadingReliabilityCard bidder={activeBidder} onConfirm={handleConfirmReadCheck} />
               </div>
             )}
             <BOQTable

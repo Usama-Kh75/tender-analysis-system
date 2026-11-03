@@ -19,7 +19,11 @@ export const withoutBidderPrices = (item: BOQItem): Partial<BOQItem> => ({
   offerUnitPrice: undefined,
   offerTotal: undefined,
   unreasonablePrice: undefined,
-  bidderSignedAt: undefined
+  bidderSignedAt: undefined,
+  // لا قراءة بعد التصفير: لا أثر لمحرك القراءة ولا لتصحيحاتها
+  readBy: undefined,
+  readCheck: undefined,
+  readCorrected: undefined
 });
 
 // حقول هوية الفقرة والكلفة التخمينية مشتركة لكل المجهزين (الكلفة التخمينية واحدة للمشروع)

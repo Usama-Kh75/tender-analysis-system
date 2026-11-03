@@ -90,7 +90,9 @@ export function createImportHandlers(ctx: EditContext) {
           hasTextDiscrepancy: undefined,
           correctionRationale: ext?.correctionRationale,
           unpriced: ext?.unpriced,
-          pageNo: ext?.pageNo
+          pageNo: ext?.pageNo,
+          readBy: ext?.readBy,
+          readCheck: ext?.readCheck
         });
       }
 
@@ -221,6 +223,9 @@ export function createImportHandlers(ctx: EditContext) {
           unpriced: ext?.unpriced,
           // صفحة الفقرة في هذا العطاء: من القراءة إن وُجدت، وإلا تبقى المسندة سابقاً (استيراد Excel بلا صفحات)
           pageNo: ext?.pageNo ?? existing?.pageNo,
+          // أثر القراءة الآلية للقراءة الجديدة وحدها: بدلت أرقام الفقرة فلا يبقى أثر القراءة السابقة ولا تصحيحاتها
+          readBy: ext?.readBy,
+          readCheck: ext?.readCheck,
           // تأشير اللجنة وتعديلات عرض موقوف يبقيان عبر إعادة القراءة (لا يُسقطهما الدمج حقلاً حقلاً)
           unreasonablePrice: existing?.unreasonablePrice,
           offerUnitPrice: existing?.offerUnitPrice,

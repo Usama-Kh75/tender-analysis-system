@@ -516,7 +516,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     // (كانت تصل صفراً فتُمسح الكلفة التخمينية في الجدول). مبلغ غير مقروء لا يمس التخميني القائم
     const toEstimate = destinationMode === 'estimated_only';
     // تعليم القراءة المزدوجة للمعاينة وحدها: لا يُدرج
-    const readItems = extractedItems.map(({ readDiff: _readDiff, ...rest }) => rest);
+    // أما عطاء المجهز فيحمل أثر قراءته (المحرك، واختلاف القراءتين) لبطاقة موثوقية القراءة لا لأي حساب
+    const readItems = extractedItems.map(({ readDiff, ...rest }) => toEstimate ? rest : {
+      ...rest,
+      readBy: engineMode === 'ai_vision' ? 'ai' as const : 'ocr' as const,
+      readCheck: readDiff ? { fields: readDiff.fields, second: readDiff.second } : undefined
+    });
     const items = toEstimate
       ? readItems.map(i => ({ ...i, estimatedTotal: (i.bidderTotal || 0) > 0 ? i.bidderTotal : undefined }))
       : readItems;
