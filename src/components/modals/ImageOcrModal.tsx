@@ -57,9 +57,18 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   // أطول بُعد (بكسل) للصورة الأصلية لكل صفحة (مفتاحها الصورة المعروضة)، قبل أن يحدّها الرسم والضغط بـ 2000؛ null مجهول أو صفحة رقمية
   const [scanEdges, setScanEdges] = useState<Record<string, number | null>>({});
-  // نوع كتابة الأرقام (فُحصت صفحة واحدة بالذكاء الاصطناعي قبل القراءة)، والصفحة الأولى مفتاح الفحص كي لا يتكرر لملف واحد
+  // نوع كتابة الأرقام (فُحصت صفحة واحدة بالذكاء الاصطناعي قبل القراءة). الفحص مرة لكل مفتاح بين تصفيرين (writingTriedKey):
+  // التدوير والحذف يغيّران رابط الصفحة الأولى فلا يصلحان مفتاحاً، وتبديل المفتاح بعد فشل يعيد المحاولة.
+  // writingGen يُبطل ردّ فحص بدأ قبل التصفير فلا يُنسب إلى ملف جديد
   const [writing, setWriting] = useState<Writing | null>(null);
-  const writingCheckedFor = useRef<string | null>(null);
+  const writingTriedKey = useRef<string | null>(null);
+  const writingGen = useRef(0);
+  const resetReadAdvice = () => {
+    setScanEdges({});
+    setWriting(null);
+    writingTriedKey.current = null;
+    writingGen.current += 1;
+  };
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
@@ -146,11 +155,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   useEffect(() => {
     if (!isOpen || engineMode !== 'ai_vision' || imagePreviews.length === 0) return;
     const key = apiKey.trim() || localStorage.getItem('gemini_ocr_api_key') || '';
-    if (!key || writingCheckedFor.current === imagePreviews[0]) return;
-    writingCheckedFor.current = imagePreviews[0];
-    const first = imagePreviews[0];
+    if (!key || writingTriedKey.current === key) return;
+    writingTriedKey.current = key;
+    const gen = writingGen.current;
     const sample = imagePreviews[Math.floor(imagePreviews.length / 2)];
-    detectWriting(sample, key).then(w => { if (writingCheckedFor.current === first) setWriting(w); });
+    detectWriting(sample, key).then(w => { if (writingGen.current === gen) setWriting(w); });
   }, [isOpen, engineMode, apiKey, imagePreviews]);
 
   useEffect(() => {
@@ -266,9 +275,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     if (!isOpen || !handoff || handoff.id === lastHandoffId.current) return;
     lastHandoffId.current = handoff.id;
     setImagePreviews([]);
-    setScanEdges({});
-    setWriting(null);
-    writingCheckedFor.current = null;
+    resetReadAdvice();
     setExtractedItems([]);
     setGeminiCheck(null);
     setLowConfidencePages([]);
@@ -281,6 +288,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   }, [isOpen, handoff]);
 
   const handleRemoveImage = (index: number) => {
+    if (imagePreviews.length === 1) resetReadAdvice();
+    else setScanEdges(prev => { const next = { ...prev }; delete next[imagePreviews[index]]; return next; });
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
     if (activeImageIndex >= index && activeImageIndex > 0) {
       setActiveImageIndex(activeImageIndex - 1);
@@ -475,7 +484,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     if (!currentImg) return;
     const index = activeImageIndex;
     const rotated = await rotateDataUrl(currentImg);
-    setScanEdges(prev => ({ ...prev, [rotated]: prev[currentImg] ?? null }));
+    setScanEdges(prev => { const { [currentImg]: edge, ...rest } = prev; return { ...rest, [rotated]: edge ?? null }; });
     setImagePreviews(prev => prev.map((p, i) => i === index ? rotated : p));
   };
 
@@ -493,7 +502,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         rotated.push(await rotateDataUrl(imagePreviews[i]));
         carried[rotated[i]] = scanEdges[imagePreviews[i]] ?? null;
       }
-      setScanEdges(prev => ({ ...prev, ...carried }));
+      setScanEdges(carried);
       setImagePreviews(rotated);
       setReadAttempted(false);
       setLowConfidencePages([]);
@@ -809,6 +818,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     <button
                       onClick={() => {
                         setImagePreviews([]);
+                        resetReadAdvice();
                         setReadAttempted(false);
                         setLowConfidencePages([]);
                         setExtractedItems([]);
