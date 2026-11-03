@@ -300,8 +300,32 @@ interface GeminiReadSpec {
   parse: (text: string) => { rows: any[]; grandTotal: number | null; grandTotalText?: string };
   attachPages: boolean;
 }
+// تصنيف نوع الكتابة في الأرقام قبل القراءة (تنبيه ما قبل القراءة): تصنيف لا نسخ، فيصيب فيه النموذج حيث يخطئ في قراءة الخط اليدوي
+export type Writing = 'handwritten' | 'printed' | 'mixed';
+const WRITING_VALUES: Writing[] = ['handwritten', 'printed', 'mixed'];
+const WRITING_CHECK_SCHEMA = {
+  type: 'OBJECT',
+  properties: { writing: { type: 'STRING', enum: WRITING_VALUES } },
+  required: ['writing']
+};
+const writingCheckPrompt = () => `الصورة صفحة من عطاء فيها جدول كميات وأسعار. المطلوب تصنيف نوع الكتابة في خانات الأسعار والمبالغ (الأرقام) وحدها، لا في العناوين: handwritten إن كانت مكتوبة بخط اليد، printed إن كانت مطبوعة أو مكتوبة بالحاسوب، mixed إن اجتمع النوعان. أعد كائن JSON فقط: {"writing":"handwritten"}`;
+
+/** يفكك رد تصنيف الكتابة: كائن {writing} بإحدى القيم الثلاث، وإلا يُرفض الرد */
+export function parseWritingCheck(text: string): { rows: { writing: Writing }[]; grandTotal: null } {
+  const clean = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  let parsed: any;
+  try { parsed = JSON.parse(clean); } catch {
+    const obj = clean.match(/\{[\s\S]*\}/);
+    try { parsed = obj ? JSON.parse(obj[0]) : undefined; } catch { parsed = undefined; }
+  }
+  const writing = parsed?.writing;
+  if (!WRITING_VALUES.includes(writing)) throw new Error('رد بلا تصنيف معروف');
+  return { rows: [{ writing }], grandTotal: null };
+}
+
 const FULL_READ: GeminiReadSpec = { prompt: geminiPrompt, schema: GEMINI_RESPONSE_SCHEMA, parse: parseGeminiTable, attachPages: true };
 const AMOUNT_READ: GeminiReadSpec = { prompt: amountColumnPrompt, schema: AMOUNT_COLUMN_SCHEMA, parse: parseAmountColumn, attachPages: false };
+const WRITING_CHECK: GeminiReadSpec = { prompt: writingCheckPrompt, schema: WRITING_CHECK_SCHEMA, parse: parseWritingCheck, attachPages: false };
 
 /**
  * يفكك رد Gemini: الشكل الجديد كائن {items, grandTotal, grandTotalText}، ويُقبل الشكل القديم
@@ -616,6 +640,22 @@ export async function extractBOQWithGeminiVision(
     return { ...first, items, doubleRead: { onlyInSecond } };
   } catch (err: any) {
     return { ...first, doubleRead: { onlyInSecond: 0, secondReadError: err?.message || String(err) } };
+  }
+}
+
+/**
+ * نوع كتابة أرقام العطاء من صفحة واحدة مصغّرة (طلب صغير الكلفة)، أو null إن تعذّر لأي سبب: التنبيه استشاري فلا يمنع القراءة
+ * ولا يُظهر خطأً (الرصيد والحصة يظهران عند القراءة نفسها)
+ */
+export async function detectWriting(pageDataUrl: string, apiKey: string, knownModels?: string[]): Promise<Writing | null> {
+  try {
+    const cleanKey = apiKey.trim();
+    const small = await compressImageDataUrl(pageDataUrl, 1100, 0.7);
+    const models = await findGeminiModels(cleanKey, knownModels);
+    const { rows, stoppedAtPage } = await runGeminiRequests([small], cleanKey, models, WRITING_CHECK);
+    return stoppedAtPage === undefined ? (rows[0]?.writing ?? null) : null;
+  } catch {
+    return null;
   }
 }
 

@@ -14,7 +14,8 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, ReadingPages, ReadItem } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, detectWriting, ReadingPages, ReadItem, Writing } from '../../utils/ocrService';
+import { lowResolutionPages, LOW_RESOLUTION_EDGE } from '../../utils/readAdvice';
 import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
@@ -54,6 +55,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   tableRows = []
 }) => {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  // أطول بُعد (بكسل) للصورة الأصلية لكل صفحة (مفتاحها الصورة المعروضة)، قبل أن يحدّها الرسم والضغط بـ 2000؛ null مجهول أو صفحة رقمية
+  const [scanEdges, setScanEdges] = useState<Record<string, number | null>>({});
+  // نوع كتابة الأرقام (فُحصت صفحة واحدة بالذكاء الاصطناعي قبل القراءة)، والصفحة الأولى مفتاح الفحص كي لا يتكرر لملف واحد
+  const [writing, setWriting] = useState<Writing | null>(null);
+  const writingCheckedFor = useRef<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
@@ -135,6 +141,18 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
   const [keyTestStatus, setKeyTestStatus] = useState<{ isTesting: boolean; success?: boolean; message?: string }>({ isTesting: false });
 
+  // تنبيه ما قبل القراءة: نوع كتابة الأرقام من صفحة واحدة مصغّرة، مرة لكل ملف، وبالمحرك السحابي ومفتاح محفوظ فقط.
+  // استشاري: تعذّره (رصيد، شبكة) صامت ولا يمنع القراءة
+  useEffect(() => {
+    if (!isOpen || engineMode !== 'ai_vision' || imagePreviews.length === 0) return;
+    const key = apiKey.trim() || localStorage.getItem('gemini_ocr_api_key') || '';
+    if (!key || writingCheckedFor.current === imagePreviews[0]) return;
+    writingCheckedFor.current = imagePreviews[0];
+    const first = imagePreviews[0];
+    const sample = imagePreviews[Math.floor(imagePreviews.length / 2)];
+    detectWriting(sample, key).then(w => { if (writingCheckedFor.current === first) setWriting(w); });
+  }, [isOpen, engineMode, apiKey, imagePreviews]);
+
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_ocr_api_key') || '';
     setApiKey(savedKey);
@@ -166,10 +184,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     });
   };
 
+  // أبعاد الصورة الأصلية قبل الضغط (الضغط والرسم يحدّانها بـ 2000 فيخفيان ضعف المسح)
+  const imageLongEdge = (dataUrl: string): Promise<number | null> => new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve(Math.max(img.naturalWidth, img.naturalHeight) || null);
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+
   const handleImageUpload = async (file: File) => {
     const dataUrl = await readFileAsDataUrl(file);
+    const edge = await imageLongEdge(dataUrl);
     // تصغير الصورة تلقائياً لتقليل حجم الطلب وتسريع الاستخراج وتفادي فشل الشبكة
     const compressed = await compressImageDataUrl(dataUrl);
+    setScanEdges(prev => ({ ...prev, [compressed]: edge }));
     setImagePreviews(prev => [...prev, compressed]);
   };
 
@@ -188,6 +216,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     // (القراءة الفردية كانت تُدرج الصفحات بترتيب اكتمال القراءة لا ترتيب الاختيار، فيختل ترتيب الصفحات عند الدمج)
     // ملف PDF (رقمي أو ممسوح ضوئياً) يُحوَّل صفحةً صفحة إلى صور في مكانه من الترتيب
     const pages: string[] = [];
+    const edges: Record<string, number | null> = {};
     let currentFile: File | null = null;
     setIsLoading(true);
     try {
@@ -196,13 +225,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         if (isPdfFile(file)) {
           setProgressStatus(`جاري تحويل صفحات ملف PDF (${file.name})...`);
           setProgressPercent(0);
+          const nativeEdges: (number | null)[] = [];
           const rendered = await pdfToImages(file, (n, total) => {
             setProgressStatus(`جاري تحويل صفحات ملف PDF: الصفحة (${n}) من (${total})...`);
             setProgressPercent(Math.round((n / total) * 100));
-          });
-          pages.push(...await Promise.all(rendered.map(d => compressImageDataUrl(d))));
+          }, (i, edge) => { nativeEdges[i] = edge; });
+          const compressed = await Promise.all(rendered.map(d => compressImageDataUrl(d)));
+          compressed.forEach((c, i) => { edges[c] = nativeEdges[i] ?? null; });
+          pages.push(...compressed);
         } else {
-          pages.push(await compressImageDataUrl(await readFileAsDataUrl(file)));
+          const raw = await readFileAsDataUrl(file);
+          const edge = await imageLongEdge(raw);
+          const compressed = await compressImageDataUrl(raw);
+          edges[compressed] = edge;
+          pages.push(compressed);
         }
       }
     } catch (err) {
@@ -217,6 +253,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       setProgressPercent(0);
     }
     if (pages.length > 0) {
+      setScanEdges(prev => ({ ...prev, ...edges }));
       setImagePreviews(prev => [...prev, ...pages]);
       setReadAttempted(false);
       setLowConfidencePages([]);
@@ -229,6 +266,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     if (!isOpen || !handoff || handoff.id === lastHandoffId.current) return;
     lastHandoffId.current = handoff.id;
     setImagePreviews([]);
+    setScanEdges({});
+    setWriting(null);
+    writingCheckedFor.current = null;
     setExtractedItems([]);
     setGeminiCheck(null);
     setLowConfidencePages([]);
@@ -435,6 +475,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     if (!currentImg) return;
     const index = activeImageIndex;
     const rotated = await rotateDataUrl(currentImg);
+    setScanEdges(prev => ({ ...prev, [rotated]: prev[currentImg] ?? null }));
     setImagePreviews(prev => prev.map((p, i) => i === index ? rotated : p));
   };
 
@@ -445,11 +486,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setIsLoading(true);
     try {
       const rotated: string[] = [];
+      const carried: Record<string, number | null> = {};
       for (let i = 0; i < imagePreviews.length; i++) {
         setProgressStatus(`جاري تدوير الصفحات: (${i + 1}) من (${imagePreviews.length})...`);
         setProgressPercent(Math.round(((i + 1) / imagePreviews.length) * 100));
         rotated.push(await rotateDataUrl(imagePreviews[i]));
+        carried[rotated[i]] = scanEdges[imagePreviews[i]] ?? null;
       }
+      setScanEdges(prev => ({ ...prev, ...carried }));
       setImagePreviews(rotated);
       setReadAttempted(false);
       setLowConfidencePages([]);
@@ -861,6 +905,28 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     className="max-w-full max-h-[330px] object-contain rounded-lg shadow-sm"
                   />
                 </div>
+
+                {(() => {
+                  const low = lowResolutionPages(imagePreviews.map(p => scanEdges[p]));
+                  const handwritten = engineMode === 'ai_vision' && (writing === 'handwritten' || writing === 'mixed');
+                  if (low.length === 0 && !handwritten) return null;
+                  const shown = low.slice(0, 5).map(i => i + 1).join('، ');
+                  return (
+                    <div role="status" className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 text-xs leading-relaxed space-y-1.5">
+                      {low.length > 0 && (
+                        <div>
+                          <strong>⚠️ دقة المسح الأصلية منخفضة</strong> في الصفحات ({shown}{low.length > 5 ? ` و${low.length - 5} أخرى` : ''}): أطول بُعد في الصورة الأصلية أقل من {LOW_RESOLUTION_EDGE} بكسل، فقد تُقرأ الأرقام الصغيرة خطأً. أعد المسح بدقة 200 نقطة في البوصة فأعلى إن أمكن.
+                        </div>
+                      )}
+                      {handwritten && (
+                        <div>
+                          <strong>✍️ {writing === 'mixed' ? 'أرقام هذا العطاء مكتوبة بخط اليد في بعضها' : 'أرقام هذا العطاء مكتوبة بخط اليد'}</strong> (فحص الذكاء الاصطناعي صفحة واحدة): القراءة الآلية للخط اليدوي أقل دقة، وتبقى أخطاؤها محتملة حتى مع القراءة الثانية، فتوقّع مطابقة فقرات بالورقة. اطلب من المجهز نسخة مطبوعة أو ملف Excel إن أمكن.
+                          {!doubleRead && <> وفعّل «قراءة ثانية للتحقق» أدناه.</>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {engineMode === 'ai_vision' && (
                   <label className="flex items-start gap-2 text-[11px] text-slate-700 leading-relaxed cursor-pointer">
