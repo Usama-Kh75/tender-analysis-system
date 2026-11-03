@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.23.1',
+    date: '2026-11-03',
+    notes: [
+      'تطابق بالورقة الفقرات التي تحتاج مراجعة بعد القراءة بالذكاء الاصطناعي من بطاقة «موثوقية القراءة»، وتؤكد كل فقرة بزر «طابقتُ الورقة».'
+    ]
+  },
+  {
     version: '1.22.0',
     date: '2026-11-01',
     notes: [

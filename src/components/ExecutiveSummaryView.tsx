@@ -455,7 +455,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 </li>
               ))}
             </ul>
-            <div className="text-xs font-semibold mt-1.5">تجدها في بطاقة «موثوقية القراءة» ضمن تبويب «العطاءات» بعد اختيار المجهز. المبلغ حدّ أعلى متحفظ: يعدّ كل مبلغ الفقرة معرَّضاً للخطأ.</div>
+            <div className="text-xs font-semibold mt-1.5">تجدها في بطاقة «موثوقية القراءة» فوق جدول المجهز في تبويب «الجدول المالي». المبلغ حدّ أعلى متحفظ: يعدّ كل مبلغ الفقرة معرَّضاً للخطأ.</div>
           </div>
         );
       })()}
