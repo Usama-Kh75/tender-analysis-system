@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { attachPages, mapGeminiRow, mergeContinuationRows } from '../src/utils/ocrService';
+import { attachPages, mapGeminiRow, mergeContinuationRows, geminiFailureKind } from '../src/utils/ocrService';
 
 test('رقم الصفحة داخل الدفعة يُحوَّل إلى رقمها في الملف', () => {
   const rows = attachPages([{ page: 1 }, { page: 3 }], 8, 3);
@@ -20,4 +20,12 @@ test('الوصف الممتد يبقى على صفحة بدايته، والصف
   assert.equal(merged.length, 1);
   assert.equal(mapGeminiRow(merged[0], 0).pageNo, 1);
   assert.equal(mapGeminiRow({ description: 'x', unpriced: false }, 0).pageNo, undefined);
+});
+
+test('أخطاء Gemini تُصنَّف: الرصيد قبل المفتاح قبل الحصة', () => {
+  assert.equal(geminiFailureKind('نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه'), 'credit');
+  assert.equal(geminiFailureKind('gemini-3.8-flash: (402) {"error":{"status":"PAYMENT_REQUIRED"'), 'credit');
+  assert.equal(geminiFailureKind('API key not valid'), 'key');
+  assert.equal(geminiFailureKind('نفدت حصة الطلبات (429)'), 'quota');
+  assert.equal(geminiFailureKind('تعذر الاتصال بالنماذج: رد فارغ'), null);
 });

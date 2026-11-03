@@ -75,10 +75,23 @@ export function rankGeminiModels(names: string[]): string[] {
     .sort((a, b) => unstable(a) - unstable(b) || family(a) - family(b) || version(b) - version(a));
 }
 
+/** رد Google 402: رصيد الحساب المدفوع مسبقاً صفر، أو لم يُفعَّل الدفع. ينطبق على كل النماذج */
+export const GEMINI_CREDIT_MESSAGE = 'نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه. لم تُجرَ القراءة. أضف رصيداً من aistudio.google.com/billing ثم أعد المحاولة.';
+export const GEMINI_QUOTA_MESSAGE = 'نفدت حصة الطلبات في Gemini مؤقتاً (429). انتظر دقيقة أو دقيقتين ثم أعد القراءة.';
+
+/** يصنّف رسالة خطأ Gemini: مفتاح غير صالح، أو رصيد منتهٍ، أو حصة طلبات، وإلا null */
+export function geminiFailureKind(message: string): 'key' | 'credit' | 'quota' | null {
+  if (/\(402\)|PAYMENT_REQUIRED/i.test(message)) return 'credit';
+  if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(message)) return 'key';
+  if (/\(429\)|RESOURCE_EXHAUSTED|quota/i.test(message)) return 'quota';
+  return null;
+}
+
 /**
- * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المتاحة بالضبط
+ * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المتاحة بالضبط.
+ * قائمة النماذج لا تستهلك رصيداً فتنجح والرصيد صفر، لذا يرسل الفحص (probe) طلب توليد صغيراً بنموذج واحد
  */
-export async function testGeminiApiKey(apiKey: string): Promise<{ success: boolean; message: string; models: string[] }> {
+export async function testGeminiApiKey(apiKey: string, probe = false): Promise<{ success: boolean; message: string; models: string[] }> {
   const cleanKey = apiKey.trim();
   if (!cleanKey) {
     return { success: false, message: 'يرجى إدخال مفتاح API أولاً', models: [] };
@@ -112,6 +125,16 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ success: boole
         message: 'تم الاتصال ولكن لم يتم العثور على نماذج Gemini نشطة في هذا المشروع. تأكد من إنشاء المفتاح من aistudio.google.com',
         models: []
       };
+    }
+
+    if (probe) {
+      const test = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelsList[0]}:generateContent?key=${cleanKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cleanKey },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'ok' }] }], generationConfig: { maxOutputTokens: 8 } })
+      });
+      if (test.status === 402) return { success: false, message: GEMINI_CREDIT_MESSAGE, models: modelsList };
+      if (test.status === 429) return { success: false, message: GEMINI_QUOTA_MESSAGE, models: modelsList };
     }
 
     return {
@@ -355,6 +378,8 @@ const toInlinePart = (dataUrl: string) => {
   return { inlineData: { mimeType: head.replace('data:', '') || 'image/jpeg', data } };
 };
 
+class CreditExhaustedError extends Error {}
+
 // نماذج رفضت صيغة الرد الإلزامية في هذه الجلسة: تُطلب بلا مخطط مباشرة بدل طلب مرفوض لكل دفعة
 const modelsWithoutSchema = new Set<string>();
 
@@ -422,6 +447,8 @@ async function requestGeminiRows(
           }
           break;
         }
+        // الرصيد للحساب كله: تجربة بقية النماذج تضيّع الوقت ولا تغيّر النتيجة
+        if (response.status === 402) throw new CreditExhaustedError();
         if (response.status === 404) {
           errorReports.push(`${model}: هذا النموذج غير متاح لمفتاحك الحالي (404)`);
           break;
@@ -430,6 +457,7 @@ async function requestGeminiRows(
         errorReports.push(`${model}: (${response.status}) ${errText.substring(0, 100)}`);
         break;
       } catch (err: any) {
+        if (err instanceof CreditExhaustedError) throw new Error(GEMINI_CREDIT_MESSAGE);
         errorReports.push(`${model}: تعذر الاتصال بالإنترنت - ${err.message}`);
         break;
       }
@@ -437,7 +465,7 @@ async function requestGeminiRows(
   }
 
   if (hadRateLimitError) {
-    throw new Error('تم تجاوز الحد المسموح من الطلبات لهذه الدقيقة (حصة مجانية محدودة من Google) (429). يرجى الانتظار دقيقة واحدة ثم إعادة المحاولة.');
+    throw new Error(GEMINI_QUOTA_MESSAGE);
   }
   throw new Error(`تعذر الاتصال بالنماذج: ${errorReports.join(' | ')}`);
 }

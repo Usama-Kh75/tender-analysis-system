@@ -14,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, compressImageDataUrl, ReadingPages } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, ReadingPages } from '../../utils/ocrService';
 import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
@@ -140,7 +140,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     if (!apiKey.trim()) return;
     setKeyTestStatus({ isTesting: true });
     try {
-      const res = await testGeminiApiKey(apiKey);
+      const res = await testGeminiApiKey(apiKey, true);
       setKeyTestStatus({ isTesting: false, success: res.success, message: res.message });
     } catch (e: any) {
       setKeyTestStatus({ isTesting: false, success: false, message: e.message });
@@ -264,16 +264,16 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     }
   };
 
-  // أشهر خطأين من Gemini يُعرضان بالعربية بدل نص الخادم الخام (JSON بالإنجليزية)
+  // أشهر أخطاء Gemini تُعرض بالعربية بدل نص الخادم الخام (JSON بالإنجليزية)
   const explainGeminiError = (message: string) => {
-    const invalidKey = /API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(message);
-    const quota = /\(429\)|RESOURCE_EXHAUSTED|quota/i.test(message);
-    if (invalidKey) {
+    const kind = geminiFailureKind(message);
+    if (kind === 'key') {
       setShowKeyInput(true);
       setKeyTestStatus({ isTesting: false, success: false, message: 'مفتاح Gemini المحفوظ غير صالح. تحقق منه أو أدخل مفتاحاً جديداً ثم أعد القراءة.' });
       return 'مفتاح Gemini غير صالح.';
     }
-    return quota ? 'نفدت حصة الطلبات المجانية في Gemini مؤقتاً. انتظر دقيقة أو دقيقتين ثم أعد القراءة.' : message;
+    if (kind === 'credit') return GEMINI_CREDIT_MESSAGE;
+    return kind === 'quota' ? GEMINI_QUOTA_MESSAGE : message;
   };
 
   // Gemini: كل الصفحات في استدعاء واحد يقسمها دفعات (GEMINI_PAGES_PER_REQUEST) بدل طلب لكل صفحة،
@@ -288,7 +288,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       setExtractedItems(result.items);
       setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed });
       if (result.stoppedAtPage) {
-        alert(`توقفت القراءة عند الصفحة (${result.stoppedAtPage}) من (${imagePreviews.length}): ${explainGeminiError(result.error || '')}\nما استُخرج من الصفحات السابقة باقٍ في الجدول.`);
+        alert(`القراءة ناقصة: توقفت عند الصفحة (${result.stoppedAtPage}) من (${imagePreviews.length}): ${explainGeminiError(result.error || '')}\nما استُخرج من الصفحات السابقة باقٍ في الجدول، وما بعدها لم يُقرأ، فلا تعتمد الجدول قبل إكماله.`);
       }
     } catch (err: any) {
       alert(`تعذّرت قراءة الصفحات: ${explainGeminiError(err?.message || 'تأكد من صحة المفتاح أو الاتصال')}\nتوقفت المعالجة.`);
@@ -576,7 +576,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                 className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg cursor-pointer"
               >
                 <Key className="w-3 h-3" />
-                <span>{apiKey ? 'تعديل مفتاح Gemini API' : 'إدخال مفتاح Gemini API المجاني'}</span>
+                <span>{apiKey ? 'تعديل مفتاح Gemini API' : 'إدخال مفتاح Gemini API'}</span>
               </button>
             </div>
           )}
@@ -589,7 +589,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex-1 min-w-[280px]">
                 <label className="block font-black text-indigo-950 mb-1">
-                  مفتاح Google Gemini API (مجاني 100% وبدون بطاقة ائتمانية):
+                  مفتاح Google Gemini API (من aistudio.google.com؛ القراءة تستهلك من رصيد حسابك أو حصته):
                 </label>
                 <div className="flex gap-2">
                   <input
