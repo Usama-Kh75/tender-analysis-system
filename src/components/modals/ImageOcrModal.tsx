@@ -284,8 +284,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     return kind === 'quota' ? GEMINI_QUOTA_MESSAGE : message;
   };
 
-  // Gemini: كل الصفحات في استدعاء واحد يقسمها دفعات (GEMINI_PAGES_PER_REQUEST) بدل طلب لكل صفحة،
-  // فيرى النموذج الجدول الممتد عبر الصفحات ويُستهلك من الحصة طلب واحد لعرض من 7 صفحات
+  // Gemini: كل الصفحات في استدعاء واحد يقسمها طلبات (GEMINI_PAGES_PER_REQUEST صفحة لكل طلب)، تُرسل أربعة معاً
   const processWithGemini = async (activeKey: string) => {
     try {
       const result = await extractBOQWithGeminiVision(imagePreviews, activeKey, (p, status, reading) => {

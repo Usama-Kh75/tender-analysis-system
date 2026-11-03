@@ -81,3 +81,41 @@ test('Gemini 402: يتوقف عند أول طلب برسالة الرصيد ول
     assert.equal(m.calls.length, 1);
   } finally { m.restore(); }
 });
+
+// ردّ يعتمد على الصفحة المرسلة لا على ترتيب الاستدعاء (الطلبات متزامنة)؛ الصفحة الأولى أبطأ لتنتهي الطلبات بغير ترتيبها
+function mockGeminiByPage(failOn?: string) {
+  const bodies: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    bodies.push(init.body);
+    const page = /"data":"P(\d+)"/.exec(init.body)?.[1] || '';
+    await new Promise(r => setTimeout(r, page === '1' ? 30 : 1));
+    if (failOn && page === failOn) return new Response('{"error":{}}', { status: 402 });
+    const n = Number(page);
+    const reply = { items: [{ itemNo: String(n), description: 'x', quantity: 1, unitPrice: n * 10, total: n * 10, unpriced: false, page: 1 }], grandTotal: null };
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] }, finishReason: 'STOP' }] }), { status: 200 });
+  }) as typeof fetch;
+  return { bodies, restore: () => { globalThis.fetch = original; } };
+}
+const pageImages = (n: number) => Array.from({ length: n }, (_, i) => `data:image/jpeg;base64,P${i + 1}`);
+
+test('Gemini: صفحة واحدة في كل طلب، والفقرات بترتيب الصفحات ولو انتهت الطلبات بغيره', async () => {
+  const m = mockGeminiByPage();
+  try {
+    const r = await extractBOQWithGeminiVision(pageImages(6), 'k', undefined, ['gemini-x']);
+    assert.equal(m.bodies.length, 6);
+    assert.ok(m.bodies.every(b => (b.match(/"inlineData"/g) || []).length === 1));
+    assert.deepEqual(r.items.map(i => i.bidderTotal), [10, 20, 30, 40, 50, 60]);
+    assert.deepEqual(r.items.map(i => i.pageNo), [1, 2, 3, 4, 5, 6]);
+    assert.equal(r.stoppedAtPage, undefined);
+  } finally { m.restore(); }
+});
+
+test('Gemini: فشل صفحة في الوسط يُبقي ما قبلها ويُبلَّغ عن موضع التوقف', async () => {
+  const m = mockGeminiByPage('3');
+  try {
+    const r = await extractBOQWithGeminiVision(pageImages(6), 'k', undefined, ['gemini-x']);
+    assert.equal(r.stoppedAtPage, 3);
+    assert.deepEqual(r.items.map(i => i.bidderTotal), [10, 20]);
+  } finally { m.restore(); }
+});

@@ -192,10 +192,12 @@ function extractJsonArray(text: string): any[] {
   }
 }
 
-// الصفحات في طلب Gemini الواحد: يرى النموذج الجدول الممتد عبر الصفحات، ويُستهلك طلب واحد من الحصة
-// المجانية بدل طلب لكل صفحة (عرض من 7 صفحات كان 7 طلبات). تُقسم الدفعة أيضاً إن تجاوز حجم صورها
-// GEMINI_MAX_BATCH_CHARS، لتبقى دون حد حجم الطلب المضمَّن
-export const GEMINI_PAGES_PER_REQUEST = 8;
+// صفحة واحدة في كل طلب Gemini: في تجربة 2026-11-03 على عطاء بخط اليد أصاب النموذج 6/7 و5/7 من الفقرات الصعبة
+// في الصفحة الواحدة مقابل 2/7 و2/7 حين أُرسلت أربع صفحات معاً، وأخطاء الدفعة ثابتة بين التشغيلين فلا تكشفها القراءة المزدوجة.
+// يبقى الثابت لتقسيم الدفعة إن تجاوز حجم صورها GEMINI_MAX_BATCH_CHARS (حد حجم الطلب المضمَّن)
+export const GEMINI_PAGES_PER_REQUEST = 1;
+// الطلبات المتزامنة: الصفحة تستغرق نحو دقيقتين، والتتابع يطيل عطاءً من 19 صفحة إلى نصف ساعة
+const GEMINI_PARALLEL_REQUESTS = 4;
 const GEMINI_MAX_BATCH_CHARS = 14_000_000;
 
 // صيغة رد إلزامية (مخطط OpenAPI في responseSchema): بدونها كان النظام يبحث عن JSON داخل نص الرد.
@@ -610,25 +612,47 @@ async function readGeminiOnce(
   let stoppedAtPage: number | undefined;
   let error: string | undefined;
 
+  // طلبات متزامنة (GEMINI_PARALLEL_REQUESTS): قراءة الصفحة الواحدة تستغرق نحو دقيقتين، فالتتابع يطيل عطاءً من 19 صفحة إلى نصف ساعة.
+  // بعد أول فشل لا تبدأ دفعات جديدة؛ ما قبل الفاشلة الأولى يُحتفظ به، وبعدها يُهمل
+  const outcomes: (GeminiRawResult | { failure: any } | undefined)[] = new Array(batches.length);
+  let nextBatch = 0;
+  let finished = 0;
+  let failed = false;
+  const worker = async () => {
+    while (!failed && nextBatch < batches.length) {
+      const b = nextBatch++;
+      const { start, images: imgs } = batches[b];
+      const label = images.length === 1 ? 'الصفحة (1)'
+        : imgs.length === 1 ? `الصفحة (${start + 1}) من (${images.length})`
+        : `الصفحات (${start + 1}–${start + imgs.length}) من (${images.length})`;
+      onProgress?.(percent, `${label}: جاري الإرسال...`, { start, count: imgs.length });
+      try {
+        outcomes[b] = await readBatch(imgs, label, start);
+        finished++;
+        percent = Math.round(10 + (80 * finished) / batches.length);
+        onProgress?.(percent, `${label}: تمت القراءة`, { start, count: imgs.length });
+      } catch (err: any) {
+        failed = true;
+        outcomes[b] = { failure: err };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(GEMINI_PARALLEL_REQUESTS, batches.length) }, worker));
+
   for (let b = 0; b < batches.length; b++) {
-    const { start, images: imgs } = batches[b];
-    const label = images.length === 1 ? 'الصفحة (1)'
-      : `الصفحات (${start + 1}–${start + imgs.length}) من (${images.length})`;
-    percent = Math.round(10 + (80 * b) / batches.length);
-    onProgress?.(percent, `${label}: جاري الإرسال...`, { start, count: imgs.length });
-    try {
-      const r = await readBatch(imgs, label, start);
-      rows.push(...r.rows);
-      rawTexts.push(r.rawText);
-      if (r.grandTotal !== null) { grandTotal = r.grandTotal; grandTotalText = r.grandTotalText; }
-      modelUsed = r.modelUsed;
-    } catch (err: any) {
+    const outcome = outcomes[b];
+    if (!outcome) break;
+    if ('failure' in outcome) {
       // دفعة أولى فاشلة = فشل القراءة كلها؛ بعدها يُحتفظ بما قُرئ ويُبلَّغ عن موضع التوقف
-      if (b === 0) throw err;
-      stoppedAtPage = start + 1;
-      error = err?.message || String(err);
+      if (b === 0) throw outcome.failure;
+      stoppedAtPage = batches[b].start + 1;
+      error = outcome.failure?.message || String(outcome.failure);
       break;
     }
+    rows.push(...outcome.rows);
+    rawTexts.push(outcome.rawText);
+    if (outcome.grandTotal !== null) { grandTotal = outcome.grandTotal; grandTotalText = outcome.grandTotalText; }
+    modelUsed = outcome.modelUsed;
   }
 
   const items = mergeContinuationRows(rows).map(mapGeminiRow);
