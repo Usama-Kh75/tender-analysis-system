@@ -76,7 +76,7 @@ export function rankGeminiModels(names: string[]): string[] {
 }
 
 /** رد Google 402: رصيد الحساب المدفوع مسبقاً صفر، أو لم يُفعَّل الدفع. ينطبق على كل النماذج */
-export const GEMINI_CREDIT_MESSAGE = 'نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه. لم تُجرَ القراءة. أضف رصيداً من aistudio.google.com/billing ثم أعد المحاولة.';
+export const GEMINI_CREDIT_MESSAGE = 'نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه. أضف رصيداً من aistudio.google.com/billing ثم أعد المحاولة.';
 export const GEMINI_QUOTA_MESSAGE = 'نفدت حصة الطلبات في Gemini مؤقتاً (429). انتظر دقيقة أو دقيقتين ثم أعد القراءة.';
 
 /** يصنّف رسالة خطأ Gemini: مفتاح غير صالح، أو رصيد منتهٍ، أو حصة طلبات، وإلا null */
@@ -405,7 +405,8 @@ async function requestGeminiRows(
           body: JSON.stringify({
             contents: [{ parts: [{ text: geminiPrompt(images.length) }, ...images.map(toInlinePart)] }],
             generationConfig: {
-              temperature: 0.1,
+              // 0 لا 0.1: في تجربة 2026-11-03 على عطاء بخط اليد أصاب 10/12 و8/12 من الفقرات الصعبة مقابل 6/12 و5/12
+              temperature: 0,
               ...(structured ? { responseMimeType: 'application/json', responseSchema: GEMINI_RESPONSE_SCHEMA } : {})
             }
           })
@@ -470,6 +471,53 @@ async function requestGeminiRows(
   throw new Error(`تعذر الاتصال بالنماذج: ${errorReports.join(' | ')}`);
 }
 
+/** فقرة مقروءة، مع تعليم القراءة المزدوجة إن اختلفت القراءتان فيها (للمعاينة فقط، لا يدخل الجدول) */
+export type ReadItem = Partial<BOQItem> & {
+  readDiff?: { fields: string[]; second: string };
+};
+
+const READ_DIFF_FIELDS: { label: string; get: (i: Partial<BOQItem>) => string }[] = [
+  { label: 'الكمية', get: i => String(i.quantity ?? '') },
+  { label: 'المفرد', get: i => String(i.enteredUnitPrice || '') },
+  { label: 'المبلغ', get: i => String(i.bidderTotal || '') },
+  { label: 'التفقيط', get: i => (i.writtenText || '').replace(/\s+/g, ' ').trim() },
+  { label: 'غير مسعّرة', get: i => (i.unpriced ? '1' : '') }
+];
+
+/**
+ * قراءتان لعطاء واحد: كل فقرة من الأولى تُقابَل بفقرة الثانية بالرقم نفسه (والتكرار بترتيب ورودهما)،
+ * وتُعلَّم إن اختلف فيها كمية أو مفرد أو مبلغ أو تفقيط، أو غابت عن الثانية. تبقى قيم القراءة الأولى.
+ * الفقرات التي وردت في الثانية وحدها تُعدّ فقط (onlyInSecond)
+ */
+export function compareReads(first: Partial<BOQItem>[], second: Partial<BOQItem>[]): { items: ReadItem[]; onlyInSecond: number } {
+  const keyed = (items: Partial<BOQItem>[]) => {
+    const seen = new Map<string, number>();
+    return items.map(i => {
+      const no = String(i.itemNo ?? '');
+      const n = (seen.get(no) || 0) + 1;
+      seen.set(no, n);
+      return `${no}#${n}`;
+    });
+  };
+  const secondByKey = new Map<string, Partial<BOQItem>>();
+  keyed(second).forEach((k, idx) => secondByKey.set(k, second[idx]));
+  const num = (n: number | undefined) => (n ?? 0).toLocaleString('en-US');
+
+  const matched = new Set<string>();
+  const items = keyed(first).map((k, idx): ReadItem => {
+    const a = first[idx];
+    const b = secondByKey.get(k);
+    if (!b) return { ...a, readDiff: { fields: ['غابت عن القراءة الثانية'], second: '' } };
+    matched.add(k);
+    const fields = READ_DIFF_FIELDS.filter(f => f.get(a) !== f.get(b)).map(f => f.label);
+    if (fields.length === 0) return a;
+    const parts = [`الكمية ${b.quantity === undefined ? '—' : num(b.quantity)}`, `المفرد ${num(b.enteredUnitPrice)}`, `المبلغ ${num(b.bidderTotal)}`];
+    if (b.writtenText) parts.push(`التفقيط: ${b.writtenText}`);
+    return { ...a, readDiff: { fields, second: parts.join(' · ') } };
+  });
+  return { items, onlyInSecond: second.length - matched.size };
+}
+
 export interface GeminiExtraction extends ExtractedTableData {
   models: string[];
   modelUsed: string;
@@ -479,6 +527,8 @@ export interface GeminiExtraction extends ExtractedTableData {
   /** توقفت القراءة قبل آخر صفحة: رقم أول صفحة لم تُقرأ وسبب التوقف، وما قبلها مقروء في items */
   stoppedAtPage?: number;
   error?: string;
+  /** القراءة المزدوجة: items عُلّمت فيها الفقرات المختلفة؛ onlyInSecond فقرات وردت في الثانية وحدها؛ secondReadError سبب تعذّر الثانية */
+  doubleRead?: { onlyInSecond: number; secondReadError?: string };
 }
 
 /** الصفحات التي تُقرأ الآن (بترتيبها من الصفر)، لتتابعها المعاينة */
@@ -492,6 +542,30 @@ export interface ReadingPages {
  * ثم دمج الأوصاف الممتدة عبر الصفحات وتعليم الفقرات غير المسعّرة وقراءة الإجمالي المكتوب
  */
 export async function extractBOQWithGeminiVision(
+  images: string[],
+  apiKey: string,
+  onProgress?: (progress: number, status: string, reading?: ReadingPages) => void,
+  knownModels?: string[],
+  doubleRead = false
+): Promise<GeminiExtraction> {
+  if (!doubleRead) return readGeminiOnce(images, apiKey, onProgress, knownModels);
+
+  // الأولى هي المعتمدة، والثانية فاحصة: لا تُجرى إن لم تكتمل الأولى (رصيد أو حصة)، ويبقى ما قُرئ إن فشلت الثانية
+  const half = (from: number, label: string): typeof onProgress => (p, status, reading) =>
+    onProgress?.(Math.round(from + p / 2), `${label}: ${status}`, reading);
+  const first = await readGeminiOnce(images, apiKey, half(0, 'القراءة الأولى'), knownModels);
+  if (first.stoppedAtPage) return first;
+  try {
+    const second = await readGeminiOnce(images, apiKey, half(50, 'القراءة الثانية'), first.models);
+    if (second.stoppedAtPage) throw new Error(second.error || 'توقفت القراءة الثانية');
+    const { items, onlyInSecond } = compareReads(first.items, second.items);
+    return { ...first, items, doubleRead: { onlyInSecond } };
+  } catch (err: any) {
+    return { ...first, doubleRead: { onlyInSecond: 0, secondReadError: err?.message || String(err) } };
+  }
+}
+
+async function readGeminiOnce(
   images: string[],
   apiKey: string,
   onProgress?: (progress: number, status: string, reading?: ReadingPages) => void,

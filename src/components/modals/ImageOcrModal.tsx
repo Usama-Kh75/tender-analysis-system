@@ -14,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, ReadingPages } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, ReadingPages, ReadItem } from '../../utils/ocrService';
 import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
 import { QuantityMismatchNotice } from '../QuantityMismatchNotice';
@@ -58,13 +58,17 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
-  const [extractedItems, setExtractedItems] = useState<Partial<BOQItem>[]>([]);
+  const [extractedItems, setExtractedItems] = useState<ReadItem[]>([]);
   // صفحات قرأها المحرك الموضعي بثقة منخفضة: تنبيه فوق النتائج وتأكيد صريح قبل الإدراج
   const [lowConfidencePages, setLowConfidencePages] = useState<{ page: number; confidence: number }[]>([]);
   // جرت قراءة على الصفحات الحالية (لتمييز «لم تبدأ القراءة» عن «انتهت بلا أسطر»)
   const [readAttempted, setReadAttempted] = useState(false);
   // نتيجة قراءة Gemini الأخيرة: الإجمالي المكتوب في العطاء (للمقارنة بمجموع الفقرات) والنموذج المستخدم
-  const [geminiCheck, setGeminiCheck] = useState<{ statedTotal: number | null; statedText?: string; modelUsed: string } | null>(null);
+  const [geminiCheck, setGeminiCheck] = useState<{ statedTotal: number | null; statedText?: string; modelUsed: string; doubleRead?: { onlyInSecond: number; secondReadError?: string } } | null>(null);
+  // نفد رصيد Google: لافتة دائمة برابط الدفع (التنبيه المنبثق لا يحمل رابطاً)
+  const [creditNotice, setCreditNotice] = useState(false);
+  // قراءة مزدوجة تعلّم الفقرات المختلفة وتضاعف كلفة القراءة؛ الاختيار يُحفظ في المتصفح
+  const [doubleRead, setDoubleRead] = useState<boolean>(() => localStorage.getItem('gemini_double_read') !== '0');
   // الصفحات التي تُقرأ الآن: تنتقل إليها المعاينة وتُعلَّم في شريط الصفحات، وما قبلها مقروء
   const [readingRange, setReadingRange] = useState<ReadingPages | null>(null);
   const lastReading = useRef('');
@@ -141,6 +145,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setKeyTestStatus({ isTesting: true });
     try {
       const res = await testGeminiApiKey(apiKey, true);
+      if (res.message === GEMINI_CREDIT_MESSAGE) setCreditNotice(true);
       setKeyTestStatus({ isTesting: false, success: res.success, message: res.message });
     } catch (e: any) {
       setKeyTestStatus({ isTesting: false, success: false, message: e.message });
@@ -272,7 +277,10 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       setKeyTestStatus({ isTesting: false, success: false, message: 'مفتاح Gemini المحفوظ غير صالح. تحقق منه أو أدخل مفتاحاً جديداً ثم أعد القراءة.' });
       return 'مفتاح Gemini غير صالح.';
     }
-    if (kind === 'credit') return GEMINI_CREDIT_MESSAGE;
+    if (kind === 'credit') {
+      setCreditNotice(true);
+      return GEMINI_CREDIT_MESSAGE;
+    }
     return kind === 'quota' ? GEMINI_QUOTA_MESSAGE : message;
   };
 
@@ -284,9 +292,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         setProgressPercent(p);
         setProgressStatus(status);
         followReading(reading);
-      });
+      }, undefined, doubleRead);
       setExtractedItems(result.items);
-      setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed });
+      setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed, doubleRead: result.doubleRead });
+      if (result.doubleRead?.secondReadError) {
+        alert(`القراءة الثانية (للتحقق) لم تكتمل: ${explainGeminiError(result.doubleRead.secondReadError)}\nالجدول من القراءة الأولى وحدها، بلا تعليم للفقرات المختلفة.`);
+      }
       if (result.stoppedAtPage) {
         alert(`القراءة ناقصة: توقفت عند الصفحة (${result.stoppedAtPage}) من (${imagePreviews.length}): ${explainGeminiError(result.error || '')}\nما استُخرج من الصفحات السابقة باقٍ في الجدول، وما بعدها لم يُقرأ، فلا تعتمد الجدول قبل إكماله.`);
       }
@@ -369,7 +380,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // أو خطأ ضرب لم يرتكبه المجهز)
   const handleUpdateExtractedItem = (index: number, field: keyof BOQItem, val: any) => {
     const updated = [...extractedItems];
-    const item: Partial<BOQItem> = { ...updated[index], [field]: val };
+    const item: ReadItem = { ...updated[index], [field]: val };
+    // الفقرة المعلَّمة راجعتها اللجنة بتعديلها: يزول التعليم
+    if (field === 'quantity' || field === 'enteredUnitPrice' || field === 'bidderTotal' || field === 'writtenText') item.readDiff = undefined;
     if (field === 'bidderTotal') item.enteredBidderTotal = val;
     // مبلغ أُدخل لفقرة عُدّت غير مسعّرة: لم تكن «-» في الأصل
     if ((field === 'bidderTotal' || field === 'enteredUnitPrice') && val > 0) item.unpriced = undefined;
@@ -478,6 +491,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // جدول الكلفة التخمينية يُطابَق مع الجدول برقم الفقرة (planEstimateMerge)، كما في الإدراج
   const estimatePlan = toEstimateDoc && extractedItems.length > 0 ? planEstimateMerge(extractedItems, tableRows) : null;
 
+  const unreviewedDiffs = extractedItems.filter(i => i.readDiff).length;
+
   const handleApply = () => {
     if (extractedItems.length === 0) return;
     if (lowConfidencePages.length > 0 && !window.confirm(
@@ -495,12 +510,17 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     )) return;
     const mergeText = estimatePlan && estimateMergeConfirmText(estimatePlan);
     if (mergeText && !window.confirm(mergeText)) return;
+    if (unreviewedDiffs > 0 && !window.confirm(
+      `القراءتان اختلفتا في (${unreviewedDiffs}) فقرة لم تُراجَع (معلَّمة في الجدول)، وإحدى القراءتين خطأ فيها.\n\nهل طابقتها مع الأصل وتريد إدراجها؟`
+    )) return;
     // المبالغ المقروءة توضع في bidderTotal؛ عند «تعبئة الكلفة التخمينية» تُنقل إلى estimatedTotal
     // (كانت تصل صفراً فتُمسح الكلفة التخمينية في الجدول). مبلغ غير مقروء لا يمس التخميني القائم
     const toEstimate = destinationMode === 'estimated_only';
+    // تعليم القراءة المزدوجة للمعاينة وحدها: لا يُدرج
+    const readItems = extractedItems.map(({ readDiff: _readDiff, ...rest }) => rest);
     const items = toEstimate
-      ? extractedItems.map(i => ({ ...i, estimatedTotal: (i.bidderTotal || 0) > 0 ? i.bidderTotal : undefined }))
-      : extractedItems;
+      ? readItems.map(i => ({ ...i, estimatedTotal: (i.bidderTotal || 0) > 0 ? i.bidderTotal : undefined }))
+      : readItems;
     // الإجمالي المكتوب يُحفظ مع عطاء المجهز ليظهر المبلغ قبل التصحيح الحسابي وبعده
     onApplyExtractedItems(items, destinationMode, bidderName.trim() || undefined,
       toEstimate ? undefined : statedTotal ?? undefined);
@@ -573,6 +593,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowKeyInput(!showKeyInput)}
+                aria-expanded={showKeyInput}
                 className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg cursor-pointer"
               >
                 <Key className="w-3 h-3" />
@@ -583,16 +604,32 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
         </div>
 
+        {creditNotice && (
+          <div role="alert" className="bg-rose-50 border-b border-rose-300 px-4 sm:px-6 py-2.5 text-xs text-rose-950 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="font-black">⚠️ نفد رصيد حسابك في Google، فلا تتم القراءة بالذكاء الاصطناعي حتى تُضيف رصيداً.</span>
+            <a
+              href="https://aistudio.google.com/billing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-black text-indigo-700 underline hover:text-indigo-900"
+            >
+              إضافة رصيد (aistudio.google.com/billing)
+            </a>
+            <button onClick={() => setCreditNotice(false)} className="ms-auto text-rose-700 hover:text-rose-900 font-bold cursor-pointer">إخفاء</button>
+          </div>
+        )}
+
         {/* API Key Drawer (if expanded) */}
         {showKeyInput && (
           <div className="bg-indigo-50 p-4 border-b border-indigo-200 flex flex-col gap-3 text-xs animate-in slide-in-from-top-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex-1 min-w-[280px]">
-                <label className="block font-black text-indigo-950 mb-1">
+                <label htmlFor="gemini-api-key" className="block font-black text-indigo-950 mb-1">
                   مفتاح Google Gemini API (من aistudio.google.com؛ القراءة تستهلك من رصيد حسابك أو حصته):
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap gap-2">
                   <input
+                    id="gemini-api-key"
                     type="password"
                     placeholder="ألصق المفتاح هنا..."
                     value={apiKey}
@@ -601,7 +638,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   />
                   <button
                     onClick={handleTestKey}
-                    disabled={keyTestStatus.isTesting}
+                    disabled={keyTestStatus.isTesting || !apiKey.trim()}
                     className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <span>{keyTestStatus.isTesting ? 'جاري الفحص...' : '🔍 فحص واختبار المفتاح'}</span>
@@ -621,7 +658,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
             {/* Test result feedback banner */}
             {keyTestStatus.message && (
-              <div className={`p-2 rounded-xl text-[11px] font-bold border flex items-center gap-2 ${
+              <div role={keyTestStatus.success ? 'status' : 'alert'} className={`p-2 rounded-xl text-[11px] font-bold border flex items-center gap-2 ${
                 keyTestStatus.success 
                   ? 'bg-emerald-50 text-emerald-950 border-emerald-300' 
                   : 'bg-rose-50 text-rose-950 border-rose-300'
@@ -821,6 +858,19 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   />
                 </div>
 
+                {engineMode === 'ai_vision' && (
+                  <label className="flex items-start gap-2 text-[11px] text-slate-700 leading-relaxed cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={doubleRead}
+                      disabled={isLoading}
+                      onChange={(e) => { setDoubleRead(e.target.checked); localStorage.setItem('gemini_double_read', e.target.checked ? '1' : '0'); }}
+                      className="mt-0.5"
+                    />
+                    <span><strong>قراءة مزدوجة للتحقق</strong>: يقرأ النموذج الصفحات مرتين ويعلّم الفقرات التي اختلفت فيها القراءتان لتراجعها مع الأصل. تُضاعف كلفة القراءة ووقتها.</span>
+                  </label>
+                )}
+
                 {/* Main Action Button */}
                 <button
                   onClick={processAllImages}
@@ -919,6 +969,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                   </div>
                 )}
 
+                {!isLoading && geminiCheck?.doubleRead && !geminiCheck.doubleRead.secondReadError && extractedItems.length > 0 && (
+                  <div role={unreviewedDiffs > 0 || geminiCheck.doubleRead.onlyInSecond > 0 ? 'alert' : 'status'}
+                    className={`p-3 rounded-xl border text-xs leading-relaxed ${unreviewedDiffs > 0 || geminiCheck.doubleRead.onlyInSecond > 0 ? 'bg-amber-50 border-amber-300 text-amber-950' : 'bg-emerald-50 border-emerald-300 text-emerald-950'}`}>
+                    <div className="font-black">
+                      {unreviewedDiffs > 0
+                        ? `⚠️ اختلفت القراءتان في (${unreviewedDiffs}) فقرة: معلَّمة بالأصفر في الجدول مع قيمة القراءة الثانية. طابقها مع الأصل وصحح ما يلزم، فتزول العلامة بتعديلها.`
+                        : '✓ القراءتان متطابقتان في كل الفقرات المعروضة. هذا لا يضمن صحتها: قد يكرر النموذج الخطأ نفسه، فراجع المجاميع مع الأصل.'}
+                    </div>
+                    {geminiCheck.doubleRead.onlyInSecond > 0 && (
+                      <div className="mt-0.5">وردت في القراءة الثانية وحدها ({geminiCheck.doubleRead.onlyInSecond}) فقرة لم تُقرأ في الأولى: قد تكون سقطت من الجدول، فقارن عدد الفقرات بالأصل.</div>
+                    )}
+                  </div>
+                )}
+
                 {/* مركّب دائماً (فارغ أثناء القراءة): منطقة الإعلان فيه يجب أن تسبق محتواها ليُعلن عنه */}
                 <QuantityMismatchNotice mismatches={isLoading ? [] : qtyMismatchList} source="العطاء المقروء" />
                 <EstimateMergeNotice plan={isLoading ? null : estimatePlan} />
@@ -978,7 +1042,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                           // «-» في العطاء، أو مبلغ تعذّرت قراءته: يُميَّز الصف ليُراجع مع الأصل
                           const missingAmount = !item.unpriced && !((item.bidderTotal || 0) > 0);
                           return (
-                          <tr key={idx} className={item.unpriced ? 'bg-slate-50' : missingAmount ? 'bg-rose-50/60' : rowMath[idx] ? 'bg-amber-50/70' : 'hover:bg-indigo-50/40'}>
+                          <tr key={idx} className={item.unpriced ? 'bg-slate-50' : missingAmount ? 'bg-rose-50/60' : item.readDiff ? 'bg-yellow-100/80' : rowMath[idx] ? 'bg-amber-50/70' : 'hover:bg-indigo-50/40'}>
                             <td className="p-1.5 text-center font-bold bg-slate-50">
                               <input
                                 type="text"
@@ -998,6 +1062,13 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                                 onChange={(e) => handleUpdateExtractedItem(idx, 'description', e.target.value)}
                                 className="w-full bg-transparent border-0 font-bold text-slate-800 text-ellipsis"
                               />
+                              {item.readDiff && (
+                                <span className="inline-block mt-0.5 text-[10px] font-bold text-yellow-950 bg-yellow-300 px-1.5 rounded">
+                                  {item.readDiff.second
+                                    ? <>اختلفت القراءتان في ({item.readDiff.fields.join('، ')}) — الثانية: <bdi>{item.readDiff.second}</bdi></>
+                                    : item.readDiff.fields[0]}
+                                </span>
+                              )}
                               {item.unpriced && (
                                 <span className="inline-block mt-0.5 text-[10px] font-bold text-slate-600 bg-slate-200 px-1.5 rounded">غير مسعّرة في العطاء («-»)</span>
                               )}
