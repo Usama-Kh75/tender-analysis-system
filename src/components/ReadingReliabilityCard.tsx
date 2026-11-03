@@ -23,8 +23,8 @@ export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ 
       aria-label="موثوقية قراءة العطاء"
       className={`rounded-xl border px-3 py-2 text-xs ${risky ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
     >
-      <p className="font-bold flex items-center gap-2">
-        <ScanSearch className="w-4 h-4 shrink-0" aria-hidden="true" />
+      <p className="font-bold flex items-start gap-2">
+        <ScanSearch className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
         <span>
           قُرئ هذا العطاء {how} ({rel.readRows} فقرة).
           {risky && ` تحتاج مطابقة بالورقة: ${rel.riskRows.length} فقرة.`}
@@ -40,14 +40,15 @@ export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ 
             {rows.map(r => (
               <li key={r.index} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-white/70 px-2 py-1">
                 <span className="min-w-0 grow basis-60">
-                  <strong>({r.itemNo})</strong> {r.description.length > 40 ? r.description.slice(0, 40) + '…' : r.description}
-                  <span className="mx-1 font-bold">{r.amount.toLocaleString('en-US')}</span>
+                  <strong>(<bdi>{r.itemNo}</bdi>)</strong> <span title={r.description}>{r.description.length > 40 ? r.description.slice(0, 40) + '…' : r.description}</span>
+                  <bdi className="mx-1 font-bold">{r.amount.toLocaleString('en-US')}</bdi>
                   <span className="block text-amber-800">{r.reasons.join(' | ')}</span>
                 </span>
                 {r.canConfirm && (
                   <button
                     type="button"
                     onClick={() => onConfirm(r.index)}
+                    aria-label={`طابقتُ الورقة للفقرة ${r.itemNo}`}
                     className="shrink-0 font-bold whitespace-nowrap px-3 py-1 rounded-lg cursor-pointer bg-amber-700 hover:bg-amber-800 text-white transition"
                   >
                     طابقتُ الورقة
@@ -57,7 +58,7 @@ export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ 
             ))}
           </ul>
           {rel.riskRows.length > SHOWN && (
-            <button type="button" onClick={() => setAll(v => !v)} className="mt-2 font-bold underline cursor-pointer">
+            <button type="button" aria-expanded={all} onClick={() => setAll(v => !v)} className="mt-2 font-bold underline cursor-pointer">
               {all ? 'عرض الأكبر فقط' : `عرض الكل (${rel.riskRows.length})`}
             </button>
           )}

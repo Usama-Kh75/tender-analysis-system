@@ -212,7 +212,7 @@ export function App() {
             )}
             {readingReliability(activeBidder) && (
               <div className="mb-4 no-print">
-                <ReadingReliabilityCard bidder={activeBidder} onConfirm={handleConfirmReadCheck} />
+                <ReadingReliabilityCard key={activeBidder.id} bidder={activeBidder} onConfirm={handleConfirmReadCheck} />
               </div>
             )}
             <BOQTable
