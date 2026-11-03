@@ -866,7 +866,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       onChange={(e) => { setDoubleRead(e.target.checked); localStorage.setItem('gemini_double_read', e.target.checked ? '1' : '0'); }}
                       className="mt-0.5"
                     />
-                    <span><strong>قراءة مزدوجة للتحقق</strong>: يقرأ النموذج الصفحات مرتين ويعلّم الفقرات التي اختلفت فيها القراءتان لتراجعها مع الأصل. تُضاعف كلفة القراءة ووقتها.</span>
+                    <span><strong>قراءة ثانية للتحقق</strong>: بعد القراءة الكاملة يعيد النموذج قراءة عمود المبلغ وحده (بلا كمية ولا مفرد، فلا يحسب المبلغ بل ينقل المكتوب) ويعلّم الفقرات التي يختلف مبلغها عن القراءة الأولى لتراجعها مع الأصل. تزيد الكلفة والوقت.</span>
                   </label>
                 )}
 
@@ -973,8 +973,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                     className={`p-3 rounded-xl border text-xs leading-relaxed ${unreviewedDiffs > 0 || geminiCheck.doubleRead.onlyInSecond > 0 ? 'bg-amber-50 border-amber-300 text-amber-950' : 'bg-emerald-50 border-emerald-300 text-emerald-950'}`}>
                     <div className="font-black">
                       {unreviewedDiffs > 0
-                        ? `⚠️ اختلفت القراءتان في (${unreviewedDiffs}) فقرة: معلَّمة بالأصفر في الجدول مع قيمة القراءة الثانية. طابقها مع الأصل وصحح ما يلزم، فتزول العلامة بتعديلها.`
-                        : '✓ القراءتان متطابقتان في كل الفقرات المعروضة. هذا لا يضمن صحتها: قد يكرر النموذج الخطأ نفسه، فراجع المجاميع مع الأصل.'}
+                        ? `⚠️ اختلف مبلغ (${unreviewedDiffs}) فقرة بين القراءة الكاملة وقراءة عمود المبلغ: معلَّمة بالأصفر مع ما قُرئ من الخانة. طابقها مع الأصل وصحح ما يلزم، فتزول العلامة بتعديلها.`
+                        : '✓ لم يختلف مبلغ أي فقرة بين القراءتين. هذا لا يضمن صحة الأرقام: قد يتفق الخطأ في القراءتين أو يختلف حجمه فقط، فراجع المجاميع مع الأصل.'}
                     </div>
                     {geminiCheck.doubleRead.onlyInSecond > 0 && (
                       <div className="mt-0.5">وردت في القراءة الثانية وحدها ({geminiCheck.doubleRead.onlyInSecond}) فقرة لم تُقرأ في الأولى: قد تكون سقطت من الجدول، فقارن عدد الفقرات بالأصل.</div>

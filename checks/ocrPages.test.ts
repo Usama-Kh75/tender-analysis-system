@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { attachPages, mapGeminiRow, mergeContinuationRows, geminiFailureKind, compareReads, extractBOQWithGeminiVision } from '../src/utils/ocrService';
+import { attachPages, mapGeminiRow, mergeContinuationRows, geminiFailureKind, compareAmountColumn, parseAmountColumn, extractBOQWithGeminiVision } from '../src/utils/ocrService';
 
 test('رقم الصفحة داخل الدفعة يُحوَّل إلى رقمها في الملف', () => {
   const rows = attachPages([{ page: 1 }, { page: 3 }], 8, 3);
@@ -30,24 +30,56 @@ test('أخطاء Gemini تُصنَّف: الرصيد قبل المفتاح قب�
   assert.equal(geminiFailureKind('تعذر الاتصال بالنماذج: رد فارغ'), null);
 });
 
-test('القراءة المزدوجة: تعليم الفقرة المختلفة والغائبة وعدّ ما انفردت به الثانية', () => {
-  const row = (itemNo: number, q: number, u: number, t: number, w?: string) => mapGeminiRow({ itemNo, description: 'x', quantity: q, unitPrice: u, total: t, writtenText: w }, itemNo - 1);
-  const first = [row(1, 10, 100, 1000), row(2, 260, 4800, 1248000), row(3, 5, 10, 50)];
-  const second = [row(1, 10, 100, 1000), row(2, 280, 4800, 1344000), row(4, 1, 1, 1)];
-  const { items, onlyInSecond } = compareReads(first, second);
-  assert.equal(items[0].readDiff, undefined);
-  assert.deepEqual(items[1].readDiff?.fields, ['الكمية', 'المبلغ']);
-  assert.match(items[1].readDiff!.second, /280/);
-  assert.equal(items[1].bidderTotal, 1248000); // تبقى قيم القراءة الأولى
-  assert.deepEqual(items[2].readDiff?.fields, ['غابت عن القراءة الثانية']);
+const amountRow = (itemNo: number | string, t: number, unpriced = false) =>
+  mapGeminiRow({ itemNo, description: 'x', quantity: 1, unitPrice: t, total: t, unpriced }, 0);
+
+test('مقارنة عمود المبلغ: اختلاف الأرقام يُعلَّم، واختلاف الحجم وحده لا يُعلَّم', () => {
+  const first = [amountRow(1, 144000), amountRow(2, 7200000)];
+  const { items, onlyInSecond } = compareAmountColumn(first, [
+    { itemNo: '1', amountDigits: '114000' },
+    { itemNo: '2', amountDigits: '720000' }
+  ]);
+  assert.deepEqual(items[0].readDiff?.fields, ['المبلغ']);
+  assert.match(items[0].readDiff!.second, /114,000/);
+  assert.equal(items[0].bidderTotal, 144000); // تبقى قيم القراءة الأولى
+  assert.equal(items[1].readDiff, undefined);
+  assert.equal(onlyInSecond, 0);
+});
+
+test('مقارنة عمود المبلغ: أرقام عربية في الثانية تُقارَن، وكذلك رقم الفقرة العربي', () => {
+  const { items } = compareAmountColumn([amountRow(3, 144000), amountRow(4, 114000)], [
+    { itemNo: '٣', amountDigits: '١١٤٠٠٠' },
+    { itemNo: '٤', amountDigits: '١١٤٠٠٠' }
+  ]);
+  assert.deepEqual(items[0].readDiff?.fields, ['المبلغ']);
+  assert.equal(items[1].readDiff, undefined);
+});
+
+test('مقارنة عمود المبلغ: الغائبة والخانة الفارغة وغير المسعّرة لا تُعلَّم، وصف المبلغ وحده يُعدّ', () => {
+  const first = [amountRow(1, 500), amountRow(2, 600), amountRow(3, 700, true)];
+  const { items, onlyInSecond } = compareAmountColumn(first, [
+    { itemNo: '2', amountDigits: '' },
+    { itemNo: '3', amountDigits: '999' },
+    { itemNo: '9', amountDigits: '123' },
+    { itemNo: '10', amountDigits: '' }
+  ]);
+  assert.ok(items.every(i => i.readDiff === undefined));
   assert.equal(onlyInSecond, 1);
 });
 
-test('القراءة المزدوجة: رقم فقرة مكرر يُقابَل بترتيب ورودهما', () => {
-  const row = (t: number) => mapGeminiRow({ itemNo: 1, description: 'x', quantity: 1, unitPrice: t, total: t }, 0);
-  const { items } = compareReads([row(5), row(7)], [row(5), row(8)]);
+test('مقارنة عمود المبلغ: رقم فقرة مكرر يُقابَل بترتيب ورودهما', () => {
+  const { items } = compareAmountColumn([amountRow(1, 5), amountRow(1, 7)], [
+    { itemNo: '1', amountDigits: '5' },
+    { itemNo: '1', amountDigits: '8' }
+  ]);
   assert.equal(items[0].readDiff, undefined);
-  assert.deepEqual(items[1].readDiff?.fields, ['المفرد', 'المبلغ']);
+  assert.deepEqual(items[1].readDiff?.fields, ['المبلغ']);
+});
+
+test('parseAmountColumn: يقبل {rows} ويرفض ردّاً بلا مصفوفة', () => {
+  assert.deepEqual(parseAmountColumn('{"rows":[{"itemNo":"1","amountDigits":"200"}]}').rows, [{ itemNo: '1', amountDigits: '200' }]);
+  assert.throws(() => parseAmountColumn('{"items":5}'));
+  assert.throws(() => parseAmountColumn('ليس json'));
 });
 
 // طلبات Gemini مُحاكاة: تتابع الردود بترتيب الاستدعاء
@@ -65,11 +97,11 @@ function mockGemini(replies: (object | number)[]) {
 const geminiReply = (total: number) => ({ items: [{ itemNo: '1', description: 'x', quantity: 1, unitPrice: total, total, unpriced: false }], grandTotal: null });
 
 test('القراءة المزدوجة عبر Gemini: قراءتان وتعليم الاختلاف', async () => {
-  const m = mockGemini([geminiReply(100), geminiReply(200)]);
+  const m = mockGemini([geminiReply(100), { rows: [{ itemNo: '1', amountDigits: '200' }] }]);
   try {
     const r = await extractBOQWithGeminiVision(['data:image/jpeg;base64,AA'], 'k', undefined, ['gemini-x'], true);
     assert.equal(m.calls.length, 2);
-    assert.deepEqual(r.items[0].readDiff?.fields, ['المفرد', 'المبلغ']);
+    assert.deepEqual(r.items[0].readDiff?.fields, ['المبلغ']);
     assert.equal(r.items[0].bidderTotal, 100);
   } finally { m.restore(); }
 });
@@ -118,4 +150,21 @@ test('Gemini: فشل صفحة في الوسط يُبقي ما قبلها ويُ�
     assert.equal(r.stoppedAtPage, 3);
     assert.deepEqual(r.items.map(i => i.bidderTotal), [10, 20]);
   } finally { m.restore(); }
+});
+
+test('القراءة المزدوجة: الطلب الثاني هو طلب عمود المبلغ، وطلبان لصفحة واحدة', async () => {
+  const bodies: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    bodies.push(init.body);
+    const reply = init.body.includes('عمود واحد فقط') ? { rows: [{ itemNo: '1', amountDigits: '10' }] } : geminiReply(10);
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] }, finishReason: 'STOP' }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r = await extractBOQWithGeminiVision(['data:image/jpeg;base64,P1'], 'k', undefined, ['gemini-x'], true);
+    assert.equal(bodies.length, 2);
+    assert.ok(!bodies[0].includes('عمود واحد فقط'));
+    assert.ok(bodies[1].includes('عمود واحد فقط') && bodies[1].includes('مبلغ الفقرة'));
+    assert.equal(r.items[0].readDiff, undefined);
+  } finally { globalThis.fetch = original; }
 });
