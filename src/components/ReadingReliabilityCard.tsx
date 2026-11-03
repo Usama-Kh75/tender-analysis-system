@@ -40,8 +40,9 @@ export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ 
             {rows.map(r => (
               <li key={r.index} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-white/70 px-2 py-1">
                 <span className="min-w-0 grow basis-60">
-                  <strong>(<bdi>{r.itemNo}</bdi>)</strong> <span title={r.description}>{r.description.length > 40 ? r.description.slice(0, 40) + '…' : r.description}</span>
-                  <bdi className="mx-1 font-bold">{r.amount.toLocaleString('en-US')}</bdi>
+                  <strong>(<bdi>{r.itemNo}</bdi>)</strong> <span title={r.description.length > 40 ? r.description : undefined}>{r.description.length > 40 ? r.description.slice(0, 40) + '…' : r.description}</span>
+                  <span className="mx-1" aria-hidden="true">—</span>
+                  <bdi className="font-bold">{r.amount.toLocaleString('en-US')}</bdi>
                   <span className="block text-amber-800">{r.reasons.join(' | ')}</span>
                 </span>
                 {r.canConfirm && (
