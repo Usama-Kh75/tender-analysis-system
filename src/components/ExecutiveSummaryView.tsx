@@ -14,6 +14,7 @@ import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, excl
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
+import { decisionSensitivity } from '../utils/decisionSensitivity';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
@@ -435,6 +436,26 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
         </div>
 
       </div>
+
+      {(() => {
+        const s = decisionSensitivity(project);
+        if (!s) return null;
+        const side = (e: typeof s.primary) => `${e.name}: ${e.rows} فقرة بمبلغ ${formatNumber(e.amount)}`;
+        return (
+          <div className="no-print bg-amber-50 border border-amber-300 rounded-3xl p-4 sm:p-5 text-amber-900">
+            <div className="font-black text-sm sm:text-base">⚠️ لا تعتمد الترسية قبل مطابقة فقرات بالورقة</div>
+            <div className="text-xs sm:text-sm font-semibold mt-1.5 leading-relaxed">
+              الفرق بين {s.primary.name} و{s.rival.name} هو <bdi className="font-mono">{formatNumber(s.gap)}</bdi> {project.currency}،
+              وفقرات القراءة الآلية التي لم تُطابَق بالورقة بعد تبلغ في العطاءين <bdi className="font-mono">{formatNumber(s.primary.amount + s.rival.amount)}</bdi> {project.currency}:
+              فخطأ قراءة واحد بهذا الحجم قد يبدّل الترتيب.
+            </div>
+            <ul className="text-xs sm:text-sm mt-1.5 list-disc pr-5">
+              {[s.primary, s.rival].filter(e => e.rows > 0).map(e => <li key={e.bidderId}>{side(e)}</li>)}
+            </ul>
+            <div className="text-xs font-semibold mt-1.5">تجدها في بطاقة «موثوقية القراءة» ضمن تبويب «العطاءات» بعد اختيار المجهز. المبلغ حدّ أعلى متحفظ: يعدّ كل مبلغ الفقرة معرَّضاً للخطأ.</div>
+          </div>
+        );
+      })()}
 
     </div>
   );
