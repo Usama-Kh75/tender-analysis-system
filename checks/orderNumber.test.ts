@@ -25,6 +25,10 @@ test('ما لا يطابق يبقى كما هو', () => {
   assert.equal(formatOrderNumber('12/26'), '12/26');
 });
 
+test('جزء أول أطول من أربعة أرقام لا يُنقل', () => {
+  assert.equal(formatOrderNumber('12345/26/11'), '12345 / 26 / 11');
+});
+
 test('مسافات زائدة وأصفار بادئة', () => {
   assert.equal(formatOrderNumber('  7   /  26 /  0905 '), '7 / 26 / 0905');
 });
