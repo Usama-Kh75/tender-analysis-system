@@ -92,16 +92,19 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               onChange={(e) => setAsOf(e.target.value)}
               className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs"
             />
-            <label htmlFor="status-sheet-sort" className="text-xs font-bold text-slate-300">الترتيب:</label>
-            <select
-              id="status-sheet-sort"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'number' | 'stage')}
-              className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs cursor-pointer"
-            >
-              <option value="number">رقم الطلبية</option>
-              <option value="stage">الإجراء</option>
-            </select>
+            {/* التسمية والقائمة معاً كي لا يفصل التفاف الشريط بينهما */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <label htmlFor="status-sheet-sort" className="text-xs font-bold text-slate-300">الترتيب:</label>
+              <select
+                id="status-sheet-sort"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'number' | 'stage')}
+                className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs cursor-pointer"
+              >
+                <option value="number">رقم الطلبية</option>
+                <option value="stage">الإجراء</option>
+              </select>
+            </div>
             <div role="group" aria-labelledby="status-cols-label" className="flex items-center gap-2 flex-wrap">
               <span id="status-cols-label" className="text-xs font-bold text-slate-300">الأعمدة:</span>
               {STATUS_COLUMNS.filter(c => c.optional).map(c => (

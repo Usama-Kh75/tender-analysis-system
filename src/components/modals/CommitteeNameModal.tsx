@@ -49,7 +49,7 @@ export const CommitteeNameModal: React.FC<CommitteeNameModalProps> = ({ mode, in
         </div>
 
         <form onSubmit={submit} className="p-6 space-y-4 bg-slate-50">
-          <p className="text-xs text-slate-600">يُطبع في كشف موقف الطلبيات وفي محضر التحليل، ويبقى محفوظاً في هذا المتصفح لكل المناقصات.</p>
+          <p id="committee-name-desc" className="text-xs text-slate-600">يُطبع في كشف موقف الطلبيات وفي محضر التحليل، ويبقى محفوظاً في هذا المتصفح لكل المناقصات.</p>
           <div>
             <label htmlFor="committee-name-input" className="block text-xs font-bold text-slate-700 mb-1">اسم اللجنة</label>
             <input
@@ -58,6 +58,8 @@ export const CommitteeNameModal: React.FC<CommitteeNameModalProps> = ({ mode, in
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="مثال: لجنة تحليل وتقييم العطاءات المحلية"
+              aria-describedby="committee-name-desc"
+              aria-required="true"
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               autoFocus
             />

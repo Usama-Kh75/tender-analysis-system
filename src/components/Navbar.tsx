@@ -73,10 +73,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     type="button"
                     onClick={onEditCommitteeName}
                     title="تعديل اسم اللجنة"
+                    aria-label={`تعديل اسم اللجنة: ${committeeName}`}
                     className="flex items-center gap-1 text-[11px] font-bold text-amber-200 hover:text-white max-w-[22rem] cursor-pointer"
                   >
                     <Pencil className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{committeeName}</span>
+                    <span className="truncate min-w-0">{committeeName}</span>
                   </button>
                 )}
 
