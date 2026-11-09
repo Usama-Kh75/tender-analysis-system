@@ -346,12 +346,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <thead className="bg-slate-100 font-bold border-b border-slate-400">
                 <tr>
                   <th className="border border-slate-300 p-2 text-center w-8">ت</th>
-                  <th className="border border-slate-300 p-2">المفرد التخميني</th>
-                  <th className="border border-slate-300 p-2 text-center">مفرد المجهز</th>
+                  <th className="border border-slate-300 p-2 text-center">المبلغ التخميني</th>
+                  <th className="border border-slate-300 p-2 text-center">مبلغ المجهز</th>
                   <th className="border border-slate-300 p-2 text-center">نسبة الانحراف</th>
                   <th className="border border-slate-300 p-2 text-center">الفقرة المنحرفة (&gt;{project.deviationThreshold}%)</th>
                   <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>
-                  <th className="border border-slate-300 p-2 text-center">المفرد الموزون (المعتمد)</th>
+                  <th className="border border-slate-300 p-2 text-center">المبلغ الموزون (المعتمد)</th>
                   <th className="border border-slate-300 p-2 text-center">التقييم</th>
                 </tr>
               </thead>
@@ -612,7 +612,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
           {/* 4. توقيعات اللجنة (رئيس اللجنة ثابت + عدد الأعضاء حسب حجم اللجنة الفعلي) */}
           <div
-            className="grid gap-6 pt-6 text-center text-xs font-bold"
+            className="grid gap-6 pt-6 text-center text-xs font-bold break-inside-avoid"
             style={{ gridTemplateColumns: `repeat(${Math.min(signatories.length, 3)}, minmax(0, 1fr))` }}
           >
             {signatories.map((s, idx) => (
