@@ -1,5 +1,6 @@
 import type { StatusEntry, StatusOrder } from '../types/tender';
 import { isValidDate } from '../utils/orderStatus';
+import { formatOrderNumber } from '../utils/orderNumber';
 import { announcementLabel } from '../utils/tenderDetails';
 import { applyStatusAdd, applyStatusDelete, applyStatusEdit, type StatusInput } from './statusHandlers';
 
@@ -22,7 +23,7 @@ export function createStatusOrderHandlers(orders: StatusOrder[], setOrders: (f: 
     return null;
   };
   const tidy = (d: StatusOrderDetails) => ({
-    referenceNumber: d.referenceNumber.trim(),
+    referenceNumber: formatOrderNumber(d.referenceNumber),
     title: d.title.trim(),
     announcementNo: d.announcementNo,
     receivedAt: d.receivedAt?.trim() || undefined

@@ -11,6 +11,7 @@ import {
   parseAllProjectsBackupFile,
   resetAllData
 } from '../utils/storageService';
+import { formatOrderNumber } from '../utils/orderNumber';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
 import { normalizeStatusOrders, saveStatusOrders } from '../utils/statusOrders';
@@ -47,7 +48,7 @@ export function createProjectHandlers({
   // Create New Project
   // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
   const handleCreateProject = ({ title, referenceNumber, announcementNo, receivedAt, contractType, budgetType, bidderNames }: { title: string; referenceNumber: string; announcementNo?: number; receivedAt?: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => {
-    const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
+    const refNo = formatOrderNumber(referenceNumber) || `TND-${Date.now().toString().slice(-4)}`;
     const blank = createNewTenderProject({ title, referenceNumber: refNo, announcementNo, receivedAt, contractType, budgetType, bidderNames });
 
     const newProj: TenderProject = {

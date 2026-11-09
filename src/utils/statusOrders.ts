@@ -1,6 +1,7 @@
 import type { StatusOrder } from '../types/tender';
 import { isValidDate, sanitizeStatusLog } from './orderStatus';
 import { announcementLabel } from './tenderDetails';
+import { formatOrderNumber } from './orderNumber';
 import { STATUS_ORDERS_KEY, isSaveBlocked, stashRecovered } from './storageService';
 
 /**
@@ -19,7 +20,7 @@ export function normalizeStatusOrders(raw: unknown): StatusOrder[] {
     if (!item || typeof item !== 'object') continue;
     const o = item as Record<string, unknown>;
     if (!isText(o.id) || o.id === '' || seen.has(o.id)) continue;
-    const referenceNumber = isText(o.referenceNumber) ? o.referenceNumber : '';
+    const referenceNumber = isText(o.referenceNumber) ? formatOrderNumber(o.referenceNumber) : '';
     const title = isText(o.title) ? o.title : '';
     if (!referenceNumber.trim() && !title.trim()) continue;
     seen.add(o.id);

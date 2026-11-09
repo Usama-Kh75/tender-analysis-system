@@ -2,6 +2,7 @@ import { TenderProject, Bidder, AuditLogEntry, BOQItem, StatusOrder } from '../t
 import { calculateBOQMetrics, normalizeItemNo } from './calculations';
 import { auditRowAmounts, isCommitteeCorrected } from './bidderAuditEngine';
 import { localDate } from './localDate';
+import { formatOrderNumber } from './orderNumber';
 import { exclusionThresholdOf } from './recommendation';
 import { recommendationEditsExport } from './recommendationText';
 import { sanitizeStatusLog, formatSheetDate } from './orderStatus';
@@ -365,8 +366,14 @@ export function uniqueItemIds(project: TenderProject): TenderProject {
   );
 }
 
+const normalizeReferenceNumber = (project: TenderProject): TenderProject => {
+  if (typeof project.referenceNumber !== 'string') return project;
+  const referenceNumber = formatOrderNumber(project.referenceNumber);
+  return referenceNumber === project.referenceNumber ? project : { ...project, referenceNumber };
+};
+
 const normalizeLoadedProject = (project: TenderProject) =>
-  defaultLegacyBudgetType(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(uniqueItemIds(latinizeItemNumbers(project))))))));
+  normalizeReferenceNumber(defaultLegacyBudgetType(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(uniqueItemIds(latinizeItemNumbers(project)))))))));
 
 // نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
 const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';

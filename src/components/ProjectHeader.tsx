@@ -3,6 +3,7 @@ import { Table2, Pencil, Award, BarChart3, Building2, Plus } from 'lucide-react'
 import { TenderProject, Bidder } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
+import { formatOrderNumber } from '../utils/orderNumber';
 import { announcementLabel } from '../utils/tenderDetails';
 import { currentStatus, statusText } from '../utils/orderStatus';
 
@@ -29,6 +30,12 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
   const [isEditingBidderName, setIsEditingBidderName] = useState<boolean>(false);
   const [tempBidderName, setTempBidderName] = useState<string>('');
+  // التوحيد عند الحفظ لا مع كل ضغطة مفتاح كي لا يتشوش الكتابة
+  const commitRefNumber = () => {
+    const formatted = formatOrderNumber(currentProject.referenceNumber);
+    if (formatted !== currentProject.referenceNumber) onChangeProjectField('referenceNumber', formatted);
+    setIsEditingRefNumber(false);
+  };
   const handleUpdateBidderName = onRenameBidder;
   const handleSelectTableTab = onSelectTableTab;
 
@@ -56,12 +63,12 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   const val = e.target.value;
                   onChangeProjectField('referenceNumber', val);
                 }}
-                onKeyDown={(e) => e.key === 'Enter' && setIsEditingRefNumber(false)}
+                onKeyDown={(e) => e.key === 'Enter' && commitRefNumber()}
                 className="bg-white border border-amber-400 text-amber-900 text-xs font-black font-mono px-3 py-1 rounded-full focus:outline-none ring-2 ring-amber-500/20 w-40"
                 autoFocus
               />
               <button
-                onClick={() => setIsEditingRefNumber(false)}
+                onClick={commitRefNumber}
                 className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shrink-0 cursor-pointer"
               >
                 حفظ
