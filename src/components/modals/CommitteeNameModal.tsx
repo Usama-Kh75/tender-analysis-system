@@ -25,7 +25,13 @@ export const CommitteeNameModal: React.FC<CommitteeNameModalProps> = ({ mode, in
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (canSave) onSave(name.trim());
+    if (!canSave) return;
+    const next = name.trim();
+    // الاسم يلازم كل أعمال اللجنة حتى يُغيَّر، فتغييره يُؤكَّد أولاً (طلب أسامة 2026-11-09)
+    if (!required && next !== initialName.trim() && !window.confirm(
+      `هل تريد تغيير اسم اللجنة؟\n\nسيُعتمد الاسم الجديد «${next}» بدل «${initialName.trim()}» في كل وثائق اللجنة: كشف موقف الطلبيات وملف Excel ومحضر التحليل لكل المناقصات، ومنها محاضر المناقصات السابقة إن أُعيدت طباعتها.`
+    )) return;
+    onSave(next);
   };
 
   return createPortal(
