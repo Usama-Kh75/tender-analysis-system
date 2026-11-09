@@ -62,5 +62,6 @@ export function getStatusOrders(): StatusOrder[] {
 
 export function saveStatusOrders(orders: StatusOrder[]): void {
   if (isSaveBlocked()) return;
-  try { localStorage.setItem(STATUS_ORDERS_KEY, JSON.stringify(orders)); } catch { /* تخزين محظور */ }
+  // بلا التقاط صامت: فشل التخزين يظهر كما يظهر في saveAllProjects
+  localStorage.setItem(STATUS_ORDERS_KEY, JSON.stringify(orders));
 }

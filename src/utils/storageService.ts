@@ -574,7 +574,9 @@ export function parseAllBackupText(text: string): AllBackupContents {
     ? raw.projects
     : (Array.isArray(raw) ? raw : null);
 
-  if (!projects || projects.length === 0 || !projects.every(p => p && typeof p === 'object' && Array.isArray(p.bidders) && p.title)) {
+  // نسخة شاملة بلا مناقصات تصح إن حملت طلبيات كشف (يصنعها من لا مناقصة عنده سوى الطلبيات)
+  const hasOrders = !Array.isArray(raw) && Array.isArray(raw?.statusOrders) && raw.statusOrders.length > 0;
+  if (!projects || (projects.length === 0 && !hasOrders) || !projects.every(p => p && typeof p === 'object' && Array.isArray(p.bidders) && p.title)) {
     throw new Error('الملف المختار ليس نسخة احتياطية شاملة صالحة لهذا النظام');
   }
   const out: AllBackupContents = { projects: projects.map(normalizeLoadedProject) };

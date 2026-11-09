@@ -7,10 +7,13 @@ interface StartScreenProps {
   recoveryNotice: React.ReactNode;
   onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
   onImportBackup: (file: File) => void;
+  // تظهر الزران معاً فقط حين توجد طلبيات كشف بلا تحليل (وإلا تبقى الشاشة بسيطة)
+  onOpenStatusSheet?: () => void;
+  onBackupAll?: () => void;
 }
 
 // لا مناقصة محفوظة (بعد «إعادة ضبط النظام» أو حذف آخر مناقصة): شاشة بداية بدل مناقصة فارغة تُنشأ تلقائياً
-export const StartScreen: React.FC<StartScreenProps> = ({ recoveryNotice, onCreate, onImportBackup }) => {
+export const StartScreen: React.FC<StartScreenProps> = ({ recoveryNotice, onCreate, onImportBackup, onOpenStatusSheet, onBackupAll }) => {
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const handleCreateProject = onCreate;
   const handleImportBackup = onImportBackup;
@@ -44,6 +47,24 @@ export const StartScreen: React.FC<StartScreenProps> = ({ recoveryNotice, onCrea
             />
           </label>
         </div>
+        {onOpenStatusSheet && onBackupAll && (
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <button
+              type="button"
+              onClick={onOpenStatusSheet}
+              className="text-sm font-bold text-slate-700 border border-slate-300 hover:bg-slate-50 px-4 py-2 rounded-xl cursor-pointer transition"
+            >
+              كشف موقف الطلبيات
+            </button>
+            <button
+              type="button"
+              onClick={onBackupAll}
+              className="text-sm font-bold text-slate-700 border border-slate-300 hover:bg-slate-50 px-4 py-2 rounded-xl cursor-pointer transition"
+            >
+              نسخة احتياطية شاملة
+            </button>
+          </div>
+        )}
       </div>
       <NewProjectModal
         isOpen={isNewProjectOpen}

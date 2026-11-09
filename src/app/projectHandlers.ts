@@ -150,7 +150,7 @@ export function createProjectHandlers({
       // نسخة قديمة بلا حقل الطلبيات تترك ما في المتصفح منها كما هو
       const orders = rawOrders ? normalizeStatusOrders(rawOrders) : undefined;
 
-      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بالنسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة)`
+      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بما في النسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة)`
         + (orders ? ` وطلبيات الكشف بلا تحليل (${statusOrders.length}) بما في النسخة (${orders.length} طلبية)` : '')
         + '. هل أنت متأكد؟')) {
         return;
@@ -165,8 +165,10 @@ export function createProjectHandlers({
       // المستعاد محفوظ في الملف الذي استُعيد منه
       const at = new Date().toISOString();
       recordBackup(Object.fromEntries([...imported, ...(orders ?? [])].map(p => [p.id, at])));
-      setActiveId(imported[0].id);
-      setActiveProjectId(imported[0].id);
+      // نسخة طلبيات فقط: لا مناقصة تُفتح
+      const firstId = imported[0]?.id ?? '';
+      setActiveId(firstId);
+      setActiveProjectId(firstId);
       alert(`تم استيراد (${imported.length}) مناقصة${orders ? ` و(${orders.length}) طلبية بلا تحليل` : ''} بنجاح من النسخة الاحتياطية الشاملة.`);
       closeSettings();
     } catch (err: any) {

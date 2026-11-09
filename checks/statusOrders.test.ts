@@ -91,3 +91,12 @@ test('الاستعادة الشاملة: حقل الطلبيات يُقرأ إن
   assert.throws(() => parseAllBackupText('{'), /تعذر/);
   assert.throws(() => parseAllBackupText('{"projects":[]}'), /ليس نسخة/);
 });
+
+test('نسخة شاملة بطلبيات فقط (بلا مناقصات) تُقبل، وتُرفض إن خلت الاثنتان', () => {
+  const ok = parseAllBackupText(JSON.stringify({ __type: 'boc-tender-backup-all', projects: [], statusOrders: [mkOrder()] }));
+  assert.equal(ok.projects.length, 0);
+  assert.equal(ok.statusOrders?.length, 1);
+  assert.throws(() => parseAllBackupText(JSON.stringify({ __type: 'boc-tender-backup-all', projects: [], statusOrders: [] })));
+  assert.throws(() => parseAllBackupText(JSON.stringify({ __type: 'boc-tender-backup-all', projects: [] })));
+  assert.throws(() => parseAllBackupText(JSON.stringify([])));
+});
