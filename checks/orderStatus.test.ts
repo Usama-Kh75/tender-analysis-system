@@ -5,7 +5,7 @@ import {
   statusText, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
 } from '../src/utils/orderStatus';
 import * as XLSX from 'xlsx-js-style';
-import { buildStatusSheetWorkbook } from '../src/utils/statusSheetExcel';
+import { buildStatusSheetWorkbook, defaultStatusColumns } from '../src/utils/statusSheetExcel';
 import type { StatusEntry, TenderProject } from '../src/types/tender';
 
 const entry = (o: Partial<StatusEntry>): StatusEntry => ({ id: 'e', stage: 'analysis', memoDate: '2026-10-05', recordedAt: '2026-10-05T00:00:00.000Z', ...o });
@@ -155,6 +155,32 @@ test('ورقة Excel: العنوان والرأس والصفوف', () => {
   assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 7 && m.e.c === 8));
   assert.equal(data[2][6], '77');
   assert.equal(data[2][7], '12/10/2026');
+});
+
+test('الأعمدة الافتراضية: ما فيه بيانات فقط', () => {
+  const rows = statusSheetRows([
+    tender('9', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('3')
+  ]);
+  assert.deepEqual(defaultStatusColumns(rows), ['receivedAt', 'memoNo', 'date']);
+  assert.deepEqual(defaultStatusColumns([]), []);
+});
+
+test('ورقة Excel بلا عمودي الإعلان وتاريخ الاستلام', () => {
+  const rows = statusSheetRows([
+    tender('9', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('3')
+  ]);
+  const wb = buildStatusSheetWorkbook(rows, '2026-11-01', ['memoNo', 'date', 'note']);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  assert.deepEqual(data[1], ['ت', 'رقم الطلبية', 'الموضوع', 'الإجراء', 'رقم المذكرة', 'التاريخ', 'الملاحظات']);
+  assert.equal(data[2].length, 7);
+  const signRow = 2 + rows.length + 1;
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow, c: 5 })].v, 'رئيس اللجنة');
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow + 1, c: 6 })]?.v ?? '', '');
+  assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 5 && m.e.c === 6));
+  assert.ok(ws['!merges']!.some(m => m.s.r === 0 && m.e.c === 6));
 });
 
 test('فروع إجراء مجهول فارغة ولا ترمي', () => {

@@ -6,7 +6,10 @@ import type { createStatusHandlers } from '../../app/statusHandlers';
 import type { createStatusOrderHandlers } from '../../app/statusOrderHandlers';
 import { StatusRowEditor } from './StatusRowEditor';
 import { statusSheetRows, formatSheetDate } from '../../utils/orderStatus';
-import { exportStatusSheetToExcel, statusSheetTitle } from '../../utils/statusSheetExcel';
+import {
+  exportStatusSheetToExcel, statusSheetTitle, STATUS_COLUMNS, defaultStatusColumns, shownStatusColumns
+} from '../../utils/statusSheetExcel';
+import type { OptionalStatusColumnKey } from '../../utils/statusSheetExcel';
 import { localDate } from '../../utils/localDate';
 
 interface StatusSheetModalProps {
@@ -27,6 +30,12 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
   // الصف المفتوح للتحرير: مناقصة أو طلبية بلا تحليل، أو طلبية جديدة
   const [editing, setEditing] = useState<{ kind: 'tender' | 'order'; id: string } | 'new' | null>(null);
 
+  // اختيار الأعمدة الاختيارية: null = الافتراضي (ما فيه بيانات)، ويُعاد عند كل فتح
+  const [chosenCols, setChosenCols] = useState<Set<OptionalStatusColumnKey> | null>(null);
+
+  // عند الإغلاق يُمسح الاختيار (يُضبط أثناء العرض لا في تأثير)
+  if (!isOpen && chosenCols !== null) setChosenCols(null);
+
   useEffect(() => {
     if (!isOpen) return;
     // والمحرر مفتوح فهو الذي يستجيب لـ Escape وحده
@@ -41,6 +50,14 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
   // تاريخ الكشف الممسوح: يُعتمد تاريخ اليوم في العنوان والتصدير بدل عنوان بلا تاريخ
   const dateMissing = formatSheetDate(asOf) === '';
   const effectiveAsOf = dateMissing ? localDate() : asOf;
+  const activeCols = chosenCols ?? new Set(defaultStatusColumns(rows));
+  const cols = shownStatusColumns(activeCols);
+  const toggleCol = (key: OptionalStatusColumnKey) => {
+    const next = new Set(activeCols);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setChosenCols(next);
+  };
+  const stateColSpan = cols.filter(c => c.key === 'action' || c.key === 'memoNo' || c.key === 'date').length;
   const canOutput = rows.length > 0;
   const title = statusSheetTitle(effectiveAsOf);
 
@@ -74,9 +91,24 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               onChange={(e) => setAsOf(e.target.value)}
               className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs"
             />
+            <div role="group" aria-label="الأعمدة" className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-300">الأعمدة:</span>
+              {STATUS_COLUMNS.filter(c => c.optional).map(c => (
+                <label key={c.key} htmlFor={`status-col-${c.key}`} className="flex items-center gap-1 text-xs text-slate-200 cursor-pointer">
+                  <input
+                    id={`status-col-${c.key}`}
+                    type="checkbox"
+                    checked={activeCols.has(c.key as OptionalStatusColumnKey)}
+                    onChange={() => toggleCol(c.key as OptionalStatusColumnKey)}
+                    className="cursor-pointer"
+                  />
+                  {c.header}
+                </label>
+              ))}
+            </div>
             <button
               type="button"
-              onClick={() => exportStatusSheetToExcel(rows, effectiveAsOf)}
+              onClick={() => exportStatusSheetToExcel(rows, effectiveAsOf, activeCols)}
               disabled={!canOutput}
               className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg cursor-pointer"
             >
@@ -105,33 +137,27 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
             <table className="w-full min-w-[850px] print:min-w-0 border-collapse text-xs">
               <thead>
                 <tr className="status-sheet-head bg-slate-100 font-black text-center">
-                  <th scope="col" rowSpan={2} className={cell}>ت</th>
-                  <th scope="col" rowSpan={2} className={cell}>رقم الطلبية</th>
-                  <th scope="col" rowSpan={2} className={cell}>الموضوع</th>
-                  <th scope="col" rowSpan={2} className={cell}>الإعلان</th>
-                  <th scope="col" rowSpan={2} className={cell}>تاريخ الاستلام</th>
-                  <th scope="colgroup" colSpan={3} className={cell}>الموقف</th>
-                  <th scope="col" rowSpan={2} className={cell}>الملاحظات</th>
+                  {cols.map(c => {
+                    const inState = c.key === 'action' || c.key === 'memoNo' || c.key === 'date';
+                    if (inState) return c.key === 'action' ? <th key="state" scope="colgroup" colSpan={stateColSpan} className={cell}>الموقف</th> : null;
+                    return <th key={c.key} scope="col" rowSpan={2} className={cell}>{c.header}</th>;
+                  })}
                   <th scope="col" rowSpan={2} className={`${cell} no-print`}><span className="sr-only">تعديل</span></th>
                 </tr>
                 <tr className="status-sheet-head bg-slate-100 font-black text-center">
-                  <th scope="col" className={cell}>الإجراء</th>
-                  <th scope="col" className={cell}>رقم المذكرة</th>
-                  <th scope="col" className={cell}>التاريخ</th>
+                  {cols.filter(c => c.key === 'action' || c.key === 'memoNo' || c.key === 'date').map(c => (
+                    <th key={c.key} scope="col" className={cell}>{c.header}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map(r => (
                   <tr key={r.no} className="break-inside-avoid">
-                    <td className={`${cell} text-center`}>{r.no}</td>
-                    <td className={`${cell} text-center`}><bdi>{r.referenceNumber}</bdi></td>
-                    <td className={cell}>{r.title}</td>
-                    <td className={`${cell} text-center`}>{r.announcement}</td>
-                    <td className={`${cell} text-center`}><bdi>{r.receivedAt}</bdi></td>
-                    <td className={cell}>{r.action}</td>
-                    <td className={`${cell} text-center`}><bdi>{r.memoNo}</bdi></td>
-                    <td className={`${cell} text-center`}><bdi>{r.date}</bdi></td>
-                    <td className={cell}>{r.note}</td>
+                    {cols.map(c => (
+                      <td key={c.key} className={c.align === 'center' ? `${cell} text-center` : cell}>
+                        {c.key === 'no' || c.key === 'announcement' ? r[c.key] : c.align === 'center' ? <bdi>{r[c.key]}</bdi> : r[c.key]}
+                      </td>
+                    ))}
                     <td className={`${cell} text-center no-print`}>
                       <button
                         type="button"
