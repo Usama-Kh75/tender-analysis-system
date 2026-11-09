@@ -30,11 +30,8 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
   // الصف المفتوح للتحرير: مناقصة أو طلبية بلا تحليل، أو طلبية جديدة
   const [editing, setEditing] = useState<{ kind: 'tender' | 'order'; id: string } | 'new' | null>(null);
 
-  // اختيار الأعمدة الاختيارية: null = الافتراضي (ما فيه بيانات)، ويُعاد عند كل فتح
+  // اختيار الأعمدة الاختيارية: null = الافتراضي (ما فيه بيانات). يُعاد عند كل فتح لأن App يركّب الكشف بمفتاح يتغير مع فتحه
   const [chosenCols, setChosenCols] = useState<Set<OptionalStatusColumnKey> | null>(null);
-
-  // عند الإغلاق يُمسح الاختيار (يُضبط أثناء العرض لا في تأثير)
-  if (!isOpen && chosenCols !== null) setChosenCols(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -91,8 +88,8 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               onChange={(e) => setAsOf(e.target.value)}
               className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs"
             />
-            <div role="group" aria-label="الأعمدة" className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-slate-300">الأعمدة:</span>
+            <div role="group" aria-labelledby="status-cols-label" className="flex items-center gap-2 flex-wrap">
+              <span id="status-cols-label" className="text-xs font-bold text-slate-300">الأعمدة:</span>
               {STATUS_COLUMNS.filter(c => c.optional).map(c => (
                 <label key={c.key} htmlFor={`status-col-${c.key}`} className="flex items-center gap-1 text-xs text-slate-200 cursor-pointer">
                   <input
