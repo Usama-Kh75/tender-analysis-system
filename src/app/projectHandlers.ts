@@ -150,9 +150,14 @@ export function createProjectHandlers({
       // نسخة قديمة بلا حقل الطلبيات تترك ما في المتصفح منها كما هو
       const orders = rawOrders ? normalizeStatusOrders(rawOrders) : undefined;
 
-      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بما في النسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة)`
-        + (orders ? ` وطلبيات الكشف بلا تحليل (${statusOrders.length}) بما في النسخة (${orders.length} طلبية)` : '')
-        + '. هل أنت متأكد؟')) {
+      // الجزء الذي لا عدد فيه على الجانبين لا يُذكر (نسخة طلبيات فقط على شاشة البداية)
+      const replaced = [
+        projects.length || imported.length ? `المناقصات الحالية (${projects.length}) بمناقصات النسخة (${imported.length})` : '',
+        orders ? `طلبيات الكشف بلا تحليل الحالية (${statusOrders.length}) بطلبيات النسخة (${orders.length})` : ''
+      ].filter(Boolean).join(' و');
+      const restored = [imported.length ? `(${imported.length}) مناقصة` : '', orders?.length ? `(${orders.length}) طلبية بلا تحليل` : '']
+        .filter(Boolean).join(' و') || 'النسخة';
+      if (!window.confirm(`⚠️ سيتم استبدال ${replaced} من النسخة الاحتياطية الشاملة المستوردة. هل أنت متأكد؟`)) {
         return;
       }
 
@@ -169,7 +174,7 @@ export function createProjectHandlers({
       const firstId = imported[0]?.id ?? '';
       setActiveId(firstId);
       setActiveProjectId(firstId);
-      alert(`تم استيراد (${imported.length}) مناقصة${orders ? ` و(${orders.length}) طلبية بلا تحليل` : ''} بنجاح من النسخة الاحتياطية الشاملة.`);
+      alert(`تم استيراد ${restored} بنجاح من النسخة الاحتياطية الشاملة.`);
       closeSettings();
     } catch (err: any) {
       alert(`فشل استيراد النسخة الاحتياطية الشاملة: ${err.message}`);

@@ -108,27 +108,32 @@ export function App() {
   // لا مناقصة محفوظة (بعد «إعادة ضبط النظام» أو حذف آخر مناقصة): شاشة بداية بدل مناقصة فارغة تُنشأ تلقائياً
   if (loaded && projects.length === 0) {
     const hasOrders = statusOrders.length > 0;
+    // زر الاستيراد هنا يقبل النسختين: الشاملة (ومنها نسخة الطلبيات وحدها) تُستعاد كاملة، وغيرها مناقصة واحدة
+    const importAnyBackup = async (file: File) => {
+      let full = false;
+      try { full = JSON.parse(await file.text())?.__type === 'boc-tender-backup-all'; } catch { /* يُترك لرسالة الاستيراد */ }
+      return full ? handleImportAllBackup(file) : handleImportBackup(file);
+    };
     return (
       <>
         <StartScreen
           recoveryNotice={recoveryNotice}
           onCreate={handleCreateProject}
-          onImportBackup={handleImportBackup}
+          onImportBackup={importAnyBackup}
           onOpenStatusSheet={hasOrders ? () => setIsStatusSheetOpen(true) : undefined}
           onBackupAll={hasOrders ? handleBackupAll : undefined}
         />
-        {hasOrders && (
-          <StatusSheetModal
-            key={`status-sheet-${isStatusSheetOpen}`}
-            isOpen={isStatusSheetOpen}
-            onClose={() => setIsStatusSheetOpen(false)}
-            projects={projects}
-            orders={statusOrders}
-            // بلا مناقصات لا صفوف مناقصة تُعدَّل؛ المعالج يُمرَّر لإرضاء نوع الخاصية فقط
-            makeTenderHandlers={(p) => createStatusHandlers(p, up => setProjects(prev => prev.map(x => x.id === up.id ? up : x)))}
-            orderHandlers={createStatusOrderHandlers(statusOrders, setStatusOrders)}
-          />
-        )}
+        {/* مركَّب دائماً (يرجع null وهو مغلق): لو رُبط بوجود الطلبيات لأزاله حذف آخر طلبية وهو مفتوح فيبقى isStatusSheetOpen عالقاً */}
+        <StatusSheetModal
+          key={`status-sheet-${isStatusSheetOpen}`}
+          isOpen={isStatusSheetOpen}
+          onClose={() => setIsStatusSheetOpen(false)}
+          projects={projects}
+          orders={statusOrders}
+          // بلا مناقصات لا صفوف مناقصة تُعدَّل؛ المعالج يُمرَّر لإرضاء نوع الخاصية فقط
+          makeTenderHandlers={(p) => createStatusHandlers(p, up => setProjects(prev => prev.map(x => x.id === up.id ? up : x)))}
+          orderHandlers={createStatusOrderHandlers(statusOrders, setStatusOrders)}
+        />
       </>
     );
   }
