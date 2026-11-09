@@ -111,7 +111,8 @@ export function App() {
     // زر الاستيراد هنا يقبل النسختين: الشاملة (ومنها نسخة الطلبيات وحدها) تُستعاد كاملة، وغيرها مناقصة واحدة
     const importAnyBackup = async (file: File) => {
       let full = false;
-      try { full = JSON.parse(await file.text())?.__type === 'boc-tender-backup-all'; } catch { /* يُترك لرسالة الاستيراد */ }
+      // النسخة الشاملة القديمة قائمة مناقصات مجردة بلا __type، ويقرؤها parseAllBackupText أيضاً
+      try { const raw = JSON.parse(await file.text()); full = raw?.__type === 'boc-tender-backup-all' || Array.isArray(raw); } catch { /* يُترك لرسالة الاستيراد */ }
       return full ? handleImportAllBackup(file) : handleImportBackup(file);
     };
     return (
