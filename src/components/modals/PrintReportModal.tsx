@@ -207,10 +207,13 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           <div className="border-b-2 border-slate-900 pb-4 mb-6 text-center relative">
             <div className="flex items-center justify-between mb-2">
               <div className="text-right text-xs font-bold text-slate-700">
-                {project.entityName && (
+                {/* المحضر محضر اللجنة: باسمها يُكتب الرأس وحده، فاللجنة ليست الجهة المتعاقدة (قرار أسامة 2026-11-09).
+                    بلا اسم لجنة يبقى الرأس باسم الجهة كما كان */}
+                {committeeName ? (
+                  <div className="text-amber-900 font-extrabold text-sm">{committeeName}</div>
+                ) : project.entityName && (
                   <div className="text-amber-900 font-extrabold text-sm">{project.entityName}</div>
                 )}
-                {committeeName && <div className="text-slate-900 font-bold text-xs">{committeeName}</div>}
               </div>
 
               <div className="text-left text-xs font-bold text-slate-700">
