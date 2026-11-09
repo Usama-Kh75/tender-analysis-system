@@ -106,11 +106,11 @@ export function App() {
       mode={committeeName === null ? 'required' : 'edit'}
       initialName={committeeName ?? ''}
       onSave={(name) => {
+        // فشل الحفظ لا يُبقي النافذة الإلزامية فوق المناقصات والنسخة الاحتياطية: يُستعمل الاسم لهذه الجلسة وحدها
         try {
           saveCommitteeName(name);
         } catch {
-          alert('تعذر حفظ اسم اللجنة في المتصفح (قد تكون مساحة التخزين ممتلئة أو ممنوعة).');
-          return;
+          alert('تعذر حفظ اسم اللجنة في المتصفح (قد تكون مساحة التخزين ممتلئة أو ممنوعة). سيُستعمل الاسم في هذه الجلسة فقط، ويُطلب ثانيةً عند الفتح التالي.');
         }
         setCommitteeName(name);
         setIsCommitteeEditOpen(false);
