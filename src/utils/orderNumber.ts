@@ -18,3 +18,22 @@ export function formatOrderNumber(raw: string): string {
     return typeof raw === 'string' ? raw.trim() : '';
   }
 }
+
+/** أجزاء الرقم الموحّد «تسلسل / سنة / رمز»؛ null إن لم يكن بهذه الصيغة. */
+export function orderNumberParts(ref: string): { seq: number; year: number; code: number } | null {
+  const parts = formatOrderNumber(ref).split(' / ');
+  if (parts.length !== 3 || !parts.every(p => DIGITS.test(p))) return null;
+  return { seq: Number(parts[0]), year: Number(parts[1]), code: Number(parts[2]) };
+}
+
+/** ترتيب أرقام الطلبيات: الموحَّدة أولاً بالسنة ثم التسلسل ثم الرمز، ثم غيرها نصاً، والفارغ أخيراً. */
+export function compareOrderNumbers(a: string, b: string): number {
+  const ea = (a ?? '').trim() === '';
+  const eb = (b ?? '').trim() === '';
+  if (ea !== eb) return ea ? 1 : -1;
+  const pa = orderNumberParts(a);
+  const pb = orderNumberParts(b);
+  if (pa && pb) return pa.year - pb.year || pa.seq - pb.seq || pa.code - pb.code;
+  if (pa || pb) return pa ? -1 : 1;
+  return (a ?? '').localeCompare(b ?? '', 'ar', { numeric: true });
+}

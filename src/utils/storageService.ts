@@ -10,6 +10,8 @@ import { sanitizeStatusLog, formatSheetDate } from './orderStatus';
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
 // طلبيات الكشف بلا تحليل (utils/statusOrders.ts)؛ المفتاح هنا ليمسحه resetAllData دون دوران في الاستيراد
 export const STATUS_ORDERS_KEY = 'antigravity_status_orders_v1';
+// اسم اللجنة: إعداد واحد للنظام كله لا لكل مناقصة (utils/committeeName.ts)
+export const COMMITTEE_NAME_KEY = 'antigravity_committee_name_v1';
 const ACTIVE_PROJECT_KEY = 'antigravity_active_project_id_v2';
 
 // البيانات الافتراضية الأولية من جدول التحليل
@@ -147,6 +149,7 @@ export function createNewTenderProject(opts: {
 export function resetAllData(): void {
   localStorage.removeItem(ACTIVE_PROJECT_KEY);
   localStorage.removeItem(STATUS_ORDERS_KEY);
+  localStorage.removeItem(COMMITTEE_NAME_KEY);
   saveAllProjects([]);
 }
 
@@ -553,10 +556,11 @@ export async function downloadProjectBackup(project: TenderProject): Promise<str
  * (بديل عن downloadProjectBackup التي تُصدّر مناقصة واحدة فقط).
  * يعيد وقت النسخة إن حُفظت، أو null إن ألغى المستخدم الحفظ.
  */
-export async function downloadAllProjectsBackup(projects: TenderProject[], statusOrders: StatusOrder[] = []): Promise<string | null> {
+export async function downloadAllProjectsBackup(projects: TenderProject[], statusOrders: StatusOrder[] = [], committeeName?: string | null): Promise<string | null> {
   const exportedAt = new Date().toISOString();
-  // statusOrders حقل إضافي: النسخ الأقدم تتجاهله وتقرأ المناقصات كما هي
-  const backup = { __type: 'boc-tender-backup-all', __version: 1, exportedAt, projectsCount: projects.length, projects, statusOrders };
+  // statusOrders وcommitteeName حقلان إضافيان: النسخ الأقدم تتجاهلهما وتقرأ المناقصات كما هي
+  const name = committeeName?.trim();
+  const backup = { __type: 'boc-tender-backup-all', __version: 1, exportedAt, projectsCount: projects.length, projects, statusOrders, ...(name ? { committeeName: name } : {}) };
   const saved = await saveJsonFile(`نسخة_احتياطية_شاملة_كل_المناقصات_${localDate(new Date(exportedAt))}.json`, backup);
   return saved ? exportedAt : null;
 }
@@ -565,6 +569,8 @@ export interface AllBackupContents {
   projects: TenderProject[];
   // غائب في النسخ القديمة: يبقى عندها ما في المتصفح من طلبيات الكشف. القيم خام، يوحّدها normalizeStatusOrders
   statusOrders?: unknown[];
+  // غائب في النسخ القديمة وفي النسخ بلا اسم: يبقى عندها اسم اللجنة الحالي
+  committeeName?: string;
 }
 
 /**
@@ -588,6 +594,7 @@ export function parseAllBackupText(text: string): AllBackupContents {
   }
   const out: AllBackupContents = { projects: projects.map(normalizeLoadedProject) };
   if (!Array.isArray(raw) && Array.isArray(raw.statusOrders)) out.statusOrders = raw.statusOrders;
+  if (!Array.isArray(raw) && typeof raw.committeeName === 'string' && raw.committeeName.trim()) out.committeeName = raw.committeeName.trim();
   return out;
 }
 

@@ -8,7 +8,8 @@ import {
   FolderOpen,
   UserCheck,
   DownloadCloud,
-  ShieldCheck
+  ShieldCheck,
+  Pencil
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { canInstallApp, installApp, subscribeInstall } from '../pwa';
@@ -26,6 +27,8 @@ interface NavbarProps {
   unsavedCount: number;
   lastBackupAt?: string;
   onBackupAll: () => void;
+  committeeName: string | null;
+  onEditCommitteeName: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -39,7 +42,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   unsavedCount,
   lastBackupAt,
-  onBackupAll
+  onBackupAll,
+  committeeName,
+  onEditCommitteeName
 }) => {
   const canInstall = useSyncExternalStore(subscribeInstall, canInstallApp);
   const lastBackupText = lastBackupAt
@@ -53,7 +58,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Right Side: Full Official Title with Author (Permanent & Sticky) */}
           <div className="flex items-center gap-3.5">
-            <div className="flex items-center gap-3 bg-slate-900/90 border border-amber-500/30 p-2 pr-3 pl-4 rounded-2xl shadow-lg">
+            {/* py-1.5 لا p-2: سطر اسم اللجنة يضيف ارتفاعاً، والصندوق يبقى داخل الشريط (h-20) */}
+            <div className="flex items-center gap-3 bg-slate-900/90 border border-amber-500/30 py-1.5 pr-3 pl-4 rounded-2xl shadow-lg">
 
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
@@ -61,6 +67,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     نظام تحليل العطاءات التجاري المتكامل
                   </span>
                 </div>
+
+                {committeeName && (
+                  <button
+                    type="button"
+                    onClick={onEditCommitteeName}
+                    title="تعديل اسم اللجنة"
+                    className="flex items-center gap-1 text-[11px] font-bold text-amber-200 hover:text-white max-w-[22rem] cursor-pointer"
+                  >
+                    <Pencil className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{committeeName}</span>
+                  </button>
+                )}
 
                 <div className="flex items-center gap-2 text-[11px] font-medium mt-0.5 flex-wrap">
                   <span className="text-emerald-400 font-bold flex items-center gap-1 bg-emerald-950/90 px-2 py-0.5 rounded-md border border-emerald-500/40">

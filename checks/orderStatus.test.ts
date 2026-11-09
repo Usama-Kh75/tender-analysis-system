@@ -4,6 +4,7 @@ import { createNewTenderProject, sanitizeStatusFields } from '../src/utils/stora
 import {
   statusText, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
 } from '../src/utils/orderStatus';
+import { compareOrderNumbers, orderNumberParts } from '../src/utils/orderNumber';
 import * as XLSX from 'xlsx-js-style';
 import { buildStatusSheetWorkbook, defaultStatusColumns } from '../src/utils/statusSheetExcel';
 import type { StatusEntry, TenderProject } from '../src/types/tender';
@@ -55,16 +56,40 @@ test('التنظيف يتجاوز الفاسد ولا يتعطل', () => {
   assert.equal(out[1].id, 'b');
 });
 
-test('ترتيب الكشف', () => {
+test('ترتيب الكشف برقم الطلبية: السنة ثم التسلسل ثم الرمز', () => {
   const rows = statusSheetRows([
-    tender('9', { receivedAt: '2026-10-10' }),
-    tender('3'),
-    tender('5', { receivedAt: '2026-09-01' })
+    tender('2 / 26 / 9012'),
+    tender('19 / 25 / 9030'),
+    tender('11 / 26 / 9014'),
+    tender('11 / 26 / 9009')
   ]);
-  assert.deepEqual(rows.map(r => r.referenceNumber), ['5', '9', '3']);
-  assert.deepEqual(rows.map(r => r.no), [1, 2, 3]);
-  const tie = statusSheetRows([tender('10', { receivedAt: '2026-10-10' }), tender('2', { receivedAt: '2026-10-10' })]);
-  assert.deepEqual(tie.map(r => r.referenceNumber), ['2', '10']);
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['19 / 25 / 9030', '2 / 26 / 9012', '11 / 26 / 9009', '11 / 26 / 9014']);
+  assert.deepEqual(rows.map(r => r.no), [1, 2, 3, 4]);
+  // تاريخ الاستلام لا يدخل في الترتيب
+  const byNumber = statusSheetRows([tender('3 / 26 / 9001', { receivedAt: '2026-01-01' }), tender('1 / 26 / 9001', { receivedAt: '2026-09-01' })]);
+  assert.deepEqual(byNumber.map(r => r.referenceNumber), ['1 / 26 / 9001', '3 / 26 / 9001']);
+});
+
+test('غير الموحَّد بعد الموحَّد، والفارغ أخيراً', () => {
+  const rows = statusSheetRows([tender(''), tender('ب'), tender('5 / 26 / 9001'), tender('أ')]);
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['5 / 26 / 9001', 'أ', 'ب', '']);
+  assert.equal(compareOrderNumbers('9 / 26 / 1', '10 / 26 / 1') < 0, true);
+  assert.equal(orderNumberParts('x'), null);
+  assert.deepEqual(orderNumberParts('2 / 26 / 9012'), { seq: 2, year: 26, code: 9012 });
+});
+
+test('ترتيب الكشف بالإجراء: مجموعات بترتيب المراحل، والمجهول بعد «آخر»، وبلا موقف أخيراً', () => {
+  const unknown = { ...entry({}), stage: 'future' as unknown as StatusEntry['stage'] };
+  const rows = statusSheetRows([
+    tender('1 / 26 / 9001'),
+    tender('2 / 26 / 9001', { statusLog: [unknown] }),
+    tender('3 / 26 / 9001', { statusLog: [entry({ stage: 'audit' })] }),
+    tender('4 / 26 / 9001', { statusLog: [entry({ stage: 'other', customText: 'س' })] }),
+    tender('6 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] }),
+    tender('5 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] })
+  ], [], 'stage');
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['5 / 26 / 9001', '6 / 26 / 9001', '3 / 26 / 9001', '4 / 26 / 9001', '2 / 26 / 9001', '1 / 26 / 9001']);
+  assert.deepEqual(rows.map(r => r.no), [1, 2, 3, 4, 5, 6]);
 });
 
 test('صف سليم لعنوان ورقم فارغين وبلا موقف', () => {
@@ -136,7 +161,7 @@ test('بلا تاريخ استلام لا موقف ولا خطأ', () => {
 
 test('ورقة Excel: العنوان والرأس والصفوف', () => {
   const rows = statusSheetRows([
-    tender('9', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('1', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
     tender('3')
   ]);
   const wb = buildStatusSheetWorkbook(rows, '2026-11-01');
@@ -159,7 +184,7 @@ test('ورقة Excel: العنوان والرأس والصفوف', () => {
 
 test('الأعمدة الافتراضية: ما فيه بيانات فقط', () => {
   const rows = statusSheetRows([
-    tender('9', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('1', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
     tender('3')
   ]);
   assert.deepEqual(defaultStatusColumns(rows), ['receivedAt', 'memoNo', 'date']);
@@ -168,7 +193,7 @@ test('الأعمدة الافتراضية: ما فيه بيانات فقط', () 
 
 test('ورقة Excel بلا عمودي الإعلان وتاريخ الاستلام', () => {
   const rows = statusSheetRows([
-    tender('9', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('1', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
     tender('3')
   ]);
   const wb = buildStatusSheetWorkbook(rows, '2026-11-01', ['memoNo', 'date', 'note']);
@@ -181,6 +206,24 @@ test('ورقة Excel بلا عمودي الإعلان وتاريخ الاستل�
   assert.equal(ws[XLSX.utils.encode_cell({ r: signRow + 1, c: 6 })]?.v ?? '', '');
   assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 5 && m.e.c === 6));
   assert.ok(ws['!merges']!.some(m => m.s.r === 0 && m.e.c === 6));
+});
+
+test('ورقة Excel باسم اللجنة: سطر مدموج فوق العنوان وتنزاح الصفوف', () => {
+  const rows = statusSheetRows([tender('9'), tender('3')]);
+  const wb = buildStatusSheetWorkbook(rows, '2026-11-01', undefined, '  لجنة التحليل  ');
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  assert.equal(ws.A1.v, 'لجنة التحليل');
+  assert.equal(ws.A2.v, 'موقف الطلبيات لغاية 01/11/2026');
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  assert.equal(data[2][1], 'رقم الطلبية');
+  assert.equal(data.length - 3, rows.length + 3);
+  const signRow = 3 + rows.length + 1;
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow, c: 7 })].v, 'رئيس اللجنة');
+  assert.ok(ws['!merges']!.some(m => m.s.r === 0 && m.e.c === 8));
+  assert.ok(ws['!merges']!.some(m => m.s.r === 1 && m.e.c === 8));
+  assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 7 && m.e.c === 8));
+  // بلا اسم: الورقة كما كانت
+  assert.equal(buildStatusSheetWorkbook(rows, '2026-11-01', undefined, '  ').Sheets['موقف الطلبيات'].A1.v, 'موقف الطلبيات لغاية 01/11/2026');
 });
 
 test('فروع إجراء مجهول فارغة ولا ترمي', () => {
@@ -228,13 +271,13 @@ test('كشف الموقف يدمج المناقصات والطلبيات بلا 
   const order = { id: 'o1', referenceNumber: '4', title: 'طلبية بلا تحليل', announcementNo: 2, receivedAt: '2026-09-15', createdAt: 'x', updatedAt: 'x', statusLog: [entry({ stage: 'readvertise', customText: 'لعدم الاستيفاء', memoDate: undefined })] };
   const t = tender('9', { receivedAt: '2026-10-10' });
   const rows = statusSheetRows([t, tender('3')], [order]);
-  assert.deepEqual(rows.map(r => r.referenceNumber), ['4', '9', '3']);
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['3', '4', '9']);
   assert.deepEqual(rows.map(r => r.no), [1, 2, 3]);
-  assert.deepEqual(rows.map(r => r.kind), ['order', 'tender', 'tender']);
-  assert.equal(rows[0].id, 'o1');
-  assert.equal(rows[1].id, t.id);
-  assert.equal(rows[0].action, 'إعادة إعلان لعدم الاستيفاء');
-  assert.equal(rows[0].date, '');
-  assert.equal(rows[0].announcement, 'الإعلان الثاني');
+  assert.deepEqual(rows.map(r => r.kind), ['tender', 'order', 'tender']);
+  assert.equal(rows[1].id, 'o1');
+  assert.equal(rows[2].id, t.id);
+  assert.equal(rows[1].action, 'إعادة إعلان لعدم الاستيفاء');
+  assert.equal(rows[1].date, '');
+  assert.equal(rows[1].announcement, 'الإعلان الثاني');
   assert.equal(statusSheetRows([], [order]).length, 1);
 });

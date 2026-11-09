@@ -9,6 +9,7 @@ import {
   downloadRecoveredData
 } from '../utils/storageService';
 import { RESUMED_STATE } from '../resume';
+import { getCommitteeName } from '../utils/committeeName';
 import { getStatusOrders, saveStatusOrders } from '../utils/statusOrders';
 import { StatusOrder, TenderProject } from '../types/tender';
 
@@ -24,6 +25,8 @@ export function useProjectStore() {
   const [projects, setProjects] = useState<TenderProject[]>(initial.stored);
   const [statusOrders, setStatusOrders] = useState<StatusOrder[]>(initial.orders);
   const [activeProjectId, setActiveId] = useState<string>(initial.activeId);
+  // اسم اللجنة: إعداد واحد للنظام؛ null = لم يُدخل بعد. يُحفظ عند الإدخال (saveCommitteeName) لا بتأثير
+  const [committeeName, setCommitteeName] = useState<string | null>(getCommitteeName);
   // لا يُحفظ شيء قبل اكتمال التحميل الأول؛ وبعده تُحفظ القائمة حتى لو فرغت (حذف آخر مناقصة)
   const loaded = true;
   const [recovered, setRecovered] = useState(initial.recovered);
@@ -74,7 +77,7 @@ export function useProjectStore() {
   const dismissRecovered = () => { clearRecoveredData(); setRecovered([]); };
 
   return {
-    projects, setProjects, statusOrders, setStatusOrders, activeProjectId, setActiveId, loaded, recovered, backupMarks,
+    projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, activeProjectId, setActiveId, loaded, recovered, backupMarks,
     unsaved, recordBackup, downloadRecovered, dismissRecovered
   };
 }

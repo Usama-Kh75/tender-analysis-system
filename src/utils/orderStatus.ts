@@ -1,5 +1,6 @@
 import type { StatusBranch, StatusEntry, StatusOrder, StatusStage, TenderProject } from '../types/tender';
 import { announcementLabel } from './tenderDetails';
+import { compareOrderNumbers } from './orderNumber';
 
 /**
  * موقف الطلبية: سجل وعرض فقط، لا يدخل في أي حساب أو توصية.
@@ -129,22 +130,28 @@ export interface StatusSheetRow {
 
 type SheetSource = { kind: 'tender' | 'order'; item: TenderProject | StatusOrder };
 
-/** كشف الموقف: المناقصات المحفوظة والطلبيات بلا تحليل معاً، مرتبة بتاريخ الاستلام ثم برقم الطلبية. */
-export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[] = []): StatusSheetRow[] {
-  const received = (p: { receivedAt?: string }) => (isValidDate(p.receivedAt) ? p.receivedAt : undefined);
+/**
+ * كشف الموقف: المناقصات المحفوظة والطلبيات بلا تحليل معاً.
+ * 'number' (الافتراضي): برقم الطلبية (السنة ثم التسلسل ثم الرمز).
+ * 'stage': مجموعات بحسب الإجراء الحالي بترتيب STAGE_ORDER (المجهول بعد «إجراء آخر»، وبلا موقف أخيراً)، وداخل المجموعة برقم الطلبية.
+ */
+export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[] = [], sortBy: 'number' | 'stage' = 'number'): StatusSheetRow[] {
   const sources: SheetSource[] = [
     ...projects.map(item => ({ kind: 'tender' as const, item })),
     ...orders.map(item => ({ kind: 'order' as const, item }))
   ];
+  const stageRank = (p: TenderProject | StatusOrder): number => {
+    const s = p.statusLog?.at(-1);
+    if (!s) return STAGE_ORDER.length + 1;
+    const i = STAGE_ORDER.indexOf(s.stage);
+    return i === -1 ? STAGE_ORDER.length : i;
+  };
   const sorted = sources.sort((a, b) => {
-    const ra = received(a.item);
-    const rb = received(b.item);
-    if (ra !== rb) {
-      if (!ra) return 1;
-      if (!rb) return -1;
-      return ra < rb ? -1 : 1;
+    if (sortBy === 'stage') {
+      const d = stageRank(a.item) - stageRank(b.item);
+      if (d) return d;
     }
-    return (a.item.referenceNumber ?? '').localeCompare(b.item.referenceNumber ?? '', 'ar', { numeric: true });
+    return compareOrderNumbers(a.item.referenceNumber ?? '', b.item.referenceNumber ?? '');
   });
   return sorted.map(({ kind, item: p }, i) => {
     const s = p.statusLog?.at(-1);

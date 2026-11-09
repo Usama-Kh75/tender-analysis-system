@@ -17,6 +17,8 @@ interface StatusSheetModalProps {
   onClose: () => void;
   projects: TenderProject[];
   orders: StatusOrder[];
+  // اسم اللجنة؛ يُطبع فوق العنوان إن وُجد
+  committeeName?: string | null;
   // معالجات مناقصة بعينها (لا الحالية وحدها) ومعالجات الطلبيات بلا تحليل
   makeTenderHandlers: (p: TenderProject) => ReturnType<typeof createStatusHandlers>;
   orderHandlers: ReturnType<typeof createStatusOrderHandlers>;
@@ -25,7 +27,9 @@ interface StatusSheetModalProps {
 const cell = 'border border-black px-2 py-1.5 align-middle';
 
 // معاينة كشف موقف الطلبيات وطباعته (A4 أفقي) وتصديره. وثيقة رسمية بتوقيع رئيس اللجنة وحده (قرار أسامة 2026-11-01)، وعرض لما هو محفوظ بلا مجاميع
-export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onClose, projects, orders, makeTenderHandlers, orderHandlers }) => {
+export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onClose, projects, orders, committeeName, makeTenderHandlers, orderHandlers }) => {
+  // ترتيب الصفوف (معاينة وطباعة وExcel): غير محفوظ، يبدأ برقم الطلبية مع كل فتح
+  const [sortBy, setSortBy] = useState<'number' | 'stage'>('number');
   const [asOf, setAsOf] = useState(localDate());
   // الصف المفتوح للتحرير: مناقصة أو طلبية بلا تحليل، أو طلبية جديدة
   const [editing, setEditing] = useState<{ kind: 'tender' | 'order'; id: string } | 'new' | null>(null);
@@ -43,7 +47,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
-  const rows = statusSheetRows(projects, orders);
+  const rows = statusSheetRows(projects, orders, sortBy);
   // تاريخ الكشف الممسوح: يُعتمد تاريخ اليوم في العنوان والتصدير بدل عنوان بلا تاريخ
   const dateMissing = formatSheetDate(asOf) === '';
   const effectiveAsOf = dateMissing ? localDate() : asOf;
@@ -88,6 +92,16 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               onChange={(e) => setAsOf(e.target.value)}
               className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs"
             />
+            <label htmlFor="status-sheet-sort" className="text-xs font-bold text-slate-300">الترتيب:</label>
+            <select
+              id="status-sheet-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'number' | 'stage')}
+              className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs cursor-pointer"
+            >
+              <option value="number">رقم الطلبية</option>
+              <option value="stage">الإجراء</option>
+            </select>
             <div role="group" aria-labelledby="status-cols-label" className="flex items-center gap-2 flex-wrap">
               <span id="status-cols-label" className="text-xs font-bold text-slate-300">الأعمدة:</span>
               {STATUS_COLUMNS.filter(c => c.optional).map(c => (
@@ -105,7 +119,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
             </div>
             <button
               type="button"
-              onClick={() => exportStatusSheetToExcel(rows, effectiveAsOf, activeCols)}
+              onClick={() => exportStatusSheetToExcel(rows, effectiveAsOf, activeCols, committeeName)}
               disabled={!canOutput}
               className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg cursor-pointer"
             >
@@ -126,6 +140,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
         </div>
 
         <div className="p-6 flex-1 min-h-0 overflow-auto bg-white text-black print:overflow-visible print:p-0" dir="rtl">
+          {committeeName && <div className="text-center text-base font-black mb-1">{committeeName}</div>}
           <h1 className="text-center text-lg font-black mb-4">{title}</h1>
           {dateMissing && <p className="no-print text-center text-xs font-bold text-rose-700 mb-2">لم يُدخل تاريخ الكشف، فيُستعمل تاريخ اليوم</p>}
           {rows.length === 0 ? (

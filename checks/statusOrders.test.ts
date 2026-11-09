@@ -78,6 +78,15 @@ test('مواقف الطلبية: إضافة وتعديل وحذف بلا تار�
 
 const projectJson = () => createNewTenderProject({ title: 'ت', referenceNumber: '1', contractType: 'works', budgetType: 'operating', bidderNames: ['x'] });
 
+test('الاستعادة الشاملة: اسم اللجنة يُقرأ مشذَّباً إن كان نصاً غير فارغ، وإلا يُترك', () => {
+  const p = projectJson();
+  const base = { __type: 'boc-tender-backup-all', __version: 1, projects: [p] };
+  assert.equal(parseAllBackupText(JSON.stringify({ ...base, committeeName: '  لجنة س ' })).committeeName, 'لجنة س');
+  assert.equal(parseAllBackupText(JSON.stringify(base)).committeeName, undefined);
+  for (const bad of ['  ', '', 5, null]) assert.equal(parseAllBackupText(JSON.stringify({ ...base, committeeName: bad })).committeeName, undefined);
+  assert.equal(parseAllBackupText(JSON.stringify([p])).committeeName, undefined);
+});
+
 test('الاستعادة الشاملة: حقل الطلبيات يُقرأ إن وُجد، وغيابه (نسخة قديمة) يعني تركها', () => {
   const p = projectJson();
   const withOrders = parseAllBackupText(JSON.stringify({ __type: 'boc-tender-backup-all', __version: 1, projects: [p], statusOrders: [mkOrder()] }));

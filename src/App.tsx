@@ -23,6 +23,8 @@ import { SmartTableImportModal } from './components/modals/SmartTableImportModal
 import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
+import { CommitteeNameModal } from './components/modals/CommitteeNameModal';
+import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
 import { OrderStatusModal } from './components/modals/OrderStatusModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -51,9 +53,10 @@ import { APP_VERSION } from './changelog';
 
 export function App() {
   const {
-    projects, setProjects, statusOrders, setStatusOrders, activeProjectId, setActiveId, loaded, recovered, backupMarks,
+    projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, activeProjectId, setActiveId, loaded, recovered, backupMarks,
     unsaved, recordBackup, downloadRecovered, dismissRecovered
   } = useProjectStore();
+  const [isCommitteeEditOpen, setIsCommitteeEditOpen] = useState(false);
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
   const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
 
@@ -76,7 +79,8 @@ export function App() {
   const [isRecEditing, setIsRecEditing] = useState(false);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
-  const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
+  const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
+    : isOcrOpen ? 'قراءة جدول من PDF / صورة'
     : isSmartImportOpen ? 'استيراد جدول'
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isStatusOpen ? 'موقف الطلبية'
@@ -91,10 +95,29 @@ export function App() {
 
   const { handleBackupAll, handleBackupProject, handleCreateProject, handleImportBackup, handleDeleteProject,
     handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup, selectProject } = createProjectHandlers({
-    projects, setProjects, statusOrders, setStatusOrders, setActiveId, recordBackup, currentProject,
+    projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, setActiveId, recordBackup, currentProject,
     closeSettings: () => setIsSettingsOpen(false),
     closeProjects: () => setIsProjectsOpen(false)
   });
+
+  // اسم اللجنة: إلزامي عند أول فتح بلا اسم محفوظ (في شاشة البداية والواجهة الرئيسية)، ويُعدَّل من الشريط العلوي
+  const committeeNameModal = loaded && (committeeName === null || isCommitteeEditOpen) ? (
+    <CommitteeNameModal
+      mode={committeeName === null ? 'required' : 'edit'}
+      initialName={committeeName ?? ''}
+      onSave={(name) => {
+        try {
+          saveCommitteeName(name);
+        } catch {
+          alert('تعذر حفظ اسم اللجنة في المتصفح (قد تكون مساحة التخزين ممتلئة أو ممنوعة).');
+          return;
+        }
+        setCommitteeName(name);
+        setIsCommitteeEditOpen(false);
+      }}
+      onClose={() => setIsCommitteeEditOpen(false)}
+    />
+  ) : null;
 
   const recoveryNotice = (
     <RecoveryNotice
@@ -131,10 +154,12 @@ export function App() {
           onClose={() => setIsStatusSheetOpen(false)}
           projects={projects}
           orders={statusOrders}
+          committeeName={committeeName}
           // بلا مناقصات لا صفوف مناقصة تُعدَّل؛ المعالج يُمرَّر لإرضاء نوع الخاصية فقط
           makeTenderHandlers={(p) => createStatusHandlers(p, up => setProjects(prev => prev.map(x => x.id === up.id ? up : x)))}
           orderHandlers={createStatusOrderHandlers(statusOrders, setStatusOrders)}
         />
+        {committeeNameModal}
       </>
     );
   }
@@ -191,6 +216,8 @@ export function App() {
         unsavedCount={unsaved.length}
         lastBackupAt={lastBackupTime(backupMarks)}
         onBackupAll={handleBackupAll}
+        committeeName={committeeName}
+        onEditCommitteeName={() => setIsCommitteeEditOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -419,6 +446,7 @@ export function App() {
         onClose={() => setIsStatusSheetOpen(false)}
         projects={projects}
         orders={statusOrders}
+        committeeName={committeeName}
         makeTenderHandlers={(p) => createStatusHandlers(p, ctx.saveProject)}
         orderHandlers={orderHandlers}
       />
@@ -430,9 +458,12 @@ export function App() {
         onClose={() => setIsPrintOpen(false)}
         project={currentProject}
         activeBidder={activeBidder}
+        committeeName={committeeName}
         onSaveRecommendationEdit={handleSaveRecommendationEdit}
         onEditingChange={setIsRecEditing}
       />
+
+      {committeeNameModal}
 
     </div>
   );

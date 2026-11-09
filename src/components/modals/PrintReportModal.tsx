@@ -19,6 +19,8 @@ interface PrintReportModalProps {
   onClose: () => void;
   project: TenderProject;
   activeBidder: Bidder;
+  // اسم اللجنة (إعداد النظام)؛ فارغ أو null يطبع كما كان
+  committeeName?: string | null;
   // صياغة اللجنة للتوصية، أو null لاستعادة صياغة النظام (recommendationHandlers.ts)
   onSaveRecommendationEdit?: (edit: RecommendationEdit | null, systemText: string) => void;
   // محرر الصياغة مفتوح: يمنع App التحديث حتى يُحفظ أو يُلغى (blockingWork)
@@ -50,6 +52,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   onClose,
   project,
   activeBidder,
+  committeeName,
   onSaveRecommendationEdit,
   onEditingChange
 }) => {
@@ -207,6 +210,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 {project.entityName && (
                   <div className="text-amber-900 font-extrabold text-sm">{project.entityName}</div>
                 )}
+                {committeeName && <div className="text-slate-900 font-bold text-xs">{committeeName}</div>}
               </div>
 
               <div className="text-left text-xs font-bold text-slate-700">
@@ -405,7 +409,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
           {/* 3. توصية وقرار اللجنة القانوني */}
           <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed bg-slate-50">
-            <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: توصية لجنة التحليل:</h4>
+            <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: توصية {committeeName || 'لجنة التحليل'}:</h4>
 
             {/* صياغة اللجنة: إعادة صياغة فقط، لا تضيف شروطاً (قرار أسامة 2026-10-23). أدواتها لا تُطبع */}
             {editable && !editing && (

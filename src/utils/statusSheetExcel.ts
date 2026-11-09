@@ -49,10 +49,14 @@ export function shownStatusColumns(optional?: Iterable<OptionalStatusColumnKey>)
 
 export const statusSheetTitle = (asOf: string): string => `موقف الطلبيات لغاية ${formatSheetDate(asOf)}`;
 
-export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>): XLSX.WorkBook {
+export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>, committeeName?: string | null): XLSX.WorkBook {
   const cols = shownStatusColumns(columns);
   const lastCol = cols.length - 1;
+  // اسم اللجنة سطر مدموج فوق العنوان إن وُجد؛ وبلا اسم تبقى الورقة كما كانت (o = إزاحة الصفوف)
+  const name = committeeName?.trim() ?? '';
+  const o = name ? 1 : 0;
   const aoa: (string | number)[][] = [
+    ...(name ? [[name]] : []),
     [statusSheetTitle(asOf)],
     cols.map(c => c.header),
     ...rows.map(r => cols.map(c => r[c.key]))
@@ -65,7 +69,7 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
   // توقيع رئيس اللجنة في آخر عمودين (يسار الصفحة في ورقة RTL): كل سطر دمج الأخيرين
   const signCol = lastCol - 1;
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
+    ...Array.from({ length: o + 1 }, (_, r) => ({ s: { r, c: 0 }, e: { r, c: lastCol } })),
     ...[signRow, signRow + 1].map(r => ({ s: { r, c: signCol }, e: { r, c: lastCol } }))
   ];
 
@@ -75,14 +79,15 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
     ws[ref].s = s;
   };
   for (let c = 0; c <= lastCol; c++) {
-    style(0, c, { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } });
-    style(1, c, {
+    if (name) style(0, c, { font: { name: FONT, sz: 12, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } });
+    style(o, c, { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } });
+    style(o + 1, c, {
       font: { name: FONT, sz: 10, bold: true, color: { rgb: 'FFFFFFFF' } },
       fill: { patternType: 'solid', fgColor: { rgb: 'FF1F4E78' } },
       border: BOX,
       alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
     });
-    for (let r = 2; r < aoa.length; r++) {
+    for (let r = o + 2; r < aoa.length; r++) {
       style(r, c, {
         font: { name: FONT, sz: 10 },
         border: BOX,
@@ -106,6 +111,6 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
   return wb;
 }
 
-export function exportStatusSheetToExcel(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>): void {
-  XLSX.writeFile(buildStatusSheetWorkbook(rows, asOf, columns),`موقف الطلبيات ${asOf}.xlsx`);
+export function exportStatusSheetToExcel(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>, committeeName?: string | null): void {
+  XLSX.writeFile(buildStatusSheetWorkbook(rows, asOf, columns, committeeName), `موقف الطلبيات ${asOf}.xlsx`);
 }
