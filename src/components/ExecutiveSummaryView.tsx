@@ -15,12 +15,14 @@ import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
 import { decisionSensitivity } from '../utils/decisionSensitivity';
+import { exclusionLabels } from '../utils/exclusionReasons';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
   onSelectBidder: (id: string) => void;
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
+  onOpenExclusionReasons: (id: string) => void;
   onOpenPrint: () => void;
   onExportExcel: () => void;
 }
@@ -29,6 +31,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   project,
   onSelectBidder,
   onUpdateBidderStatus,
+  onOpenExclusionReasons,
   onOpenPrint,
   onExportExcel
 }) => {
@@ -53,7 +56,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
     if (bidder.status === 'disqualified') {
       commercialStatus = 'excluded';
-      commercialReason = 'مستبعد بقرار اللجنة';
+      const why = exclusionLabels(bidder);
+      commercialReason = why ? `مستبعد بقرار اللجنة: ${why}` : 'مستبعد بقرار اللجنة';
     } else if (noEstimate) {
       // كان يُكتب «عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً» قبل أي مقارنة ممكنة
       commercialStatus = 'pending';
@@ -172,7 +176,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
-            <div className="text-slate-400 font-semibold mb-1">المستبعدة تجارياً (انحرافات)</div>
+            <div className="text-slate-400 font-semibold mb-1">المستبعدة</div>
             <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-rose-400'}`}>
               {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus === 'excluded').length} عروض`}
             </div>
@@ -206,7 +210,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 <th className="p-3.5 text-center w-32 border-l border-slate-800">الانحراف الجزئي %</th>
                 <th className="p-3.5 text-center w-28 border-l border-slate-800 text-purple-200">النسبة السعرية</th>
                 <th className="p-3.5 text-center w-44 border-l border-slate-800">الموقف التجاري والرقابي</th>
-                <th className="p-3.5 min-w-[260px] border-l border-slate-800">أسباب القبول أو الاستبعاد التجاري</th>
+                <th className="p-3.5 min-w-[260px] border-l border-slate-800">أسباب القبول أو الاستبعاد</th>
                 <th className="p-3.5 text-center w-28">قرار اللجنة</th>
               </tr>
             </thead>
@@ -319,6 +323,15 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                       <div className="text-slate-700 font-semibold">
                         {bidder.commercialReason}
                       </div>
+                      {bidder.status === 'disqualified' && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenExclusionReasons(bidder.id)}
+                          className="mt-1.5 text-[11px] font-bold text-rose-700 hover:underline cursor-pointer"
+                        >
+                          أسباب الاستبعاد
+                        </button>
+                      )}
                     </td>
 
                     {/* قرار اللجنة */}

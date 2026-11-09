@@ -85,6 +85,26 @@ export interface Bidder {
   weightedOffer?: WeightedOfferState;
   status: 'pending' | 'qualified' | 'disqualified' | 'recommended' | 'awarded';
   notes?: string;
+  // أسباب استبعاد العطاء كله (status 'disqualified')، بنود التعليمات التي استندت إليها اللجنة (utils/exclusionReasons.ts).
+  // تبقى محفوظة إن تغيّرت الحالة، ولا تُعرض ولا تُطبع إلا والعطاء مستبعد
+  exclusionReasons?: ExclusionReason[];
+}
+
+export type ExclusionGround =
+  | 'technical' | 'qualification' | 'conditions' | 'incomplete' | 'bidBond' | 'bondInvalid' | 'legalDocs'
+  | 'blacklist' | 'derivedDiscount' | 'erasures' | 'refusedCorrection' | 'duplicateManager' | 'duplicatePartner' | 'other';
+
+export interface ExclusionReason {
+  ground: ExclusionGround | string;   // نص غير معروف (من إصدار أحدث) يبقى ويُعرض «سبب غير محدد»
+  item?: number;                      // المتطلب المطلوب استكماله (1..9)، لسبب 'incomplete' وحده
+  detail?: string;
+}
+
+// مصدر الرأي الفني الذي استندت إليه اللجنة في استبعاد عطاء فنياً (المادة 13/ثانياً)، للمناقصة كلها
+export interface TechnicalOpinion {
+  source?: string;
+  letterNo?: string;
+  letterDate?: string;   // YYYY-MM-DD
 }
 
 export interface AuditLogEntry {
@@ -177,6 +197,7 @@ export interface TenderProject {
   exclusionThreshold?: number;        // حد استبعاد العطاء بانحرافه الكلي؛ غائب = deviationThreshold (exclusionThresholdOf)
   thresholdBasis?: string;            // سند الحد المعتمد إن اختلف أحد الحدّين عن نص التعليمات (20%)
   recommendationEdit?: RecommendationEdit;
+  technicalOpinion?: TechnicalOpinion;
   activeBidderId: string;
   bidders: Bidder[];
   auditLogs: AuditLogEntry[];

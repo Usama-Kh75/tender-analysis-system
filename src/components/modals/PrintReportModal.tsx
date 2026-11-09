@@ -13,6 +13,7 @@ import { tenderDetailParts } from '../../utils/tenderDetails';
 import { localDate } from '../../utils/localDate';
 import { recommendationPieces, recommendationEditChanges, savedRecommendationEdit, type RecommendationBlock } from '../../utils/recommendationText';
 import { LegalTextsList, ThresholdBasisSentence } from '../LegalTexts';
+import { excludedBidders, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -96,6 +97,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح بحضور المجهز وتوقيعه، فلا تُطبع فقرة التصحيح أصلاً:
   // تسلسلها في أوليات المناقصة (سجل التدقيق وقيد الاختيار). قرار المستخدم 2026-10-21
   const adopted = rec.kind === 'award' && rec.chosenByCommittee;
+  // أسباب استبعاد العطاءات بقرار اللجنة، ونصوصها الرسمية، وتذكيرات ما ينقص
+  const excluded = excludedBidders(project);
+  const withReasons = excluded.filter(b => (b.exclusionReasons?.length ?? 0) > 0);
+  const withoutReasons = excluded.filter(b => (b.exclusionReasons?.length ?? 0) === 0);
+  const exclusionKeys = exclusionLegalKeys(project);
 
   // صياغة اللجنة تُطبع بدل صياغة النظام ما دامت هناك توصية (لا قبل الكلفة التخمينية)
   const savedEdit = rec.kind !== 'no-estimate' ? savedRecommendationEdit(project) : undefined;
@@ -290,7 +296,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       </>)}
                       <td className="border border-slate-300 p-2 text-center font-bold">
                         {isRejected ? (
-                          <span className="text-rose-800">مستبعد بقرار اللجنة</span>
+                          <span className="text-rose-800">{exclusionLegalLabels(b) ? `مستبعد — ${exclusionLegalLabels(b)}` : 'مستبعد بقرار اللجنة'}</span>
                         ) : isExcluded ? (
                           <span className="text-rose-800">مستبعد تجارياً — المادة (13)/ثالثاً/أ</span>
                         ) : isRec ? (
@@ -320,6 +326,30 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                         التصحيح في {s.unsigned.length > 1 ? 'الفقرات' : 'الفقرة'}: <bdi>{s.unsigned.join('، ')}</bdi>.</>}
                   </p>
                 ))}
+              </div>
+            )}
+            {withReasons.length > 0 && (
+              <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white mt-3">
+                <strong>أسباب استبعاد العطاءات:</strong>
+                {withReasons.map(b => (
+                  <div key={b.id} className="mt-1.5">
+                    <p>استُبعد عطاء ({b.name}) {b.exclusionReasons!.length > 1 ? 'للأسباب الآتية' : 'للسبب الآتي'}:</p>
+                    <ol className="list-decimal pr-6 space-y-0.5">
+                      {b.exclusionReasons!.map((r, i) => <li key={i}>{reasonLine(r, project)}</li>)}
+                    </ol>
+                  </div>
+                ))}
+                <LegalTextsList keys={exclusionKeys} />
+              </div>
+            )}
+            {withoutReasons.map(b => (
+              <div key={b.id} className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                لم تُذكر أسباب استبعاد عطاء ({b.name})؛ تُسجَّل من «أسباب الاستبعاد». (هذه الملاحظة لا تظهر في الطباعة)
+              </div>
+            ))}
+            {needsOpinionSource(project) && (
+              <div className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                لم يُذكر مصدر الرأي الفني (الفنيون المستعان بهم وكتابهم). (هذه الملاحظة لا تظهر في الطباعة)
               </div>
             )}
           </div>

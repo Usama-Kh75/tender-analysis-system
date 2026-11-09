@@ -24,6 +24,8 @@ import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { CommitteeNameModal } from './components/modals/CommitteeNameModal';
+import { ExclusionReasonsModal } from './components/modals/ExclusionReasonsModal';
+import { createExclusionHandlers } from './app/exclusionHandlers';
 import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
 import { OrderStatusModal } from './components/modals/OrderStatusModal';
@@ -77,6 +79,8 @@ export function App() {
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
+  // العطاء الذي تُسجَّل أسباب استبعاده في نافذة «أسباب الاستبعاد»؛ null = مغلقة
+  const [exclusionBidderId, setExclusionBidderId] = useState<string | null>(null);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
@@ -88,6 +92,7 @@ export function App() {
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
     : isPrintOpen && isRecEditing ? 'صياغة التوصية'
+    : exclusionBidderId ? 'أسباب الاستبعاد'
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
@@ -184,6 +189,8 @@ export function App() {
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
+  const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
+  const exclusionBidder = exclusionBidderId ? currentProject.bidders.find(b => b.id === exclusionBidderId) : undefined;
   const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(currentProject, ctx.saveProject);
   const orderHandlers = createStatusOrderHandlers(statusOrders, setStatusOrders);
 
@@ -316,6 +323,7 @@ export function App() {
               project={currentProject}
               onSelectBidder={selectBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
+              onOpenExclusionReasons={setExclusionBidderId}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
             />
@@ -363,8 +371,19 @@ export function App() {
         onSelectBidder={selectBidder}
         onAddNewBidder={handleAddNewBidder}
         onUpdateBidderStatus={handleUpdateBidderStatus}
+        onOpenExclusionReasons={setExclusionBidderId}
         onDeleteBidder={handleDeleteBidder}
       />
+
+      {exclusionBidder && (
+        <ExclusionReasonsModal
+          key={exclusionBidder.id}
+          project={currentProject}
+          bidder={exclusionBidder}
+          onSave={(bidderId, reasons, opinion) => { handleSaveExclusionReasons(bidderId, reasons, opinion); setExclusionBidderId(null); }}
+          onClose={() => setExclusionBidderId(null)}
+        />
+      )}
 
       <AuditTrailModal
         isOpen={isAuditOpen}
