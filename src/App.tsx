@@ -45,12 +45,13 @@ import { createBidderHandlers } from './app/bidderHandlers';
 import { createProjectHandlers } from './app/projectHandlers';
 import { createRecommendationHandlers } from './app/recommendationHandlers';
 import { createStatusHandlers } from './app/statusHandlers';
+import { createStatusOrderHandlers } from './app/statusOrderHandlers';
 import { downloadRecommendationEdits } from './utils/storageService';
 import { APP_VERSION } from './changelog';
 
 export function App() {
   const {
-    projects, setProjects, activeProjectId, setActiveId, loaded, recovered, backupMarks,
+    projects, setProjects, statusOrders, setStatusOrders, activeProjectId, setActiveId, loaded, recovered, backupMarks,
     unsaved, recordBackup, downloadRecovered, dismissRecovered
   } = useProjectStore();
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
@@ -90,7 +91,7 @@ export function App() {
 
   const { handleBackupAll, handleBackupProject, handleCreateProject, handleImportBackup, handleDeleteProject,
     handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup, selectProject } = createProjectHandlers({
-    projects, setProjects, setActiveId, recordBackup, currentProject,
+    projects, setProjects, statusOrders, setStatusOrders, setActiveId, recordBackup, currentProject,
     closeSettings: () => setIsSettingsOpen(false),
     closeProjects: () => setIsProjectsOpen(false)
   });
@@ -132,7 +133,8 @@ export function App() {
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
-  const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(ctx);
+  const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(currentProject, ctx.saveProject);
+  const orderHandlers = createStatusOrderHandlers(statusOrders, setStatusOrders);
 
   const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
     applyPageBreaks(pages);
@@ -332,7 +334,8 @@ export function App() {
         key={`${currentProject.id}-status-${isStatusOpen}`}
         isOpen={isStatusOpen}
         onClose={() => setIsStatusOpen(false)}
-        project={currentProject}
+        statusLog={currentProject.statusLog ?? []}
+        suggestions={currentProject.bidders.map(b => b.name).filter(Boolean)}
         onAdd={handleAddStatus}
         onEdit={handleEditStatus}
         onDelete={handleDeleteStatus}
@@ -392,11 +395,14 @@ export function App() {
         isOpen={isStatusSheetOpen}
         onClose={() => setIsStatusSheetOpen(false)}
         projects={projects}
+        orders={statusOrders}
+        makeTenderHandlers={(p) => createStatusHandlers(p, ctx.saveProject)}
+        orderHandlers={orderHandlers}
       />
 
       <PrintReportModal
         // خيار جدول الأسعار الموزونة يبدأ بقيمته الافتراضية مع كل فتح، كما في ProjectSettingsModal
-        key={`${currentProject.id}-${isPrintOpen}`}
+        key={`${currentProject.id}-print-${isPrintOpen}`}
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
         project={currentProject}

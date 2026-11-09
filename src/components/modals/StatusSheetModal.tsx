@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, FileSpreadsheet } from 'lucide-react';
-import type { TenderProject } from '../../types/tender';
+import { X, Printer, FileSpreadsheet, Plus } from 'lucide-react';
+import type { StatusOrder, TenderProject } from '../../types/tender';
+import type { createStatusHandlers } from '../../app/statusHandlers';
+import type { createStatusOrderHandlers } from '../../app/statusOrderHandlers';
+import { StatusRowEditor } from './StatusRowEditor';
 import { statusSheetRows, formatSheetDate } from '../../utils/orderStatus';
 import { exportStatusSheetToExcel, statusSheetTitle } from '../../utils/statusSheetExcel';
 import { localDate } from '../../utils/localDate';
@@ -10,24 +13,31 @@ interface StatusSheetModalProps {
   isOpen: boolean;
   onClose: () => void;
   projects: TenderProject[];
+  orders: StatusOrder[];
+  // معالجات مناقصة بعينها (لا الحالية وحدها) ومعالجات الطلبيات بلا تحليل
+  makeTenderHandlers: (p: TenderProject) => ReturnType<typeof createStatusHandlers>;
+  orderHandlers: ReturnType<typeof createStatusOrderHandlers>;
 }
 
 const cell = 'border border-black px-2 py-1.5 align-middle';
 
 // معاينة كشف موقف الطلبيات وطباعته (A4 أفقي) وتصديره. وثيقة رسمية بتوقيع رئيس اللجنة وحده (قرار أسامة 2026-11-01)، وعرض لما هو محفوظ بلا مجاميع
-export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onClose, projects }) => {
+export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onClose, projects, orders, makeTenderHandlers, orderHandlers }) => {
   const [asOf, setAsOf] = useState(localDate());
+  // الصف المفتوح للتحرير: مناقصة أو طلبية بلا تحليل، أو طلبية جديدة
+  const [editing, setEditing] = useState<{ kind: 'tender' | 'order'; id: string } | 'new' | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // والمحرر مفتوح فهو الذي يستجيب لـ Escape وحده
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !editing) onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, editing]);
 
   if (!isOpen) return null;
 
-  const rows = statusSheetRows(projects);
+  const rows = statusSheetRows(projects, orders);
   // تاريخ الكشف الممسوح: يُعتمد تاريخ اليوم في العنوان والتصدير بدل عنوان بلا تاريخ
   const dateMissing = formatSheetDate(asOf) === '';
   const effectiveAsOf = dateMissing ? localDate() : asOf;
@@ -49,6 +59,13 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
             <h2 className="text-base font-bold">كشف موقف الطلبيات</h2>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setEditing('new')}
+              className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> إضافة طلبية بلا تحليل
+            </button>
             <label htmlFor="status-sheet-date" className="text-xs font-bold text-slate-300">تاريخ الكشف</label>
             <input
               id="status-sheet-date"
@@ -83,7 +100,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
           <h1 className="text-center text-lg font-black mb-4">{title}</h1>
           {dateMissing && <p className="no-print text-center text-xs font-bold text-rose-700 mb-2">لم يُدخل تاريخ الكشف، فيُستعمل تاريخ اليوم</p>}
           {rows.length === 0 ? (
-            <p className="text-center text-sm text-slate-500 py-8">لا طلبيات محفوظة</p>
+            <p className="text-center text-sm text-slate-500 py-8">لا طلبيات محفوظة. أضف طلبية بلا تحليل من الزر أعلاه.</p>
           ) : (
             <table className="w-full min-w-[850px] print:min-w-0 border-collapse text-xs">
               <thead>
@@ -95,6 +112,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                   <th scope="col" rowSpan={2} className={cell}>تاريخ الاستلام</th>
                   <th scope="colgroup" colSpan={3} className={cell}>الموقف</th>
                   <th scope="col" rowSpan={2} className={cell}>الملاحظات</th>
+                  <th scope="col" rowSpan={2} className={`${cell} no-print`}><span className="sr-only">تعديل</span></th>
                 </tr>
                 <tr className="status-sheet-head bg-slate-100 font-black text-center">
                   <th scope="col" className={cell}>الإجراء</th>
@@ -114,13 +132,21 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                     <td className={`${cell} text-center`}><bdi>{r.memoNo}</bdi></td>
                     <td className={`${cell} text-center`}><bdi>{r.date}</bdi></td>
                     <td className={cell}>{r.note}</td>
+                    <td className={`${cell} text-center no-print`}>
+                      <button
+                        type="button"
+                        onClick={() => setEditing({ kind: r.kind, id: r.id })}
+                        aria-label={`تعديل الطلبية ${r.referenceNumber || r.title}`}
+                        className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer"
+                      >تعديل</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
           {rows.length > 0 && (
-            <div className="break-inside-avoid break-before-avoid flex justify-start pt-8 text-center text-xs font-bold">
+            <div className="break-inside-avoid break-before-avoid flex justify-end pt-8 text-center text-xs font-bold">
               <div className="w-64 border-t border-slate-400 pt-2">
                 <div>رئيس اللجنة</div>
                 <div className="mt-6 text-slate-600">التوقيع: .....................</div>
@@ -129,6 +155,16 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
           )}
         </div>
       </div>
+      {editing && (() => {
+        const common = { orderHandlers, onClose: () => setEditing(null), onCreated: (id: string) => setEditing({ kind: 'order', id }) };
+        if (editing === 'new') return <StatusRowEditor key="new" mode="new" {...common} />;
+        if (editing.kind === 'tender') {
+          const project = projects.find(p => p.id === editing.id);
+          return project ? <StatusRowEditor key={`t-${project.id}`} mode="tender" project={project} tenderHandlers={makeTenderHandlers(project)} {...common} /> : null;
+        }
+        const order = orders.find(o => o.id === editing.id);
+        return order ? <StatusRowEditor key={`o-${order.id}`} mode="order" order={order} {...common} /> : null;
+      })()}
     </div>,
     document.body
   );

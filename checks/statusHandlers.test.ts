@@ -2,7 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject } from '../src/utils/storageService';
-import { createEditContext } from '../src/app/editContext';
 import { createStatusHandlers } from '../src/app/statusHandlers';
 import { currentStatus } from '../src/utils/orderStatus';
 import type { TenderProject } from '../src/types/tender';
@@ -15,8 +14,7 @@ const mk = (receivedAt?: string): TenderProject => ({
 // ينفّذ عملية ويعيد المحفوظ (undefined إن لم يُحفظ شيء) ونتيجة المعالج
 const run = <T,>(project: TenderProject, fn: (h: ReturnType<typeof createStatusHandlers>) => T) => {
   let saved: TenderProject | undefined;
-  const ctx = createEditContext(project, project.bidders[0], (f: any) => { saved = f([project])[0]; });
-  const result = fn(createStatusHandlers(ctx));
+  const result = fn(createStatusHandlers(project, p => { saved = p; }));
   return { saved, result };
 };
 
@@ -74,21 +72,63 @@ test('حذف الكل يعطي currentStatus غير معرّف', () => {
   assert.equal(currentStatus(saved!), undefined);
 });
 
-test('إضافة بتاريخ فارغ أو باطل لا تُحفظ وترجع رسالة', () => {
-  for (const memoDate of ['', 'x', '2026-02-30']) {
+test('إضافة بتاريخ باطل لا تُحفظ وترجع رسالة', () => {
+  for (const memoDate of ['x', '2026-02-30']) {
     const { saved, result } = run(mk(), h => h.handleAddStatus({ stage: 'audit', memoDate }));
     assert.match(result ?? '', /[؀-ۿ]/);
     assert.equal(saved, undefined);
   }
 });
 
-test('تنظيف المدخل: trim وحذف الفارغ وcustomText لغير «إجراء آخر»', () => {
+test('تنظيف المدخل: trim وحذف الفارغ والتفصيل النصي يُحفظ لكل إجراء', () => {
   const { saved } = run(mk(), h => h.handleAddStatus({ stage: 'audit', branch: '' as any, customText: 'نص', memoNo: '  ', memoDate: '2026-10-20', note: '  ملاحظة  ' }));
   const e = currentStatus(saved!)!;
-  assert.equal(e.customText, undefined);
+  assert.equal(e.customText, 'نص');
   assert.equal(e.branch, undefined);
   assert.equal(e.memoNo, undefined);
   assert.equal(e.note, 'ملاحظة');
   const other = currentStatus(run(mk(), h => h.handleAddStatus({ stage: 'other', customText: '  كتاب  ', memoDate: '2026-10-20' })).saved!)!;
   assert.equal(other.customText, 'كتاب');
+});
+
+test('إضافة بلا تاريخ تُحفظ، والتاريخ الفارغ يصير غائباً، ووصف السجل بلا «بتاريخ»', () => {
+  for (const memoDate of [undefined, '', '  ']) {
+    const { saved, result } = run(mk(), h => h.handleAddStatus({ stage: 'referred', customText: ' شركة س ', memoDate }));
+    assert.equal(result, null);
+    const e = currentStatus(saved!)!;
+    assert.equal(e.memoDate, undefined);
+    assert.equal(e.customText, 'شركة س');
+    assert.doesNotMatch(saved!.auditLogs[0].details, /بتاريخ/);
+    assert.match(saved!.auditLogs[0].details, /تمت الإحالة إلى شركة س/);
+  }
+});
+
+test('التفصيل النصي يُحفظ لكل إجراء', () => {
+  const e = currentStatus(run(mk(), h => h.handleAddStatus({ stage: 'awaitingBidders', customText: ' على الأعمال المماثلة ' })).saved!)!;
+  assert.equal(e.customText, 'على الأعمال المماثلة');
+});
+
+test('المعالجات تعمل على أي مناقصة تُمرَّر لا الحالية وحدها', () => {
+  const other = mk('2026-10-05');
+  let saved: TenderProject | undefined;
+  const h = createStatusHandlers(other, p => { saved = p; });
+  assert.equal(h.handleAddStatus({ stage: 'audit' }), null);
+  assert.equal(saved!.id, other.id);
+  assert.equal(saved!.statusLog!.length, 2);
+});
+
+test('حفظ الإعلان وتاريخ الاستلام من الكشف: يُسجَّل ولا يمس السجل، وبلا تغيير لا يُحفظ شيء', () => {
+  const p = mk('2026-10-05');
+  const { saved, result } = run(p, h => h.handleSaveDetails({ announcementNo: 2, receivedAt: '2026-10-07' }));
+  assert.equal(result, null);
+  assert.equal(saved!.announcementNo, 2);
+  assert.equal(saved!.receivedAt, '2026-10-07');
+  assert.deepEqual(saved!.statusLog, p.statusLog);
+  assert.notEqual(saved!.updatedAt, p.updatedAt);
+  assert.match(saved!.auditLogs[0].details, /الإعلان: الإعلان الثاني/);
+  assert.match(saved!.auditLogs[0].details, /07\/10\/2026/);
+  assert.equal(run(p, h => h.handleSaveDetails({ announcementNo: p.announcementNo, receivedAt: p.receivedAt })).saved, undefined);
+  assert.notEqual(run(p, h => h.handleSaveDetails({ receivedAt: '2026-02-30' })).result, null);
+  const cleared = run(p, h => h.handleSaveDetails({ receivedAt: '' })).saved!;
+  assert.equal(cleared.receivedAt, undefined);
 });

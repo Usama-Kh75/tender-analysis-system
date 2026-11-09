@@ -130,18 +130,30 @@ export interface RecommendationBasis {
 export type InvitationType = 'general' | 'limited' | 'twoStage' | 'direct' | 'singleSource';
 
 /** موقف الطلبية: الإجراء الحالي وفرعه الاختياري (انظر utils/orderStatus.ts). */
-export type StatusStage = 'analysis' | 'audit' | 'returnedFromAudit' | 'reviewCommittee' | 'sentToContracts' | 'readvertise' | 'other';
+export type StatusStage = 'analysis' | 'awaitingBidders' | 'audit' | 'returnedFromAudit' | 'reviewCommittee' | 'referralPending' | 'referred' | 'sentToContracts' | 'readvertise' | 'other';
 export type StatusBranch = 'technical' | 'commercial' | 'documents' | 'negotiation';
 
 export interface StatusEntry {
   id: string;
   stage: StatusStage;
   branch?: StatusBranch;
-  customText?: string;   // مطلوب عند stage = 'other'
+  customText?: string;   // تفصيل اختياري يُلحق بالإجراء؛ مطلوب عند 'other' (هو النص كله)، واسم الجهة عند 'referred'
   memoNo?: string;
-  memoDate: string;      // YYYY-MM-DD: تاريخ المذكرة أو الإجراء
+  memoDate?: string;     // YYYY-MM-DD: تاريخ المذكرة أو الإجراء (اختياري)
   note?: string;
   recordedAt: string;
+}
+
+/** طلبية في كشف الموقف بلا تحليل (أُعيد إعلانها مثلاً): ليست مناقصة، ولا تظهر في قائمة المناقصات (utils/statusOrders.ts). */
+export interface StatusOrder {
+  id: string;
+  referenceNumber: string;
+  title: string;
+  announcementNo?: number;
+  receivedAt?: string;
+  statusLog: StatusEntry[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TenderProject {

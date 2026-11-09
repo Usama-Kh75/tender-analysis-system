@@ -9,16 +9,20 @@ import {
   downloadRecoveredData
 } from '../utils/storageService';
 import { RESUMED_STATE } from '../resume';
-import { TenderProject } from '../types/tender';
+import { getStatusOrders, saveStatusOrders } from '../utils/statusOrders';
+import { StatusOrder, TenderProject } from '../types/tender';
 
 // مخزن المناقصات: التحميل الأول والحفظ والتنبيه قبل المغادرة واستعادة التمرير. يُستدعى في أول App قبل أي رجوع
 export function useProjectStore() {
   // التحميل الأول مرة واحدة: getAllProjects قبل getRecoveredData لأن الأولى تنسخ البيانات التالفة إلى مفتاح الاسترجاع
   const [initial] = useState(() => {
     const stored = getAllProjects();
-    return { stored, recovered: getRecoveredData(), activeId: getActiveProjectId() || stored[0]?.id || '' };
+    // طلبيات الكشف بلا تحليل بعد المشاريع: قراءتها قد تضيف إلى بيانات الاسترداد
+    const orders = getStatusOrders();
+    return { stored, orders, recovered: getRecoveredData(), activeId: getActiveProjectId() || stored[0]?.id || '' };
   });
   const [projects, setProjects] = useState<TenderProject[]>(initial.stored);
+  const [statusOrders, setStatusOrders] = useState<StatusOrder[]>(initial.orders);
   const [activeProjectId, setActiveId] = useState<string>(initial.activeId);
   // لا يُحفظ شيء قبل اكتمال التحميل الأول؛ وبعده تُحفظ القائمة حتى لو فرغت (حذف آخر مناقصة)
   const loaded = true;
@@ -30,8 +34,15 @@ export function useProjectStore() {
     if (loaded) saveAllProjects(projects);
   }, [projects, loaded]);
 
-  // تذكير النسخة الاحتياطية: المناقصات التي تغيّرت منذ آخر نسخة تحويها
-  const unsaved = useMemo(() => unsavedProjects(projects, backupMarks), [projects, backupMarks]);
+  useEffect(() => {
+    if (loaded) saveStatusOrders(statusOrders);
+  }, [statusOrders, loaded]);
+
+  // تذكير النسخة الاحتياطية: المناقصات والطلبيات بلا تحليل التي تغيّرت منذ آخر نسخة تحويها
+  const unsaved = useMemo(
+    () => [...unsavedProjects(projects, backupMarks), ...unsavedProjects(statusOrders, backupMarks)],
+    [projects, statusOrders, backupMarks]
+  );
   const hasUnsaved = loaded && unsaved.length > 0;
 
   // المتصفح لا يعرض إلا رسالته العامة «مغادرة الموقع؟»، ولا يظهر التنبيه إلا إذا بقيت تغييرات لم تُحفظ في نسخة احتياطية
@@ -63,7 +74,7 @@ export function useProjectStore() {
   const dismissRecovered = () => { clearRecoveredData(); setRecovered([]); };
 
   return {
-    projects, setProjects, activeProjectId, setActiveId, loaded, recovered, backupMarks,
+    projects, setProjects, statusOrders, setStatusOrders, activeProjectId, setActiveId, loaded, recovered, backupMarks,
     unsaved, recordBackup, downloadRecovered, dismissRecovered
   };
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, MapPin } from 'lucide-react';
-import type { StatusBranch, StatusStage, TenderProject } from '../../types/tender';
+import type { StatusBranch, StatusEntry, StatusStage } from '../../types/tender';
 import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusText } from '../../utils/orderStatus';
 import { localDate } from '../../utils/localDate';
 import type { StatusInput } from '../../app/statusHandlers';
@@ -8,7 +8,18 @@ import type { StatusInput } from '../../app/statusHandlers';
 interface OrderStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
-  project: TenderProject;
+  title?: string;
+  subtitle?: string;
+  statusLog: StatusEntry[];
+  // أسماء مقترحة للجهة المحال إليها (مجهزو المناقصة)؛ فارغة لطلبية بلا تحليل
+  suggestions?: string[];
+  // قسم بيانات يظهر فوق نموذج الموقف (المحرر في كشف الموقف)
+  detailsSlot?: React.ReactNode;
+  // يخفي نموذج الموقف وسجله (طلبية جديدة لم تُحفظ بياناتها بعد)
+  statusHidden?: boolean;
+  statusHiddenNote?: string;
+  // نافذة تعلو نافذة أخرى مفتوحة (كشف الموقف)
+  stacked?: boolean;
   onAdd: (input: StatusInput) => string | null;
   onEdit: (id: string, input: StatusInput) => string | null;
   onDelete: (id: string) => void;
@@ -18,7 +29,10 @@ const fieldClass = 'w-full bg-white border border-slate-300 rounded-lg px-3 py-2
 const labelClass = 'block text-xs font-bold text-slate-700 mb-1';
 
 // نافذة موقف الطلبية: إضافة موقف جديد، وسجل المواقف (الأحدث أولاً) مع تعديل وحذف
-export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onClose, project, onAdd, onEdit, onDelete }) => {
+export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
+  isOpen, onClose, title = 'موقف الطلبية', subtitle = 'أين الطلبية الآن وبأي مذكرة، والأخير في السجل هو الموقف الحالي',
+  statusLog, suggestions = [], detailsSlot, statusHidden, statusHiddenNote, stacked, onAdd, onEdit, onDelete
+}) => {
   const [stage, setStage] = useState<StatusStage>('analysis');
   const [branch, setBranch] = useState<StatusBranch | ''>('');
   const [customText, setCustomText] = useState('');
@@ -42,8 +56,9 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
 
   const branches = branchesOf(stage);
   // الأحدث إدخالاً أولاً: الأخير في المصفوفة هو الموقف الحالي
-  const entries = [...(project.statusLog ?? [])].reverse();
-  const currentId = project.statusLog?.at(-1)?.id;
+  const entries = [...statusLog].reverse();
+  const currentId = statusLog.at(-1)?.id;
+  const preview = statusText({ stage, branch: branch || undefined, customText });
 
   const reset = () => {
     setStage('analysis');
@@ -59,6 +74,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
   const handleStageChange = (next: StatusStage) => {
     setStage(next);
     setError(null);
+    // التفصيل النصي يبقى عند تبديل الإجراء
     if (branch && !branchesOf(next).includes(branch)) setBranch('');
   };
 
@@ -74,7 +90,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
   };
 
   const startEdit = (id: string) => {
-    const entry = project.statusLog?.find(s => s.id === id);
+    const entry = statusLog.find(s => s.id === id);
     if (!entry) return;
     setEditingId(id);
     // مرحلة مجهولة (من نسخة أحدث): يبدأ النموذج بإجراء معروف ويبقى الإدخال قابلاً للحذف
@@ -83,7 +99,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
     setBranch(known ? entry.branch ?? '' : '');
     setCustomText(entry.customText ?? '');
     setMemoNo(entry.memoNo ?? '');
-    setMemoDate(entry.memoDate);
+    setMemoDate(entry.memoDate ?? '');
     setNote(entry.note ?? '');
     setError(null);
     // النموذج في أعلى النافذة والسجل تحته: يُنقل التركيز إليه ليظهر
@@ -97,7 +113,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="موقف الطلبية">
+    <div className={`fixed inset-0 ${stacked ? 'z-[60] print:hidden' : 'z-50'} bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4`} role="dialog" aria-modal="true" aria-label={title}>
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
@@ -106,8 +122,8 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold">موقف الطلبية</h2>
-              <p className="text-xs text-slate-400">أين الطلبية الآن وبأي مذكرة، والأخير في السجل هو الموقف الحالي</p>
+              <h2 className="text-base sm:text-lg font-bold">{title}</h2>
+              <p className="text-xs text-slate-400">{subtitle}</p>
             </div>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
@@ -116,6 +132,11 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
         </div>
 
         <div className="p-6 space-y-5 bg-slate-50 flex-1 overflow-y-auto">
+          {detailsSlot}
+
+          {statusHidden ? (
+            <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg px-3 py-4 text-center">{statusHiddenNote}</p>
+          ) : (<>
           <form onSubmit={handleSubmit} className="space-y-3">
             <h3 className="text-sm font-black text-slate-800">{editingId ? 'تعديل الموقف' : 'إضافة موقف جديد'}</h3>
 
@@ -137,12 +158,24 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
                 </div>
               )}
 
-              {stage === 'other' && (
-                <div className="sm:col-span-2">
-                  <label htmlFor="status-custom" className={labelClass}>النص <span className="text-rose-600">*</span></label>
-                  <input id="status-custom" type="text" value={customText} onChange={(e) => setCustomText(e.target.value)} className={fieldClass} />
-                </div>
-              )}
+              <div className="sm:col-span-2">
+                <label htmlFor="status-custom" className={labelClass}>
+                  {stage === 'other' ? <>النص <span className="text-rose-600">*</span></>
+                    : stage === 'referred' ? 'الجهة المحال إليها (اختياري)'
+                    : 'تفصيل يُلحق بالإجراء (اختياري)'}
+                </label>
+                <input
+                  id="status-custom" type="text" value={customText} onChange={(e) => setCustomText(e.target.value)} className={fieldClass}
+                  list={stage === 'referred' ? 'status-referred-suggestions' : undefined}
+                  placeholder={stage === 'other' || stage === 'referred' ? undefined : 'مثل: على تقديم الأعمال المماثلة'}
+                />
+                {stage === 'referred' && (
+                  <datalist id="status-referred-suggestions">
+                    {suggestions.map(n => <option key={n} value={n} />)}
+                  </datalist>
+                )}
+                {preview && <p className="text-[11px] text-slate-500 mt-1">يُكتب في الكشف: <span className="font-bold text-slate-700">{preview}</span></p>}
+              </div>
 
               <div>
                 <label htmlFor="status-memo-no" className={labelClass}>رقم المذكرة (اختياري)</label>
@@ -150,7 +183,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
               </div>
 
               <div>
-                <label htmlFor="status-memo-date" className={labelClass}>تاريخ المذكرة أو الإجراء</label>
+                <label htmlFor="status-memo-date" className={labelClass}>تاريخ المذكرة أو الإجراء (اختياري)</label>
                 <input id="status-memo-date" type="date" value={memoDate} onChange={(e) => setMemoDate(e.target.value)} className={fieldClass} />
               </div>
 
@@ -188,19 +221,20 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ isOpen, onCl
                         {entry.id === currentId && <span className="mr-2 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5">الحالي</span>}
                       </div>
                       <div className="text-slate-600">
-                        {entry.memoNo ? <>مذكرة رقم <bdi>{entry.memoNo}</bdi> — </> : ''}<bdi>{formatSheetDate(entry.memoDate)}</bdi>
+                        {entry.memoNo ? <>مذكرة رقم <bdi>{entry.memoNo}</bdi>{entry.memoDate ? ' — ' : ''}</> : ''}{entry.memoDate ? <bdi>{formatSheetDate(entry.memoDate)}</bdi> : (!entry.memoNo && 'بلا تاريخ')}
                       </div>
                       {entry.note && <div className="text-slate-500 break-words">{entry.note}</div>}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button type="button" onClick={() => startEdit(entry.id)} aria-label={`تعديل موقف: ${statusText(entry) || 'غير محدد'} ${formatSheetDate(entry.memoDate)}`} className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer">تعديل</button>
-                      <button type="button" onClick={() => handleDelete(entry.id)} aria-label={`حذف موقف: ${statusText(entry) || 'غير محدد'} ${formatSheetDate(entry.memoDate)}`} className="px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer">حذف</button>
+                      <button type="button" onClick={() => startEdit(entry.id)} aria-label={`تعديل موقف: ${[statusText(entry) || 'غير محدد', formatSheetDate(entry.memoDate)].filter(Boolean).join(' ')}`} className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer">تعديل</button>
+                      <button type="button" onClick={() => handleDelete(entry.id)} aria-label={`حذف موقف: ${[statusText(entry) || 'غير محدد', formatSheetDate(entry.memoDate)].filter(Boolean).join(' ')}`} className="px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer">حذف</button>
                     </div>
                   </li>
                 ))}
               </ul>
             )}
           </section>
+          </>)}
         </div>
       </div>
     </div>

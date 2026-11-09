@@ -21,10 +21,16 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): 
     ...rows.map(r => [r.no, r.referenceNumber, r.title, r.announcement, r.receivedAt, r.action, r.memoNo, r.date, r.note])
   ];
   const signRow = aoa.length + 1;
-  aoa.push([], ['رئيس اللجنة'], ['التوقيع: .....................']);
+  const pad = Array<string>(STATUS_SHEET_HEADERS.length - 2).fill('');
+  aoa.push([], [...pad, 'رئيس اللجنة'], [...pad, 'التوقيع: .....................']);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = WIDTHS.map(wch => ({ wch }));
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }];
+  // توقيع رئيس اللجنة في آخر عمودين (يسار الصفحة في ورقة RTL): كل سطر دمج الأخيرين
+  const signCol = lastCol - 1;
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
+    ...[signRow, signRow + 1].map(r => ({ s: { r, c: signCol }, e: { r, c: lastCol } }))
+  ];
 
   const style = (r: number, c: number, s: object) => {
     const ref = XLSX.utils.encode_cell({ r, c });
@@ -50,9 +56,11 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): 
     }
   }
 
-  // توقيع رئيس اللجنة تحت الجدول في العمود الأول، بلا حدود
+  // توقيع رئيس اللجنة تحت الجدول في آخر عمودين، بلا حدود
   for (const r of [signRow, signRow + 1]) {
-    style(r, 0, { font: { name: FONT, sz: 10, bold: r === signRow }, alignment: { horizontal: 'right', vertical: 'center' } });
+    for (const c of [signCol, lastCol]) {
+      style(r, c, { font: { name: FONT, sz: 10, bold: r === signRow }, alignment: { horizontal: 'center', vertical: 'center' } });
+    }
   }
 
   const wb = XLSX.utils.book_new();

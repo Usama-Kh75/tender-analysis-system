@@ -29,3 +29,10 @@ test('آخر نسخة هي أحدث الأوقات، ولا شيء بلا نسخ
   assert.equal(lastBackupTime({ a: '2026-10-18T09:00:00.000Z', b: '2026-10-18T13:00:00.000Z' }), '2026-10-18T13:00:00.000Z');
   assert.equal(lastBackupTime({}), undefined);
 });
+
+test('الطلبيات بلا تحليل تُعدّ مع المناقصات وتتبع علامتها', () => {
+  const order = { id: 'o', updatedAt: '2026-10-18T12:00:00.000Z' };
+  assert.deepEqual(unsavedProjects([order], {}).map(o => o.id), ['o']);
+  assert.deepEqual(unsavedProjects([order], { o: '2026-10-18T12:00:00.000Z' }), []);
+  assert.equal(unsavedProjects([{ ...order, updatedAt: '2026-10-18T12:00:01.000Z' }], { o: '2026-10-18T12:00:00.000Z' }).length, 1);
+});

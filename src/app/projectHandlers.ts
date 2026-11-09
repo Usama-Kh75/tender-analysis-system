@@ -13,11 +13,14 @@ import {
 } from '../utils/storageService';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
-import { TenderProject, ContractType, BudgetType } from '../types/tender';
+import { normalizeStatusOrders, saveStatusOrders } from '../utils/statusOrders';
+import { TenderProject, ContractType, BudgetType, StatusOrder } from '../types/tender';
 
 interface ProjectHandlersArgs {
   projects: TenderProject[];
   setProjects: Dispatch<SetStateAction<TenderProject[]>>;
+  statusOrders: StatusOrder[];
+  setStatusOrders: Dispatch<SetStateAction<StatusOrder[]>>;
   setActiveId: (id: string) => void;
   recordBackup: (marks: BackupMarks) => void;
   // قد يكون undefined قبل الرجوع المبكر (شاشة البداية)
@@ -28,12 +31,12 @@ interface ProjectHandlersArgs {
 
 // معالجات مستوى المناقصات: لا تعتمد على مجهز نشط، فتُستدعى قبل الرجوعين المبكرين في App
 export function createProjectHandlers({
-  projects, setProjects, setActiveId, recordBackup, currentProject, closeSettings, closeProjects
+  projects, setProjects, statusOrders, setStatusOrders, setActiveId, recordBackup, currentProject, closeSettings, closeProjects
 }: ProjectHandlersArgs) {
   // النسخة الشاملة تستبدل كل العلامات، فتسقط علامات المناقصات المحذوفة
   const handleBackupAll = async () => {
-    const at = await downloadAllProjectsBackup(projects);
-    if (at) recordBackup(Object.fromEntries(projects.map(p => [p.id, at])));
+    const at = await downloadAllProjectsBackup(projects, statusOrders);
+    if (at) recordBackup(Object.fromEntries([...projects, ...statusOrders].map(p => [p.id, at])));
   };
   // قراءة العلامات من جديد بعد await مقصودة، لتفادي القيمة القديمة في الإغلاق (closure)
   const handleBackupProject = async () => {
@@ -125,6 +128,7 @@ export function createProjectHandlers({
 
     resetAllData();
     setProjects([]);
+    setStatusOrders([]);
     setActiveId('');
     closeSettings();
   };
@@ -142,19 +146,28 @@ export function createProjectHandlers({
   // Import All Projects Backup (JSON) — يستبدل كل المناقصات الحالية بالنسخة الشاملة المستوردة
   const handleImportAllBackup = async (file: File) => {
     try {
-      const imported = await parseAllProjectsBackupFile(file);
+      const { projects: imported, statusOrders: rawOrders } = await parseAllProjectsBackupFile(file);
+      // نسخة قديمة بلا حقل الطلبيات تترك ما في المتصفح منها كما هو
+      const orders = rawOrders ? normalizeStatusOrders(rawOrders) : undefined;
 
-      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بالنسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة). هل أنت متأكد؟`)) {
+      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بالنسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة)`
+        + (orders ? ` وطلبيات الكشف بلا تحليل (${statusOrders.length}) بما في النسخة (${orders.length} طلبية)` : '')
+        + '. هل أنت متأكد؟')) {
         return;
       }
 
       saveAllProjects(imported);
       setProjects(imported);
-      // المناقصات المستعادة محفوظة في الملف الذي استُعيدت منه
-      recordBackup(Object.fromEntries(imported.map(p => [p.id, new Date().toISOString()])));
+      if (orders) {
+        saveStatusOrders(orders);
+        setStatusOrders(orders);
+      }
+      // المستعاد محفوظ في الملف الذي استُعيد منه
+      const at = new Date().toISOString();
+      recordBackup(Object.fromEntries([...imported, ...(orders ?? [])].map(p => [p.id, at])));
       setActiveId(imported[0].id);
       setActiveProjectId(imported[0].id);
-      alert(`تم استيراد (${imported.length}) مناقصة بنجاح من النسخة الاحتياطية الشاملة.`);
+      alert(`تم استيراد (${imported.length}) مناقصة${orders ? ` و(${orders.length}) طلبية بلا تحليل` : ''} بنجاح من النسخة الاحتياطية الشاملة.`);
       closeSettings();
     } catch (err: any) {
       alert(`فشل استيراد النسخة الاحتياطية الشاملة: ${err.message}`);
