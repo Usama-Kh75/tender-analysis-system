@@ -641,8 +641,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           )}
 
           {/* 4. توقيعات اللجنة (رئيس اللجنة ثابت + عدد الأعضاء حسب حجم اللجنة الفعلي) */}
+          {/* حاوية block تمنع انقسام التواقيع بين صفحتين: break-inside على حاوية grid قد لا يُحترم عند الطباعة */}
+          <div className="break-inside-avoid">
           <div
-            className="grid gap-6 pt-6 text-center text-xs font-bold break-inside-avoid"
+            className="grid gap-6 pt-6 text-center text-xs font-bold"
             style={{ gridTemplateColumns: `repeat(${Math.min(signatories.length, 3)}, minmax(0, 1fr))` }}
           >
             {signatories.map((s, idx) => (
@@ -652,6 +654,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <div className="mt-6 text-slate-600">التوقيع: .....................</div>
               </div>
             ))}
+          </div>
           </div>
 
         </div>

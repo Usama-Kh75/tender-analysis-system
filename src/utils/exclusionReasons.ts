@@ -197,10 +197,13 @@ export function needsOpinionSource(project: TenderProject): boolean {
     && excludedBidders(project).some(b => reasonsOf(b).some(r => r.ground === 'technical'));
 }
 
-/** كل عطاء مستبعد له مبالغ ذكرت اللجنة سبباً واحداً على الأقل لاستبعاده (ولا عطاء مستبعد غيره في المناقصة بمبالغ) */
+/**
+ * كل عطاء مستبعد له مبالغ ذكرت اللجنة لاستبعاده سبباً واحداً على الأقل من بنود التعليمات. «سبب آخر» والسبب غير
+ * المعروف لا يُثبتان عدم المطابقة لشروط المناقصة ومعاييرها التي تشترطها المادة (20)/ثالثاً (ملاحظة مراجعة Codex)
+ */
 export function allExcludedHaveReasons(project: TenderProject): boolean {
   const list = excludedBidders(project);
-  return list.length > 0 && list.every(b => reasonsOf(b).length > 0);
+  return list.length > 0 && list.every(b => reasonsOf(b).some(r => !!reasonLegalKey(r)));
 }
 
 // ---- التنظيف عند التحميل والحفظ ----

@@ -1,6 +1,6 @@
 import { addAuditLog } from '../utils/storageService';
 import { formatSheetDate } from '../utils/orderStatus';
-import { cleanExclusionReasons, cleanTechnicalOpinion, exclusionLabels } from '../utils/exclusionReasons';
+import { cleanExclusionReasons, cleanTechnicalOpinion, reasonLabel } from '../utils/exclusionReasons';
 import type { ExclusionReason, TechnicalOpinion, TenderProject } from '../types/tender';
 
 // وصف مصدر الرأي الفني في سجل التدقيق
@@ -25,8 +25,12 @@ export function createExclusionHandlers(project: TenderProject, saveProject: (p:
     const opinionChanged = JSON.stringify(cleanTechnicalOpinion(project.technicalOpinion)) !== JSON.stringify(nextOpinion);
     if (!reasonsChanged && !opinionChanged) return;
 
-    const labels = exclusionLabels({ ...bidder, status: 'disqualified', exclusionReasons: nextReasons });
-    const details = `عطاء (${bidder.name}): ${nextReasons.length ? labels : 'بلا أسباب'}`
+    // كل سبب بتسميته ومتطلبه وتفصيله، فتغيير التفصيل وحده يظهر في السجل (ملاحظة مراجعة Codex)
+    const describe = (rs: ExclusionReason[]) => rs.length
+      ? rs.map(r => `${reasonLabel(r)}${r.detail ? `: ${r.detail}` : ''}`).join('؛ ') : 'بلا أسباب';
+    const prevReasons = cleanExclusionReasons(bidder.exclusionReasons) ?? [];
+    const details = `عطاء (${bidder.name}): ${describe(nextReasons)}`
+      + (reasonsChanged && prevReasons.length ? ` — وكانت: ${describe(prevReasons)}` : '')
       + (opinionChanged ? ` — ومصدر الرأي الفني: ${describeOpinion(nextOpinion)}` : '');
 
     const updated: TenderProject = {
@@ -40,7 +44,11 @@ export function createExclusionHandlers(project: TenderProject, saveProject: (p:
       updatedAt: new Date().toISOString()
     };
     if (nextOpinion) updated.technicalOpinion = nextOpinion; else delete updated.technicalOpinion;
-    saveProject(addAuditLog(updated, 'أسباب الاستبعاد', details, { bidderId }));
+    saveProject(addAuditLog(updated, 'أسباب الاستبعاد', details, {
+      bidderId,
+      oldValue: { reasons: prevReasons, technicalOpinion: cleanTechnicalOpinion(project.technicalOpinion) },
+      newValue: { reasons: nextReasons, technicalOpinion: nextOpinion }
+    }));
   };
 
   return { handleSaveExclusionReasons };

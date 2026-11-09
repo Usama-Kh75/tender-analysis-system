@@ -7,7 +7,7 @@ import { createExclusionHandlers } from '../src/app/exclusionHandlers';
 import { recommendationPieces } from '../src/utils/recommendationText';
 import { LEGAL_TEXTS } from '../src/utils/legalTexts';
 import {
-  EXCLUSION_GROUNDS, INCOMPLETE_ITEMS, exclusionLabels, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource,
+  EXCLUSION_GROUNDS, INCOMPLETE_ITEMS, allExcludedHaveReasons, exclusionLabels, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource,
   opinionClause, reasonLine, sanitizeExclusionFields, validateReasons
 } from '../src/utils/exclusionReasons';
 import type { Bidder, ExclusionReason, TenderProject } from '../src/types/tender';
@@ -119,6 +119,22 @@ test('توصية إعادة الإعلان عند استبعاد الجميع', 
   assert.ok(recommendationPieces(partial, partial.bidders[0]).systemText.startsWith('استبعدت اللجنة جميع العطاءات المقدمة. وإذا'));
 });
 
+test('سبب آخر أو غير معروف وحده لا يجعل الاستبعاد مثبتاً: تبقى الصيغة الشرطية', () => {
+  for (const reasons of [[{ ground: 'other', detail: 'س' }], [{ ground: 'zzz', detail: 'س' }]]) {
+    const p = mkProject([mkBidder('A', 'A', 1000, reasons), mkBidder('B', 'B', 1000, reasons)]);
+    assert.equal(allExcludedHaveReasons(p), false);
+    assert.ok(recommendationPieces(p, p.bidders[0]).systemText.startsWith('استبعدت اللجنة جميع العطاءات المقدمة. وإذا'));
+  }
+});
+
+test('المعالج: تغيير التفصيل وحده يغيّر details', () => {
+  const p = mkProject([mkBidder('A', 'A', 1000, [{ ground: 'technical', detail: 'قديم' }]), mkBidder('B', 'B', 1000)]);
+  let saved: TenderProject | null = null;
+  createExclusionHandlers(p, x => { saved = x; }).handleSaveExclusionReasons('A', [{ ground: 'technical', detail: 'جديد' }]);
+  const log = (saved as unknown as TenderProject).auditLogs.at(-1)!;
+  assert.ok(log.details.includes('جديد') && log.details.includes('وكانت') && log.details.includes('قديم'));
+});
+
 test('كل مفتاح في الكتالوج موجود في LEGAL_TEXTS', () => {
   for (const g of EXCLUSION_GROUNDS) if (g.legalKey) assert.ok(LEGAL_TEXTS[g.legalKey], g.ground);
   INCOMPLETE_ITEMS.forEach((_, i) => assert.ok((LEGAL_TEXTS as any)[`ann4_7_${i + 1}`]));
@@ -136,7 +152,7 @@ test('المعالج: حفظ، وسجل تدقيق، وبلا تغيير لا ح
   assert.equal(s.bidders[1].exclusionReasons, undefined);
   assert.deepEqual(s.technicalOpinion, opinion);
   assert.equal(s.auditLogs.at(-1)!.action, 'أسباب الاستبعاد');
-  assert.ok(s.auditLogs.at(-1)!.details.startsWith('عطاء (A): عدم المطابقة الفنية — ومصدر الرأي الفني:'));
+  assert.ok(s.auditLogs.at(-1)!.details.startsWith('عطاء (A): عدم المطابقة الفنية: د — ومصدر الرأي الفني:'));
   assert.notEqual(s.updatedAt, p.updatedAt);
   saved = null;
   createExclusionHandlers(s, x => { saved = x; }).handleSaveExclusionReasons('A', [{ ground: 'technical', detail: 'د' }], opinion);
