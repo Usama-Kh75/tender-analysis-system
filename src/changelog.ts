@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.27.0',
+    date: '2026-11-10',
+    notes: [
+      'ترتّب كشف موقف الطلبيات بخيار «الإحالة أولاً»: المحالة ثم قيد الإحالة ثم بقية المراحل، وإعادة الإعلان في آخره.'
+    ]
+  },
+  {
     version: '1.26.0',
     date: '2026-11-09',
     notes: [
