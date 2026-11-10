@@ -189,8 +189,8 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
 
               <div className="sm:col-span-2">
                 <label htmlFor="status-note" className={labelClass}>ملاحظة (اختيارية)</label>
-                <textarea id="status-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} className={`${fieldClass} resize-y`} />
-                <p className="text-[11px] text-slate-500 mt-1">كل سطر يظهر في سطر مستقل في الكشف</p>
+                <textarea id="status-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} className={`${fieldClass} resize-y`} aria-describedby="status-note-hint" />
+                <p id="status-note-hint" className="text-[11px] text-slate-500 mt-1">كل سطر يظهر في سطر مستقل في الكشف</p>
               </div>
             </div>
 
@@ -217,10 +217,17 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
                 {entries.map(entry => (
                   <li key={entry.id} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex items-start justify-between gap-3">
                     <div className="text-xs space-y-0.5 min-w-0 flex-1">
-                      <div className="font-black text-slate-900 whitespace-pre-line">
-                        {statusText(entry) || 'غير محدد'}
-                        {entry.id === currentId && <span className="mr-2 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5">الحالي</span>}
-                      </div>
+                      {(() => {
+                        // شارة «الحالي» تلازم سطر الإجراء الأول، والتفصيل (إن وُجد) في السطر التالي
+                        const [head, ...rest] = (statusText(entry) || 'غير محدد').split('\n');
+                        return (
+                          <div className="font-black text-slate-900">
+                            {head}
+                            {entry.id === currentId && <span className="mr-2 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5">الحالي</span>}
+                            {rest.length > 0 && <div className="whitespace-pre-line">{rest.join('\n')}</div>}
+                          </div>
+                        );
+                      })()}
                       <div className="text-slate-600">
                         {entry.memoNo ? <>مذكرة رقم <bdi>{entry.memoNo}</bdi>{entry.memoDate ? ' — ' : ''}</> : ''}{entry.memoDate ? <bdi>{formatSheetDate(entry.memoDate)}</bdi> : (!entry.memoNo && 'بلا تاريخ')}
                       </div>
