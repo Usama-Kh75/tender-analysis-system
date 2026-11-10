@@ -5,7 +5,7 @@ import type { StatusOrder, TenderProject } from '../../types/tender';
 import type { createStatusHandlers } from '../../app/statusHandlers';
 import type { createStatusOrderHandlers } from '../../app/statusOrderHandlers';
 import { StatusRowEditor } from './StatusRowEditor';
-import { statusSheetRows, formatSheetDate } from '../../utils/orderStatus';
+import { statusSheetRows, formatSheetDate, type StatusSortKey } from '../../utils/orderStatus';
 import {
   exportStatusSheetToExcel, statusSheetTitle, STATUS_COLUMNS, defaultStatusColumns, shownStatusColumns
 } from '../../utils/statusSheetExcel';
@@ -29,7 +29,7 @@ const cell = 'border border-black px-2 py-1.5 align-middle';
 // معاينة كشف موقف الطلبيات وطباعته (A4 أفقي) وتصديره. وثيقة رسمية بتوقيع رئيس اللجنة وحده (قرار أسامة 2026-11-01)، وعرض لما هو محفوظ بلا مجاميع
 export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onClose, projects, orders, committeeName, makeTenderHandlers, orderHandlers }) => {
   // ترتيب الصفوف (معاينة وطباعة وExcel): غير محفوظ، يبدأ برقم الطلبية مع كل فتح
-  const [sortBy, setSortBy] = useState<'number' | 'stage'>('number');
+  const [sortBy, setSortBy] = useState<StatusSortKey>('number');
   const [asOf, setAsOf] = useState(localDate());
   // الصف المفتوح للتحرير: مناقصة أو طلبية بلا تحليل، أو طلبية جديدة
   const [editing, setEditing] = useState<{ kind: 'tender' | 'order'; id: string } | 'new' | null>(null);
@@ -98,11 +98,12 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               <select
                 id="status-sheet-sort"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'number' | 'stage')}
+                onChange={(e) => setSortBy(e.target.value as StatusSortKey)}
                 className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs cursor-pointer"
               >
                 <option value="number">رقم الطلبية</option>
                 <option value="stage">الإجراء</option>
+                <option value="referral">الإحالة أولاً</option>
               </select>
             </div>
             <div role="group" aria-labelledby="status-cols-label" className="flex items-center gap-2 flex-wrap">
@@ -169,7 +170,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                 {rows.map(r => (
                   <tr key={r.no} className="break-inside-avoid">
                     {cols.map(c => (
-                      <td key={c.key} className={`${c.align === 'center' ? `${cell} text-center` : cell}${c.key === 'referenceNumber' ? ' whitespace-nowrap' : ''}`}>
+                      <td key={c.key} className={`${c.align === 'center' ? `${cell} text-center` : cell}${c.key === 'referenceNumber' ? ' whitespace-nowrap' : c.key === 'action' || c.key === 'note' ? ' whitespace-pre-line' : ''}`}>
                         {c.key === 'no' || c.key === 'announcement' ? r[c.key] : c.align === 'center' ? <bdi>{r[c.key]}</bdi> : r[c.key]}
                       </td>
                     ))}

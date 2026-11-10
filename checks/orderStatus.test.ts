@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject, sanitizeStatusFields } from '../src/utils/storageService';
 import {
-  statusText, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
+  statusText, statusLine, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
 } from '../src/utils/orderStatus';
+import { createStatusHandlers } from '../src/app/statusHandlers';
 import { compareOrderNumbers, orderNumberParts } from '../src/utils/orderNumber';
 import * as XLSX from 'xlsx-js-style';
 import { buildStatusSheetWorkbook, defaultStatusColumns } from '../src/utils/statusSheetExcel';
@@ -90,6 +91,33 @@ test('ترتيب الكشف بالإجراء: مجموعات بترتيب الم
   ], [], 'stage');
   assert.deepEqual(rows.map(r => r.referenceNumber), ['5 / 26 / 9001', '6 / 26 / 9001', '3 / 26 / 9001', '4 / 26 / 9001', '2 / 26 / 9001', '1 / 26 / 9001']);
   assert.deepEqual(rows.map(r => r.no), [1, 2, 3, 4, 5, 6]);
+});
+
+test('ترتيب الكشف «الإحالة أولاً»: الإحالة ثم قيد الإحالة ثم التحليل، والمجهول بعد إعادة الإعلان، وبلا موقف أخيراً', () => {
+  const unknown = { ...entry({}), stage: 'future' as unknown as StatusEntry['stage'] };
+  const rows = statusSheetRows([
+    tender('1 / 26 / 9001'),
+    tender('2 / 26 / 9001', { statusLog: [entry({ stage: 'readvertise' })] }),
+    tender('3 / 26 / 9001', { statusLog: [unknown] }),
+    tender('4 / 26 / 9001', { statusLog: [entry({ stage: 'awaitingBidders' })] }),
+    tender('5 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] }),
+    tender('7 / 26 / 9001', { statusLog: [entry({ stage: 'referralPending' })] }),
+    tender('8 / 26 / 9001', { statusLog: [entry({ stage: 'referred' })] }),
+    tender('6 / 26 / 9001', { statusLog: [entry({ stage: 'referred' })] })
+  ], [], 'referral');
+  assert.deepEqual(rows.map(r => r.referenceNumber), [
+    '6 / 26 / 9001', '8 / 26 / 9001', '7 / 26 / 9001', '5 / 26 / 9001', '4 / 26 / 9001', '2 / 26 / 9001', '3 / 26 / 9001', '1 / 26 / 9001'
+  ]);
+});
+
+test('الملاحظة متعددة الأسطر: تُنظَّف أطرافها وتبقى أسطرها الداخلية في الكشف', () => {
+  const { saved } = (() => {
+    let s: TenderProject | undefined;
+    createStatusHandlers(tender('1'), p => { s = p; }).handleAddStatus({ stage: 'audit', note: '  أولاً \r\nثانياً  \n\n' });
+    return { saved: s };
+  })();
+  assert.equal(currentStatus(saved!)?.note, 'أولاً\nثانياً');
+  assert.equal(statusSheetRows([saved!])[0].note, 'أولاً\nثانياً');
 });
 
 test('صف سليم لعنوان ورقم فارغين وبلا موقف', () => {
@@ -251,7 +279,9 @@ test('sanitizeStatusFields تعيد الكائن نفسه حين لا يتغير
 });
 
 test('نصوص الإجراءات الجديدة والتفصيل', () => {
-  assert.equal(statusText(entry({ stage: 'referred', customText: 'شركة الرافدين' })), 'تمت الإحالة إلى شركة الرافدين');
+  assert.equal(statusText(entry({ stage: 'referred', customText: 'شركة الرافدين' })), 'تمت الإحالة\nشركة الرافدين');
+  assert.equal(statusLine(entry({ stage: 'referred', customText: 'شركة الرافدين' })), 'تمت الإحالة — شركة الرافدين');
+  assert.equal(statusLine(entry({ stage: 'audit' })), 'لدى قسم الرقابة والتدقيق الداخلي');
   assert.equal(statusText(entry({ stage: 'referred' })), 'تمت الإحالة');
   assert.equal(statusText(entry({ stage: 'referralPending' })), 'قيد الإحالة');
   assert.equal(statusText(entry({ stage: 'awaitingBidders', customText: 'على تقديم الأعمال المماثلة' })), 'بانتظار إجابة الشركات على تقديم الأعمال المماثلة');
@@ -283,4 +313,18 @@ test('كشف الموقف يدمج المناقصات والطلبيات بلا 
   assert.equal(rows[1].date, '');
   assert.equal(rows[1].announcement, 'الإعلان الثاني');
   assert.equal(statusSheetRows([], [order]).length, 1);
+});
+
+test('Excel: الإجراء والملاحظة متعددا الأسطر يبقى فاصل السطر في الخلية مع التفاف النص', () => {
+  const rows = statusSheetRows([tender('1 / 26 / 9001', { statusLog: [entry({ stage: 'referred', customText: 'شركة س', note: 'أولاً\nثانياً' })] })]);
+  const ws = buildStatusSheetWorkbook(rows, '2026-11-10', ['note']).Sheets['موقف الطلبيات'];
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  const actionCol = data[1].indexOf('الإجراء');
+  const noteCol = data[1].indexOf('الملاحظات');
+  const a = ws[XLSX.utils.encode_cell({ r: 2, c: actionCol })];
+  const n = ws[XLSX.utils.encode_cell({ r: 2, c: noteCol })];
+  assert.equal(a.v, 'تمت الإحالة\nشركة س');
+  assert.equal(n.v, 'أولاً\nثانياً');
+  assert.equal(a.s.alignment.wrapText, true);
+  assert.equal(n.s.alignment.wrapText, true);
 });

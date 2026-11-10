@@ -1,5 +1,5 @@
 import { addAuditLog } from '../utils/storageService';
-import { formatSheetDate, isValidDate, statusText, validateStatusEntry } from '../utils/orderStatus';
+import { formatSheetDate, isValidDate, statusLine, validateStatusEntry } from '../utils/orderStatus';
 import { announcementLabel } from '../utils/tenderDetails';
 import type { StatusEntry, TenderProject } from '../types/tender';
 
@@ -7,7 +7,11 @@ export type StatusInput = Omit<StatusEntry, 'id' | 'recordedAt'>;
 
 // وصف الإدخال في سجل التدقيق: الإجراء والمذكرة وتاريخها إن وُجد
 export const describeStatus = (e: StatusEntry): string =>
-  `${statusText(e) || 'غير محدد'}${e.memoNo ? ` — مذكرة رقم (${e.memoNo})` : ''}${e.memoDate ? ` — بتاريخ ${formatSheetDate(e.memoDate)}` : ''}`;
+  `${statusLine(e) || 'غير محدد'}${e.memoNo ? ` — مذكرة رقم (${e.memoNo})` : ''}${e.memoDate ? ` — بتاريخ ${formatSheetDate(e.memoDate)}` : ''}`;
+
+// الملاحظة متعددة الأسطر: توحيد نهايات الأسطر، وحذف الأسطر الفارغة وفراغات نهاية كل سطر، وتبقى الأسطر الداخلية كما كُتبت
+const cleanNote = (note?: string): string | undefined =>
+  note?.replace(/\r\n?/g, '\n').trim().replace(/[ \t]+$/gm, '') || undefined;
 
 // ينظّف المدخل: فراغات الأطراف، والحقول الفارغة تُحذف (والتاريخ الفارغ أيضاً)، والتفصيل النصي لكل إجراء
 const clean = (input: StatusInput): StatusInput => ({
@@ -16,7 +20,7 @@ const clean = (input: StatusInput): StatusInput => ({
   customText: input.customText?.trim() || undefined,
   memoNo: input.memoNo?.trim() || undefined,
   memoDate: input.memoDate?.trim() || undefined,
-  note: input.note?.trim() || undefined
+  note: cleanNote(input.note)
 });
 
 // عمليات السجل النقية، مشتركة بين المناقصات والطلبيات بلا تحليل: ترجع الخطأ أو السجل الجديد

@@ -5,7 +5,7 @@ import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { formatOrderNumber } from '../utils/orderNumber';
 import { announcementLabel } from '../utils/tenderDetails';
-import { currentStatus, statusText } from '../utils/orderStatus';
+import { currentStatus, statusLine } from '../utils/orderStatus';
 
 interface ProjectHeaderProps {
   project: TenderProject;
@@ -89,7 +89,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             title="موقف الطلبية: أين هي الآن وبأي مذكرة"
             className="bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold px-3.5 py-1 rounded-full border border-amber-200 cursor-pointer transition"
           >
-            {(() => { const s = currentStatus(currentProject); return s ? `الموقف: ${statusText(s) || 'غير محدد'}` : 'حدد الموقف'; })()}
+            {(() => { const s = currentStatus(currentProject); return s ? `الموقف: ${statusLine(s) || 'غير محدد'}` : 'حدد الموقف'; })()}
           </button>
           {currentProject.entityName && (
             <span className="bg-slate-100 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">

@@ -99,7 +99,7 @@ test('إضافة بلا تاريخ تُحفظ، والتاريخ الفارغ ي
     assert.equal(e.memoDate, undefined);
     assert.equal(e.customText, 'شركة س');
     assert.doesNotMatch(saved!.auditLogs[0].details, /بتاريخ/);
-    assert.match(saved!.auditLogs[0].details, /تمت الإحالة إلى شركة س/);
+    assert.match(saved!.auditLogs[0].details, /تمت الإحالة — شركة س/);
   }
 });
 

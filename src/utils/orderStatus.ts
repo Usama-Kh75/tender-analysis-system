@@ -56,11 +56,15 @@ export function statusText(e: Pick<StatusEntry, 'stage' | 'branch' | 'customText
   if (e.stage === 'other') return e.customText ?? '';
   // مرحلة غير معروفة (من نسخة أحدث) تُعامل «غير محدد» ولا تُحذف
   if (!isStage(e.stage)) return 'غير محدد';
-  if (e.stage === 'referred') return detail ? `تمت الإحالة إلى ${detail}` : STAGE_LABELS.referred;
+  // الإجراء في سطر والتفصيل في السطر التالي (التفصيل حقل حر قد يكون جهة أو جملة، فلا «إلى»)
+  if (e.stage === 'referred') return detail ? `${STAGE_LABELS.referred}\n${detail}` : STAGE_LABELS.referred;
   const label = STAGE_LABELS[e.stage];
   const base = e.branch ? `${label}: ${BRANCH_LABELS[e.branch]}` : label;
   return detail ? `${base} ${detail}` : base;
 }
+
+/** نص الموقف في سطر واحد (سجل التدقيق، الترويسة، بطاقة المناقصة): الأسطر تُوصل بـ « — ». */
+export const statusLine = (e: Pick<StatusEntry, 'stage' | 'branch' | 'customText'>): string => statusText(e).replace(/\s*\n\s*/g, ' — ');
 
 export function validateStatusEntry(e: Pick<StatusEntry, 'stage' | 'branch' | 'customText' | 'memoDate'>): string | null {
   if (!isStage(e.stage)) return 'الإجراء غير معروف';
@@ -128,26 +132,32 @@ export interface StatusSheetRow {
   note: string;
 }
 
+export type StatusSortKey = 'number' | 'stage' | 'referral';
+
+export const REFERRAL_FIRST_ORDER: StatusStage[] = ['referred', 'referralPending', 'sentToContracts', 'reviewCommittee', 'returnedFromAudit', 'audit', 'analysis', 'awaitingBidders', 'other', 'readvertise'];
+
 type SheetSource = { kind: 'tender' | 'order'; item: TenderProject | StatusOrder };
 
 /**
  * كشف الموقف: المناقصات المحفوظة والطلبيات بلا تحليل معاً.
  * 'number' (الافتراضي): برقم الطلبية (السنة ثم التسلسل ثم الرمز).
  * 'stage': مجموعات بحسب الإجراء الحالي بترتيب STAGE_ORDER (المجهول بعد «إجراء آخر»، وبلا موقف أخيراً)، وداخل المجموعة برقم الطلبية.
+ * 'referral': كـ 'stage' لكن بترتيب REFERRAL_FIRST_ORDER (الإحالة أولاً؛ المجهول بعد القائمة، وبلا موقف أخيراً).
  */
-export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[] = [], sortBy: 'number' | 'stage' = 'number'): StatusSheetRow[] {
+export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[] = [], sortBy: StatusSortKey = 'number'): StatusSheetRow[] {
   const sources: SheetSource[] = [
     ...projects.map(item => ({ kind: 'tender' as const, item })),
     ...orders.map(item => ({ kind: 'order' as const, item }))
   ];
+  const order = sortBy === 'referral' ? REFERRAL_FIRST_ORDER : STAGE_ORDER;
   const stageRank = (p: TenderProject | StatusOrder): number => {
     const s = p.statusLog?.at(-1);
-    if (!s) return STAGE_ORDER.length + 1;
-    const i = STAGE_ORDER.indexOf(s.stage);
-    return i === -1 ? STAGE_ORDER.length : i;
+    if (!s) return order.length + 1;
+    const i = order.indexOf(s.stage);
+    return i === -1 ? order.length : i;
   };
   const sorted = sources.sort((a, b) => {
-    if (sortBy === 'stage') {
+    if (sortBy !== 'number') {
       const d = stageRank(a.item) - stageRank(b.item);
       if (d) return d;
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, MapPin } from 'lucide-react';
 import type { StatusBranch, StatusEntry, StatusStage } from '../../types/tender';
-import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusText } from '../../utils/orderStatus';
+import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusLine, statusText } from '../../utils/orderStatus';
 import { localDate } from '../../utils/localDate';
 import type { StatusInput } from '../../app/statusHandlers';
 
@@ -161,7 +161,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
               <div className="sm:col-span-2">
                 <label htmlFor="status-custom" className={labelClass}>
                   {stage === 'other' ? <>النص <span className="text-rose-600">*</span></>
-                    : stage === 'referred' ? 'الجهة المحال إليها (اختياري)'
+                    : stage === 'referred' ? 'الجهة المحال إليها أو تفصيل الإحالة (اختياري)'
                     : 'تفصيل يُلحق بالإجراء (اختياري)'}
                 </label>
                 <input
@@ -174,7 +174,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
                     {suggestions.map(n => <option key={n} value={n} />)}
                   </datalist>
                 )}
-                {preview && <p className="text-[11px] text-slate-500 mt-1">يُكتب في الكشف: <span className="font-bold text-slate-700">{preview}</span></p>}
+                {preview && <p className="text-[11px] text-slate-500 mt-1">يُكتب في الكشف: <span className="font-bold text-slate-700 whitespace-pre-line">{preview}</span></p>}
               </div>
 
               <div>
@@ -189,7 +189,8 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
 
               <div className="sm:col-span-2">
                 <label htmlFor="status-note" className={labelClass}>ملاحظة (اختيارية)</label>
-                <input id="status-note" type="text" value={note} onChange={(e) => setNote(e.target.value)} className={fieldClass} />
+                <textarea id="status-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} className={`${fieldClass} resize-y`} />
+                <p className="text-[11px] text-slate-500 mt-1">كل سطر يظهر في سطر مستقل في الكشف</p>
               </div>
             </div>
 
@@ -216,18 +217,18 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
                 {entries.map(entry => (
                   <li key={entry.id} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex items-start justify-between gap-3">
                     <div className="text-xs space-y-0.5 min-w-0 flex-1">
-                      <div className="font-black text-slate-900">
+                      <div className="font-black text-slate-900 whitespace-pre-line">
                         {statusText(entry) || 'غير محدد'}
                         {entry.id === currentId && <span className="mr-2 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5">الحالي</span>}
                       </div>
                       <div className="text-slate-600">
                         {entry.memoNo ? <>مذكرة رقم <bdi>{entry.memoNo}</bdi>{entry.memoDate ? ' — ' : ''}</> : ''}{entry.memoDate ? <bdi>{formatSheetDate(entry.memoDate)}</bdi> : (!entry.memoNo && 'بلا تاريخ')}
                       </div>
-                      {entry.note && <div className="text-slate-500 break-words">{entry.note}</div>}
+                      {entry.note && <div className="text-slate-500 break-words whitespace-pre-line">{entry.note}</div>}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button type="button" onClick={() => startEdit(entry.id)} aria-label={`تعديل موقف: ${[statusText(entry) || 'غير محدد', formatSheetDate(entry.memoDate)].filter(Boolean).join(' ')}`} className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer">تعديل</button>
-                      <button type="button" onClick={() => handleDelete(entry.id)} aria-label={`حذف موقف: ${[statusText(entry) || 'غير محدد', formatSheetDate(entry.memoDate)].filter(Boolean).join(' ')}`} className="px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer">حذف</button>
+                      <button type="button" onClick={() => startEdit(entry.id)} aria-label={`تعديل موقف: ${[statusLine(entry) || 'غير محدد', formatSheetDate(entry.memoDate)].filter(Boolean).join(' ')}`} className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer">تعديل</button>
+                      <button type="button" onClick={() => handleDelete(entry.id)} aria-label={`حذف موقف: ${[statusLine(entry) || 'غير محدد', formatSheetDate(entry.memoDate)].filter(Boolean).join(' ')}`} className="px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer">حذف</button>
                     </div>
                   </li>
                 ))}
