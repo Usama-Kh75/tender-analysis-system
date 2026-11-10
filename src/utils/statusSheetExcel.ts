@@ -22,7 +22,7 @@ export interface StatusColumnDef {
 // تعريف أعمدة الكشف: مصدر واحد للمعاينة والطباعة وExcel. الأعمدة الاختيارية تُعرض أو تُخفى
 export const STATUS_COLUMNS: StatusColumnDef[] = [
   { key: 'no', header: 'ت', wch: 5, align: 'center', optional: false },
-  { key: 'referenceNumber', header: 'رقم الطلبية', wch: 14, align: 'center', optional: false },
+  { key: 'referenceNumber', header: 'رقم الطلبية', wch: 18, align: 'center', optional: false },
   { key: 'title', header: 'الموضوع', wch: 40, align: 'right', optional: false },
   { key: 'announcement', header: 'الإعلان', wch: 14, align: 'center', optional: true },
   { key: 'receivedAt', header: 'تاريخ الاستلام', wch: 14, align: 'center', optional: true },
@@ -91,7 +91,8 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
       style(r, c, {
         font: { name: FONT, sz: 10 },
         border: BOX,
-        alignment: { horizontal: cols[c].align, vertical: 'center', wrapText: true },
+        // رقم الطلبية سطر واحد لا يلتفّ عند المسافات حول «/» (طلب أسامة 2026-11-10)
+        alignment: { horizontal: cols[c].align, vertical: 'center', wrapText: cols[c].key !== 'referenceNumber' },
         // أرقام الطلبية والمذكرة والتواريخ نصوص تُحفظ كما كُتبت؛ عمود «ت» رقم فلا يُنسَّق نصاً
         ...(cols[c].key === 'no' ? {} : { numFmt: '@' })
       });

@@ -180,6 +180,9 @@ test('ورقة Excel: العنوان والرأس والصفوف', () => {
   assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 7 && m.e.c === 8));
   assert.equal(data[2][6], '77');
   assert.equal(data[2][7], '12/10/2026');
+  // رقم الطلبية سطر واحد لا يلتفّ (B3)، والموضوع يلتفّ كما كان (C3)
+  assert.equal(ws.B3.s.alignment.wrapText, false);
+  assert.equal(ws.C3.s.alignment.wrapText, true);
 });
 
 test('الأعمدة الافتراضية: ما فيه بيانات فقط', () => {

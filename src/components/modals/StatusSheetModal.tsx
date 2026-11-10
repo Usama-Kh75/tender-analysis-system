@@ -169,7 +169,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                 {rows.map(r => (
                   <tr key={r.no} className="break-inside-avoid">
                     {cols.map(c => (
-                      <td key={c.key} className={c.align === 'center' ? `${cell} text-center` : cell}>
+                      <td key={c.key} className={`${c.align === 'center' ? `${cell} text-center` : cell}${c.key === 'referenceNumber' ? ' whitespace-nowrap' : ''}`}>
                         {c.key === 'no' || c.key === 'announcement' ? r[c.key] : c.align === 'center' ? <bdi>{r[c.key]}</bdi> : r[c.key]}
                       </td>
                     ))}
