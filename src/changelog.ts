@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.28.0',
+    date: '2026-11-12',
+    notes: [
+      'يضم ملف Excel الذي تصدّره للمجهز ورقة «اعتماد العرض الموزون»: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه، ليعتمدها المجهز ويضع بها أسعار عطائه.'
+    ]
+  },
+  {
     version: '1.27.0',
     date: '2026-11-10',
     notes: [
