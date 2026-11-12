@@ -463,6 +463,16 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
   });
 }
 
+// مفرد العرض بلا تقريب لمنزلتين (العرض المنطلق من التصحيح مفرده مبلغ ÷ كمية)، فيُعرض بأربع منازل على الأكثر
+// كي لا يخالف الكمية × المفرد المبلغَ الذي يوقّع عليه المجهز
+const UNIT_FMT_DEC = '#,##0.00##;\\(#,##0.00##\\);\\-';
+const unitCell = (v: number): XLSX.CellObject => {
+  const x = Math.round(v * 1e4) / 1e4;
+  if (Number.isInteger(x)) return amount(x);
+  const c = amount(x);
+  return { ...c, z: UNIT_FMT_DEC, s: { ...c.s, numFmt: UNIT_FMT_DEC } };
+};
+
 // ورقة اعتماد المجهز للعرض الموزون: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه فقط، ليضع المجهز أسعار
 // عطائه عليها ويوقّع ويختم. تظهر مع عرض فعّال أو معتمد (الموقوف لا يُعرض). المجموع بصيغة Excel
 function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
@@ -471,11 +481,12 @@ function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.W
   const last = FIRST + items.length - 1;
   const final = isOfferFinal(bidder);
   const data: Cell[][] = items.map(item => {
-    if (item.unpriced) return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
+    // غير مسعّرة بلا سعر في العرض: شرطة. أما العرض المنطلق من المعادلة فقد يسعّر الفقرة، فيُعرض سعره ليطابق المجموع
+    if (item.unpriced && !((item.offerTotal ?? 0) > 0)) return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
     const unit = item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
     return [
       itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity),
-      amount(round2(unit)), amount(item.offerTotal ?? item.bidderTotal)
+      unitCell(unit), amount(item.offerTotal ?? item.bidderTotal)
     ];
   });
   const offerSum = round2(items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0));
