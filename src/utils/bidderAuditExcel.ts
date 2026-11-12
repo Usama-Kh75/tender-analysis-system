@@ -6,7 +6,7 @@ import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicT
 import { toLatinDigits, percentDecimals } from './calculations';
 import { exclusionThresholdOf } from './recommendation';
 import { summarizePages } from './pageSummary';
-import { isOfferEdited, offerStatus } from './weightedOffer';
+import { isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
 
 /**
@@ -16,6 +16,8 @@ import { tenderDetailParts } from './tenderDetails';
  * - «أخطاء المجهز»: فقرات خطأ الضرب وتعارض التفقيط وحدها، بأرقام المجهز كما دوّنها، وعمود «قرار اللجنة» للتعبئة.
  * - «الجدول المعدل»: العطاء بعد تصحيحات اللجنة في النظام، بالانحراف والأسعار الموزونة، والتصحيح المعتمد لكل
  *   فقرة كما سُجّل في سجل التدقيق.
+ * - «اعتماد العرض الموزون» (مع عرض فعّال أو معتمد فقط): الوصف والوحدة والكمية ومفرد العرض ومبلغه، ليعتمدها المجهز
+ *   ويوقّع ويضع بها أسعار عطائه.
  * التنسيق كملف «مطابق للأصل»: خط Arial، ورؤوس بيضاء على أزرق داكن، وأرقام المجهز كما دوّنها بالأزرق والمحسوبة
  * بالأسود، والصفوف المؤشرة ملوّنة. تثبيت الأعمدة لا تكتبه المكتبة المجانية.
  */
@@ -461,6 +463,47 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
   });
 }
 
+// ورقة اعتماد المجهز للعرض الموزون: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه فقط، ليضع المجهز أسعار
+// عطائه عليها ويوقّع ويختم. تظهر مع عرض فعّال أو معتمد (الموقوف لا يُعرض). المجموع بصيغة Excel
+function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
+  if (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused') return null;
+  const items = bidder.items;
+  const last = FIRST + items.length - 1;
+  const final = isOfferFinal(bidder);
+  const data: Cell[][] = items.map(item => {
+    if (item.unpriced) return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
+    const unit = item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
+    return [
+      itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity),
+      amount(round2(unit)), amount(item.offerTotal ?? item.bidderTotal)
+    ];
+  });
+  const offerSum = round2(items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0));
+  const gap = round2(offerSum - bidder.totals.totalBidderAmount);
+  const note = 'للمجهز: يُعتمد هذا الجدول بأسعار العرض الموزون الجديدة، وتُوضع بها أسعار عطائك. الوصف والوحدة والكمية كما في جدول العطاء.'
+    + (final ? '' : ' تنبيه: العرض الموزون لم يُعتمد نهائياً من اللجنة بعد، فالأسعار غير نهائية.');
+  const tail = (label: string, value: Cell): Cell[] => [label, '', '', '', '', value];
+
+  return buildSheet([
+    [`اعتماد العرض الموزون: ${bidder.name}`],
+    [projectLine(project)],
+    [note],
+    [],
+    ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', 'مفرد العرض الموزون', 'مبلغ العرض الموزون'],
+    ...data,
+    [],
+    tail('مجموع العرض الموزون', formula(`SUM(F${FIRST}:F${last})`, offerSum)),
+    ...(Math.abs(gap) >= 0.005 ? [tail('الفرق عن مبلغ العطاء بعد التصحيح الحسابي', amount(gap))] : []),
+    [],
+    ['اسم المجهز: ' + bidder.name],
+    ['اسم المفوض بالتوقيع: ………………………………   التوقيع: ………………………   الختم: ………………………   التاريخ: ……… / ……… / ………']
+  ], {
+    widths: [6, 52, 10, 12, 20, 22],
+    dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + items.length,
+    center: [0, 2], wrap: [1], filter: false
+  });
+}
+
 // ملخص صفحات العطاء: مبلغ كل صفحة كما دوّنه المجهز، وبعد التصحيح، وفي العرض الموزون؛ المجموع بصيغ Excel
 function buildPagesSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
   const pages = summarizePages(bidder.items);
@@ -500,6 +543,8 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
   XLSX.utils.book_append_sheet(wb, buildAsIsSheet(project, bidder, rows), AS_IS_SHEET);
   XLSX.utils.book_append_sheet(wb, buildErrorsSheet(project, bidder, rows), 'أخطاء المجهز');
   XLSX.utils.book_append_sheet(wb, buildAdjustedSheet(project, bidder, rows), 'الجدول المعدل');
+  const approvalSheet = buildOfferApprovalSheet(project, bidder);
+  if (approvalSheet) XLSX.utils.book_append_sheet(wb, approvalSheet, 'اعتماد العرض الموزون');
   const pagesSheet = buildPagesSheet(project, bidder);
   if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
   wb.Workbook = { Views: [{ RTL: true }] };
