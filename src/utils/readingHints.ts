@@ -17,7 +17,7 @@ export function readingHint(read: number, written: number): ReadingHint | null {
       if (!((a[i] === '2' && b[i] === '3') || (a[i] === '3' && b[i] === '2'))) return null;
       diff++;
     }
-    return diff > 0 ? { kind: 'swap23', text: 'الأرجح خطأ قراءة: «٣» بخط اليد تُقرأ أحياناً «٢»' } : null;
+    return diff > 0 ? { kind: 'swap23', text: 'الأرجح خطأ قراءة: الرقم ثلاثة بخط اليد يُقرأ أحياناً اثنين' } : null;
   }
   return stripTrailingZeros(a) === stripTrailingZeros(b)
     ? { kind: 'zeros', text: 'الأرجح خطأ قراءة: صفر زائد أو ناقص' }

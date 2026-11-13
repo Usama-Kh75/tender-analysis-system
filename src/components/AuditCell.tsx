@@ -122,13 +122,13 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                                 ⚖️ اعتماد المبلغ وتصحيح المفرد (علامة عشرية)
                               </button>
                               {/* الورقة تخالف القراءة: المفرد صحيح والمبلغ قُرئ خطأً، فليس خطأ مجهز */}
-                              {onReadingFromPaper && (item.enteredUnitPrice || 0) > 0 && (
+                              {onReadingFromPaper && !item.hasTextDiscrepancy && (item.enteredUnitPrice || 0) > 0 && (
                                 <button
                                   onClick={() => onReadingFromPaper(index, { total: (item.enteredUnitPrice || 0) * (item.quantity || 1) })}
                                   className={`bg-white hover:bg-rose-50 text-rose-900 border border-slate-400 ${paperBtn}`}
                                   title="طابقتَ الورقة فوجدت المبلغ مكتوباً بحاصل الضرب، وأن القراءة هي التي أخطأت: يُعتمد دون أن يُحسب خطأ مجهز"
                                 >
-                                  📄 الورقة تقول: المبلغ = <bdi dir="ltr" className="whitespace-nowrap">{(item.quantity || 1).toLocaleString()} × {(item.enteredUnitPrice || 0).toLocaleString()}</bdi> (خطأ قراءة)
+                                  📄 الورقة تقول: المبلغ = <bdi dir="ltr" className="whitespace-nowrap">{(item.quantity || 1).toLocaleString()} × {(item.enteredUnitPrice || 0).toLocaleString()} = {((item.enteredUnitPrice || 0) * (item.quantity || 1)).toLocaleString()}</bdi> (خطأ قراءة)
                                 </button>
                               )}
                             </div>
@@ -246,20 +246,20 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                                   ⚖️ اعتماده مبلغاً للفقرة ({written.toLocaleString()})
                                 </button>
                                 {onReadingFromPaper && (<>
-                                  <button
+                                  {(hint ? paperUnitLead : likelyUnit) && (<button
                                     onClick={() => onReadingFromPaper(index, { unitPrice: written, total: written * qty })}
                                     className={paperClass(paperUnitLead)}
                                     title="طابقتَ الورقة فوجدت المفرد مكتوباً كما في التفقيط وأن القراءة هي التي أخطأت: يُعتمد دون أن يُحسب خطأ مجهز"
                                   >
                                     📄 الورقة تقول: المفرد <bdi dir="ltr" className="whitespace-nowrap">{written.toLocaleString()} × {qty.toLocaleString()} = {(written * qty).toLocaleString()}</bdi> (خطأ قراءة)
-                                  </button>
-                                  <button
+                                  </button>)}
+                                  {(hint ? paperTotalLead : !likelyUnit) && (<button
                                     onClick={() => onReadingFromPaper(index, { total: written })}
                                     className={paperClass(paperTotalLead)}
                                     title="طابقتَ الورقة فوجدت مبلغ الفقرة مكتوباً كما في التفقيط وأن القراءة هي التي أخطأت: يبقى المفرد كما هو"
                                   >
                                     📄 الورقة تقول: المبلغ {written.toLocaleString()} (خطأ قراءة)
-                                  </button>
+                                  </button>)}
                                 </>)}
                               </>) : (<>
                                 <button
