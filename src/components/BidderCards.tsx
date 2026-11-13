@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
-import { bidderAuditState } from '../utils/tenderPath';
+import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 
 interface BidderCardsProps {
   project: TenderProject;
@@ -22,7 +22,22 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     setEditingId(null);
   };
 
+  // عدّاد العطاءات: أخضر حين تكتمل مبالغ كل المسجّلين. المستلمة قد تزيد على المحلَّلة بحق (العطاء غير المستوفي لا يُحلَّل)
+  const bids = tenderPath(project).bids;
+  const complete = bids.entered === bids.registered;
+  const counterText = bids.expected > bids.entered && complete
+    ? `المحلَّلة تجارياً: ${bids.entered} من (${bids.expected}) مستلمة`
+    : `العطاءات المدخلة: ${bids.entered} من ${bids.expected}`;
   return (
+    <>
+    <p
+      aria-label="عدّاد العطاءات"
+      className={`mb-2 inline-block text-xs font-black rounded-full px-3 py-1 border ${
+        complete ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-slate-50 text-slate-700 border-slate-300'
+      }`}
+    >
+      {counterText}
+    </p>
     <div className="flex flex-wrap items-stretch gap-3 mb-4">
       {project.bidders.map(b => {
         const active = b.id === activeBidderId;
@@ -98,5 +113,6 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
         ＋ شركة
       </button>
     </div>
+    </>
   );
 };

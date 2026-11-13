@@ -17,6 +17,7 @@ import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit
 import { rankingEffect } from '../utils/rankingEffect';
 import { decisionSensitivity } from '../utils/decisionSensitivity';
 import { exclusionLabels } from '../utils/exclusionReasons';
+import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
@@ -25,6 +26,8 @@ interface ExecutiveSummaryViewProps {
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
   onOpenExclusionReasons: (id: string) => void;
   onOpenPrint: () => void;
+  /** يفتح عرض التدقيق في تبويب العطاءات عند أول مجهز فيه فقرات معلّقة */
+  onOpenAudit: () => void;
   onExportExcel: () => void;
   // مقارنة المجهزين والرسوم: زرّان بجانب الطباعة (كانا في الشريط العلوي وتبويب مستقل)
   onOpenMatrix: () => void;
@@ -38,6 +41,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   onUpdateBidderStatus,
   onOpenExclusionReasons,
   onOpenPrint,
+  onOpenAudit,
   onExportExcel,
   onOpenMatrix,
   chartsOpen,
@@ -147,7 +151,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
               className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-black px-4 py-2.5 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>طباعة المحضر النهائي</span>
+              <span>معاينة المحضر وطباعته</span>
             </button>
             <button
               onClick={onExportExcel}
@@ -210,6 +214,25 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
       </div>
 
+      {/* مؤشر الفقرات بانتظار قرار اللجنة: النقر يفتح عرض التدقيق، وهادئ أخضر عند الصفر */}
+      {(() => {
+        const pending = tenderPath(project).audit.pending;
+        return pending > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenAudit}
+            className="w-full flex flex-wrap items-center justify-between gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm font-black cursor-pointer transition no-print"
+          >
+            <span>فقرات بانتظار قرار اللجنة: <bdi className="font-mono">{pending}</bdi></span>
+            <span className="text-xs underline">فتح التدقيق</span>
+          </button>
+        ) : (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl px-4 py-3 text-sm font-black no-print">
+            <span aria-hidden="true">✓ </span>لا شيء بانتظار قرار اللجنة
+          </div>
+        );
+      })()}
+
       {/* Main Commercial Summary Table */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
@@ -234,6 +257,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 <th className="p-3.5 text-center w-32 border-l border-slate-800">الانحراف الكلي %</th>
                 <th className="p-3.5 text-center w-32 border-l border-slate-800">الانحراف الجزئي %</th>
                 <th className="p-3.5 text-center w-28 border-l border-slate-800 text-purple-200">النسبة السعرية</th>
+                <th className="p-3.5 text-center w-28 border-l border-slate-800">التدقيق</th>
                 <th className="p-3.5 text-center w-44 border-l border-slate-800">الموقف التجاري والرقابي</th>
                 <th className="p-3.5 min-w-[260px] border-l border-slate-800">أسباب القبول أو الاستبعاد</th>
                 <th className="p-3.5 text-center w-28">قرار اللجنة</th>
@@ -323,6 +347,16 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                       {bidder.totals.overallPriceRatio.toFixed(4)}
                     </td>
                     </>)}
+
+                    {/* حالة التدقيق الحسابي: عدد الفقرات المعلّقة أو «مكتمل» */}
+                    <td className="p-3.5 text-center border-l border-slate-200 text-xs font-black">
+                      {(() => {
+                        const st = bidderAuditState(bidder);
+                        return st.kind === 'pending'
+                          ? <span className="text-amber-800">{st.count} معلّقة</span>
+                          : <span className="text-emerald-700">مكتمل</span>;
+                      })()}
+                    </td>
 
                     {/* الموقف التجاري */}
                     <td className="p-3.5 text-center border-l border-slate-200">

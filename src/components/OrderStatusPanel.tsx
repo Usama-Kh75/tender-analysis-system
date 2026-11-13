@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import type { StatusBranch, StatusStage, TenderProject } from '../types/tender';
 import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusLine, statusText } from '../utils/orderStatus';
 import { localDate } from '../utils/localDate';
+import { analysisPath } from '../utils/analysisPath';
 import type { StatusInput } from '../app/statusHandlers';
 
 interface OrderStatusPanelProps {
@@ -112,6 +113,36 @@ export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onA
       </div>
       <div>
         <div className="p-6 space-y-5">
+          {/* مسار التحليل: مشتق من حالة المناقصة وسجل تدقيقها، لا يُخزَّن ولا يغيّر سجل المواقف أدناه */}
+          <section aria-labelledby="analysis-path-title">
+            <h3 id="analysis-path-title" className="text-sm font-black text-slate-800">مسار التحليل</h3>
+            <p className="text-xs text-slate-500 mb-3">ما أُنجز وما بقي ومن ينفّذه، يتحدّث وحده من بيانات المناقصة</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {analysisPath(project).map(stage => (
+                <div key={stage.title} className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs font-black text-slate-900 mb-2">{stage.title}</div>
+                  <ol className="space-y-1.5">
+                    {stage.steps.map(step => (
+                      <li key={step.text} className={`flex items-start gap-2 text-xs ${step.state === 'pending' ? 'text-slate-400' : 'text-slate-800'}`}>
+                        <span aria-hidden="true" className={`mt-0.5 shrink-0 font-black ${step.state === 'done' ? 'text-emerald-600' : step.state === 'current' ? 'text-amber-600' : 'text-slate-300'}`}>
+                          {step.state === 'done' ? '✓' : step.state === 'current' ? '◐' : '○'}
+                        </span>
+                        <span className="min-w-0 grow">
+                          <span className={step.state === 'current' ? 'font-black' : 'font-semibold'}>{step.text}</span>
+                          <span className="block text-[11px] text-slate-500">
+                            {step.actor}
+                            {step.state === 'done' ? ' — تم' : step.state === 'current' ? ' — الخطوة الحالية' : ' — لم يحن بعد'}
+                            {step.date && <> — <bdi>{formatSheetDate(step.date)}</bdi></>}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <form onSubmit={handleSubmit} className="space-y-3">
             <h3 className="text-sm font-black text-slate-800">{editingId ? 'تعديل الموقف' : 'إضافة موقف جديد'}</h3>
 

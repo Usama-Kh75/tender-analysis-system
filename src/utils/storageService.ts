@@ -97,6 +97,7 @@ export function createNewTenderProject(opts: {
   budgetType: TenderProject['budgetType'];
   announcementNo?: number;
   receivedAt?: string;
+  receivedBidsCount?: number;
   bidderNames: string[];
 }): TenderProject {
   const now = Date.now();
@@ -126,6 +127,7 @@ export function createNewTenderProject(opts: {
     budgetType: opts.budgetType,
     referenceNumber: opts.referenceNumber,
     announcementNo: opts.announcementNo,
+    ...(opts.receivedBidsCount ? { receivedBidsCount: opts.receivedBidsCount } : {}),
     ...(receivedAt ? {
       receivedAt,
       statusLog: [{ id: `status-${now}`, stage: 'analysis' as const, memoDate: receivedAt, recordedAt: new Date().toISOString() }]

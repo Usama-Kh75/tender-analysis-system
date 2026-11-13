@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Flag, Pencil, RotateCcw, Signature } from 'lucide-react';
 import { BOQItem, ReadingField } from '../types/tender';
+import { readingHint } from '../utils/readingHints';
 import { committeeResolvedTextMismatch, hasNumericCommitteeCorrection, isCommitteeCorrected, parseArabicTextToNumber, readMissingThousands, writtenAmountTarget } from '../utils/bidderAuditEngine';
 
 // تصحيح قراءة التفقيط: يُعتمد النص عند مغادرة الحقل أو Enter، وEscape يلغي. يُكتب كما في العطاء ولا
@@ -59,14 +60,17 @@ interface AuditCellProps {
   onMarkUnreasonable?: (index: number, note: string | null) => void;
   onMarkBidderSigned?: (index: number, signed: boolean) => void;
   onAcceptAsReading?: (index: number) => void;
+  onReadingFromPaper?: (index: number, paper: { unitPrice?: number; total?: number }) => void;
 }
 
 // خلية «تدقيق الأخطاء الحسابية والتفقيط» وأزرار قرارات اللجنة فيها (منقولة من BOQTable كما هي)،
 // وتظهر في عرض التدقيق وحده
 export const AuditCell: React.FC<AuditCellProps> = ({
   item, index, editingText, onEditText, onUpdateFields, onCorrectReading, onAdoptTafqeetThousands,
-  onMarkUnreasonable, onMarkBidderSigned, onAcceptAsReading
+  onMarkUnreasonable, onMarkBidderSigned, onAcceptAsReading, onReadingFromPaper
 }) => {
+  // زر «الورقة تقول»: ثانوي الشكل، ويُبرز حين يرجّح التلميح أن الرقم المقروء هو الخطأ
+  const paperBtn = 'text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer';
   return (
                       <div className="space-y-1.5">
 
@@ -117,6 +121,16 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                               >
                                 ⚖️ اعتماد المبلغ وتصحيح المفرد (علامة عشرية)
                               </button>
+                              {/* الورقة تخالف القراءة: المفرد صحيح والمبلغ قُرئ خطأً، فليس خطأ مجهز */}
+                              {onReadingFromPaper && (item.enteredUnitPrice || 0) > 0 && (
+                                <button
+                                  onClick={() => onReadingFromPaper(index, { total: (item.enteredUnitPrice || 0) * (item.quantity || 1) })}
+                                  className={`bg-white hover:bg-rose-50 text-rose-900 border border-slate-400 ${paperBtn}`}
+                                  title="طابقتَ الورقة فوجدت المبلغ مكتوباً بحاصل الضرب، وأن القراءة هي التي أخطأت: يُعتمد دون أن يُحسب خطأ مجهز"
+                                >
+                                  📄 الورقة تقول: المبلغ = <bdi dir="ltr" className="whitespace-nowrap">{(item.quantity || 1).toLocaleString()} × {(item.enteredUnitPrice || 0).toLocaleString()}</bdi> (خطأ قراءة)
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
@@ -165,6 +179,13 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                               'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة'));
                           const solid = 'bg-amber-700 hover:bg-amber-800 text-white';
                           const outline = 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-500';
+                          // تلميح خطأ القراءة: الرقم المقروء يطابق ما يقوله التفقيط إلا في ٢/٣ أو في عدد الأصفار
+                          const unitHint = ambiguous && written ? readingHint(unit, written) : null;
+                          const totalHint = written ? readingHint(enteredTotal, written) : null;
+                          const hint = unitHint ?? totalHint;
+                          const paperUnitLead = !!unitHint;
+                          const paperTotalLead = !unitHint && !!totalHint;
+                          const paperClass = (lead: boolean) => `${lead ? solid : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-400'} ${paperBtn}`;
                           // «ثلاثة وخمسمائة» والأرقام 3,500: كلمة «آلاف» ناقصة من خطأ المجهز، لا تعارض بين رقمين
                           const missing = readMissingThousands(item.writtenText, unit, enteredTotal);
                           if (missing) {
@@ -203,12 +224,15 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                               </div>
                               <EditTextButton rowId={item.id} itemNo={item.itemNo} onClick={() => onEditText(item.id)} />
                             </div>
+                            {hint && (
+                              <div className="mr-5 text-[11px] font-black text-indigo-800">💡 {hint.text}</div>
+                            )}
                             {written !== null && written > 0 && (
                             <div className="flex flex-wrap items-center gap-1.5 mt-1 mr-5">
                               {ambiguous ? (<>
                                 <button
                                   onClick={() => adoptAsUnit()}
-                                  className={`${likelyUnit ? solid : outline} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
+                                  className={`${hint ? outline : likelyUnit ? solid : outline} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
                                   title="التفقيط لسعر المفرد: يُعتمد مفرداً ويُضرب بالكمية، بقرار اللجنة"
                                 >
                                   {/* المعادلة باتجاه اليسار ومتصلة: في سياق عربي كانت تنقلب «= 50,300» إلى أول السطر */}
@@ -216,12 +240,28 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                                 </button>
                                 <button
                                   onClick={adoptAsTotal}
-                                  className={`${likelyUnit ? outline : solid} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
+                                  className={`${hint ? outline : likelyUnit ? outline : solid} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
                                   title="التفقيط لمبلغ الفقرة: يُعتمد مبلغاً لها، بقرار اللجنة"
                                 >
                                   ⚖️ اعتماده مبلغاً للفقرة ({written.toLocaleString()})
                                 </button>
-                              </>) : (
+                                {onReadingFromPaper && (<>
+                                  <button
+                                    onClick={() => onReadingFromPaper(index, { unitPrice: written, total: written * qty })}
+                                    className={paperClass(paperUnitLead)}
+                                    title="طابقتَ الورقة فوجدت المفرد مكتوباً كما في التفقيط وأن القراءة هي التي أخطأت: يُعتمد دون أن يُحسب خطأ مجهز"
+                                  >
+                                    📄 الورقة تقول: المفرد <bdi dir="ltr" className="whitespace-nowrap">{written.toLocaleString()} × {qty.toLocaleString()} = {(written * qty).toLocaleString()}</bdi> (خطأ قراءة)
+                                  </button>
+                                  <button
+                                    onClick={() => onReadingFromPaper(index, { total: written })}
+                                    className={paperClass(paperTotalLead)}
+                                    title="طابقتَ الورقة فوجدت مبلغ الفقرة مكتوباً كما في التفقيط وأن القراءة هي التي أخطأت: يبقى المفرد كما هو"
+                                  >
+                                    📄 الورقة تقول: المبلغ {written.toLocaleString()} (خطأ قراءة)
+                                  </button>
+                                </>)}
+                              </>) : (<>
                                 <button
                                   onClick={adoptAsTotal}
                                   className={`${solid} text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer`}
@@ -229,7 +269,16 @@ export const AuditCell: React.FC<AuditCellProps> = ({
                                 >
                                   ⚖️ اعتماد المكتوب كتابةً بموافقة اللجنة
                                 </button>
-                              )}
+                                {onReadingFromPaper && (
+                                  <button
+                                    onClick={() => onReadingFromPaper(index, unit > 0 && qty === 1 ? { unitPrice: written, total: written } : { total: written })}
+                                    className={paperClass(paperTotalLead)}
+                                    title="طابقتَ الورقة فوجدت المبلغ مكتوباً كما في التفقيط وأن القراءة هي التي أخطأت: يُعتمد دون أن يُحسب خطأ مجهز"
+                                  >
+                                    📄 الورقة تقول: المبلغ {written.toLocaleString()} (خطأ قراءة)
+                                  </button>
+                                )}
+                              </>)}
                             </div>
                             )}
                           </div>

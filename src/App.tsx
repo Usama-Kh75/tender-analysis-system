@@ -3,7 +3,7 @@ import { unitPriceOutliers } from './utils/unitOutliers';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
 import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
-import type { NextStepAction } from './utils/tenderPath';
+import { tenderPath, type NextStepAction } from './utils/tenderPath';
 import { exportTenderToExcel } from './utils/excelService';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
 
@@ -201,7 +201,7 @@ export function App() {
   }
 
   const ctx = createEditContext(currentProject, activeBidder, setProjects);
-  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
+  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleReadingFromPaper, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handleStartOffer, handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
@@ -239,7 +239,13 @@ export function App() {
     const scrollToTable = () => setTimeout(() => {
       document.getElementById('boq-table-container')?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
-    if (action.target === 'bids') {
+    if (action.target === 'importEstimate') {
+      // استيراد الكلفة التخمينية يغيّر فقرات مشتركة بين المجهزين، فيُرفض قبل فتح النافذة كما في زر «استيراد جدول»
+      setActiveTab('bids');
+      if (ctx.blockedByOffer({ shared: true })) return;
+      setSmartImportDocType('estimated');
+      setIsSmartImportOpen(true);
+    } else if (action.target === 'bids') {
       setActiveTab('bids');
       if (action.bidderId) handlePickBidder(action.bidderId);
       scrollToTable();
@@ -277,6 +283,7 @@ export function App() {
         onBackupAll={handleBackupAll}
         committeeName={committeeName}
         onEditCommitteeName={() => setIsCommitteeEditOpen(true)}
+        pendingAudit={tenderPath(currentProject).audit.pending}
       />
 
       {/* Main Content Area */}
@@ -350,6 +357,7 @@ export function App() {
               onUpdateFields={handleUpdateItemFields}
               onCorrectReading={handleCorrectReading}
               onAcceptAsReading={handleAcceptAsReading}
+              onReadingFromPaper={handleReadingFromPaper}
               onAdoptTafqeetThousands={handleAdoptTafqeetThousands}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
@@ -388,6 +396,7 @@ export function App() {
               onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenExclusionReasons={setExclusionBidderId}
               onOpenPrint={() => setIsPrintOpen(true)}
+              onOpenAudit={() => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: tenderPath(currentProject).audit.firstBidderId ?? undefined })}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
               chartsOpen={chartsOpen}

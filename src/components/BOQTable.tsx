@@ -152,6 +152,7 @@ interface BOQTableProps {
   onCorrectReading: (index: number, field: ReadingField, value: number | string) => void;
   // فقرة عليها تصحيح حسابي تبيّن أن خطأها قراءة النظام للورقة: الأرقام الحالية تصير المدوَّنة (handleAcceptAsReading في itemHandlers.ts)
   onAcceptAsReading?: (index: number) => void;
+  onReadingFromPaper?: (index: number, paper: { unitPrice?: number; total?: number }) => void;
   // تفقيط ناقص «آلاف»: تعتمده اللجنة بعد إضافتها دون أن يتغير رقم (handleAdoptTafqeetThousands في App.tsx)
   onAdoptTafqeetThousands: (index: number, correctedText: string) => void;
   onAddItem: () => void;
@@ -206,6 +207,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onMarkUnreasonable,
   onMarkBidderSigned,
   onAcceptAsReading,
+  onReadingFromPaper,
   offerControl,
   auditMode,
   onAuditModeChange,
@@ -721,6 +723,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           onMarkUnreasonable={onMarkUnreasonable}
                           onMarkBidderSigned={onMarkBidderSigned}
                           onAcceptAsReading={onAcceptAsReading}
+                          onReadingFromPaper={onReadingFromPaper}
                         />
                       )}
                       {handled && (

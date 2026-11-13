@@ -4,7 +4,8 @@ import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { formatOrderNumber } from '../utils/orderNumber';
-import { announcementLabel } from '../utils/tenderDetails';
+import { announcementLabel, tenderDetailParts } from '../utils/tenderDetails';
+import { statusLine } from '../utils/orderStatus';
 import type { NextStepAction } from '../utils/tenderPath';
 import { NextStepBar } from './NextStepBar';
 
@@ -29,6 +30,8 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     if (formatted !== currentProject.referenceNumber) onChangeProjectField('referenceNumber', formatted);
     setIsEditingRefNumber(false);
   };
+
+  const lastStatus = currentProject.statusLog?.[currentProject.statusLog.length - 1];
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
@@ -104,6 +107,16 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             >
               ⚠️ حدد نوع الموازنة
             </button>
+          )}
+          {/* أسلوب الدعوة والجهة المستفيدة: ما أُدخل فقط، وصياغته من tenderDetailParts (الإعلان والأعداد لها مكانها) */}
+          {tenderDetailParts(currentProject, { withCounts: false, withAnnouncement: false }).map(part => (
+            <span key={part} className="bg-slate-50 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">{part}</span>
+          ))}
+          {/* شارة الموقف: آخر مدخل في statusLog (الأخير في المصفوفة لا الأحدث تاريخاً)، وتختفي إن لم يوجد */}
+          {lastStatus && (
+            <span className="bg-blue-50 text-blue-900 text-xs font-bold px-3.5 py-1 rounded-full border border-blue-200">
+              الموقف: {statusLine(lastStatus) || 'غير محدد'}
+            </span>
           )}
           <button
             onClick={onOpenSettings}

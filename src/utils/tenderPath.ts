@@ -17,8 +17,9 @@ export function bidderAuditState(b: Bidder): BidderAuditState {
 
 export interface TenderPath {
   hasEstimate: boolean;
-  /** entered: الشركات التي لها مبالغ؛ expected: العطاءات المستلمة إن أُدخلت، وإلا عدد الشركات */
-  bids: { entered: number; expected: number };
+  /** entered: الشركات التي لها مبالغ؛ registered: الشركات المسجّلة في المناقصة؛
+   *  expected للعرض: الأكبر من العطاءات المستلمة (إن أُدخلت) والمسجّلة، فالمستلمة قد تزيد على المحلَّلة بحق */
+  bids: { entered: number; registered: number; expected: number };
   /** pending في الشركات ذوات المبالغ وحدها؛ firstBidderId أولها بترتيب الشركات */
   audit: { pending: number; firstBidderId: string | null };
   /** من اختارته اللجنة للترسية، وnull قبل اختيارها */
@@ -31,7 +32,7 @@ export function tenderPath(p: TenderProject): TenderPath {
   const rec = buildRecommendation(p);
   return {
     hasEstimate: !hasNoEstimate(p),
-    bids: { entered: withAmounts.length, expected: p.receivedBidsCount ?? p.bidders.length },
+    bids: { entered: withAmounts.length, registered: p.bidders.length, expected: Math.max(p.receivedBidsCount ?? 0, p.bidders.length) },
     audit: {
       pending: withAmounts.reduce((n, b) => n + pendingCount(b), 0),
       firstBidderId: pendingBidders[0]?.id ?? null
@@ -40,7 +41,7 @@ export function tenderPath(p: TenderProject): TenderPath {
   };
 }
 
-export type NextStepTarget = 'bids' | 'audit' | 'analysis' | 'status';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'analysis' | 'status';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
   kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report';
@@ -54,8 +55,8 @@ export function nextStep(p: TenderProject): NextStep | null {
   if (!path.hasEstimate) {
     return {
       kind: 'estimate',
-      text: 'الخطوة التالية: إدخال الكلفة التخمينية',
-      actions: [{ label: 'إدخال الكلفة التخمينية', target: 'bids' }]
+      text: 'الخطوة التالية: استيراد كشف الكلف التخمينية',
+      actions: [{ label: 'استيراد كشف الكلف التخمينية', target: 'importEstimate' }]
     };
   }
   if (path.audit.pending > 0) {
@@ -68,21 +69,21 @@ export function nextStep(p: TenderProject): NextStep | null {
     };
   }
   const empty = p.bidders.find(b => !hasBidAmounts(b));
-  if (empty || path.bids.entered < path.bids.expected) {
-    const action: NextStepAction = { label: 'إدخال العطاء', target: 'bids' };
-    if (empty) action.bidderId = empty.id;
+  if (empty) {
+    const action: NextStepAction = { label: 'إدخال العطاء', target: 'bids', bidderId: empty.id };
     return {
       kind: 'bids',
-      text: empty
-        ? `الخطوة التالية: إدخال عطاء «${empty.name}»`
-        : `الخطوة التالية: إدخال العطاء الباقي (${path.bids.entered} من ${path.bids.expected})`,
+      text: `الخطوة التالية: إدخال عطاء «${empty.name}»`,
       actions: [action]
     };
   }
   if (!path.award) {
     return {
       kind: 'award',
-      text: 'الخطوة التالية: دراسة العطاءات والتوصية بالإحالة',
+      text: `اكتمل إدخال العطاءات (${path.bids.entered} من ${path.bids.expected}) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة`
+        + (path.bids.expected > path.bids.registered
+          ? `. استُلمت (${path.bids.expected}) عطاءات، وأُدخل منها (${path.bids.entered}) للتحليل التجاري. العطاء غير المستوفي لمعايير التأهيل لا يُحلَّل تجارياً، وإن كان مستوفياً فأضفه من «إضافة مجهز».`
+          : ''),
       actions: [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]
     };
   }

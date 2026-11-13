@@ -41,8 +41,8 @@ test('حالة الشركة: بلا مبالغ، ومعلّقة بعدد فقر�
 
 test('العطاءات n من m: m عدد الشركات أو العطاءات المستلمة', () => {
   const p = setup();
-  assert.deepEqual(tenderPath(p).bids, { entered: 2, expected: 3 });
-  assert.deepEqual(tenderPath({ ...p, receivedBidsCount: 4 }).bids, { entered: 2, expected: 4 });
+  assert.deepEqual(tenderPath(p).bids, { entered: 2, registered: 3, expected: 3 });
+  assert.deepEqual(tenderPath({ ...p, receivedBidsCount: 4 }).bids, { entered: 2, registered: 3, expected: 4 });
 });
 
 test('التدقيق: لا يعدّ شركة بلا مبالغ، وأول شركة معلّقة بترتيبها', () => {
@@ -78,8 +78,8 @@ test('الخطوة 1: بلا كلفة تخمينية، ولها الأولوية
   const blank = blankTender();
   const s = nextStep(blank)!;
   assert.equal(s.kind, 'estimate');
-  assert.equal(s.text, 'الخطوة التالية: إدخال الكلفة التخمينية');
-  assert.deepEqual(s.actions, [{ label: 'إدخال الكلفة التخمينية', target: 'bids' }]);
+  assert.equal(s.text, 'الخطوة التالية: استيراد كشف الكلف التخمينية');
+  assert.deepEqual(s.actions, [{ label: 'استيراد كشف الكلف التخمينية', target: 'importEstimate' }]);
   // كلفة مفقودة مع معلّق ← estimate
   const p0 = setup();
   const noEst: TenderProject = { ...p0, bidders: [
@@ -107,12 +107,25 @@ test('الخطوة 3: شركة بلا مبالغ باسمها', () => {
   assert.deepEqual(s.actions, [{ label: 'إدخال العطاء', target: 'bids', bidderId: p.bidders[2].id }]);
 });
 
-test('الخطوة 3: receivedBidsCount أكبر من الشركات', () => {
-  const p = { ...allIn(), receivedBidsCount: 3 };
+test('المستلمة أكثر من المسجّلين وكلهم بمبالغ: لا يعلق الشريط ويظهر التنبيه', () => {
+  const p = { ...allIn(), receivedBidsCount: 4 };
+  const s = nextStep(p)!;
+  assert.equal(s.kind, 'award');
+  assert.match(s.text, /^اكتمل إدخال العطاءات \(2 من 4\) والكلفة التخمينية\. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة/);
+  assert.match(s.text, /استُلمت \(4\) عطاءات، وأُدخل منها \(2\) للتحليل التجاري\. العطاء غير المستوفي لمعايير التأهيل لا يُحلَّل تجارياً، وإن كان مستوفياً فأضفه من «إضافة مجهز»\./);
+  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]);
+});
+
+test('مسجّل 3 واثنان بمبالغ: إدخال عطاء باسم صاحبه ولو زادت المستلمة', () => {
+  const p = { ...clean(setup()), receivedBidsCount: 5 };
   const s = nextStep(p)!;
   assert.equal(s.kind, 'bids');
-  assert.equal(s.text, 'الخطوة التالية: إدخال العطاء الباقي (2 من 3)');
-  assert.deepEqual(s.actions, [{ label: 'إدخال العطاء', target: 'bids' }]);
+  assert.equal(s.text, 'الخطوة التالية: إدخال عطاء «ج»');
+});
+
+test('الكل مكتمل: اكتمل إدخال العطاءات، بلا ملاحظة حين لا فرق', () => {
+  const s = nextStep(allIn())!;
+  assert.equal(s.text, 'اكتمل إدخال العطاءات (2 من 2) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة');
 });
 
 test('الخطوة 3: لا عطاء مدخلاً بعد وفيه كلفة ← إدخال عطاء، لا تدقيق ولا ترسية', () => {
@@ -126,7 +139,7 @@ test('الخطوة 3: لا عطاء مدخلاً بعد وفيه كلفة ← إ
 test('الخطوة 4: عطاءات مدخلة بلا ترسية', () => {
   const s = nextStep(allIn())!;
   assert.equal(s.kind, 'award');
-  assert.equal(s.text, 'الخطوة التالية: دراسة العطاءات والتوصية بالإحالة');
+  assert.equal(s.text, 'اكتمل إدخال العطاءات (2 من 2) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة');
   assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]);
 });
 

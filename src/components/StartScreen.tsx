@@ -5,7 +5,7 @@ import { NewProjectModal } from './modals/NewProjectModal';
 
 interface StartScreenProps {
   recoveryNotice: React.ReactNode;
-  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[]; receivedBidsCount?: number }) => void;
   onImportBackup: (file: File) => void;
   // تظهر الزران معاً فقط حين توجد طلبيات كشف بلا تحليل (وإلا تبقى الشاشة بسيطة)
   onOpenStatusSheet?: () => void;
