@@ -2,6 +2,7 @@ import { calculateBOQMetrics } from '../utils/calculations';
 import { addAuditLog } from '../utils/storageService';
 import { offerLockReason } from '../utils/weightedOffer';
 import { correctionSignatures } from '../utils/bidderAuditEngine';
+import { formatOrderNumber } from '../utils/orderNumber';
 import { localDate } from '../utils/localDate';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
@@ -215,6 +216,7 @@ ${exclusionLock}`);
     let updatedProj: TenderProject = {
       ...currentProject,
       ...updated,
+      ...(typeof updated.referenceNumber === 'string' ? { referenceNumber: formatOrderNumber(updated.referenceNumber) } : {}),
       deviationThreshold: threshold,
       exclusionThreshold: exclusion,
       thresholdBasis: basis,

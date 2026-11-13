@@ -13,12 +13,15 @@ import { tenderDetailParts } from '../../utils/tenderDetails';
 import { localDate } from '../../utils/localDate';
 import { recommendationPieces, recommendationEditChanges, savedRecommendationEdit, type RecommendationBlock } from '../../utils/recommendationText';
 import { LegalTextsList, ThresholdBasisSentence } from '../LegalTexts';
+import { excludedBidders, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
 
 interface PrintReportModalProps {
   isOpen: boolean;
   onClose: () => void;
   project: TenderProject;
   activeBidder: Bidder;
+  // اسم اللجنة (إعداد النظام)؛ فارغ أو null يطبع كما كان
+  committeeName?: string | null;
   // صياغة اللجنة للتوصية، أو null لاستعادة صياغة النظام (recommendationHandlers.ts)
   onSaveRecommendationEdit?: (edit: RecommendationEdit | null, systemText: string) => void;
   // محرر الصياغة مفتوح: يمنع App التحديث حتى يُحفظ أو يُلغى (blockingWork)
@@ -50,6 +53,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   onClose,
   project,
   activeBidder,
+  committeeName,
   onSaveRecommendationEdit,
   onEditingChange
 }) => {
@@ -93,6 +97,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // بعد اختيار اللجنة للترسية تمّت إجراءات التصحيح بحضور المجهز وتوقيعه، فلا تُطبع فقرة التصحيح أصلاً:
   // تسلسلها في أوليات المناقصة (سجل التدقيق وقيد الاختيار). قرار المستخدم 2026-10-21
   const adopted = rec.kind === 'award' && rec.chosenByCommittee;
+  // أسباب استبعاد العطاءات بقرار اللجنة، ونصوصها الرسمية، وتذكيرات ما ينقص
+  const excluded = excludedBidders(project);
+  const withReasons = excluded.filter(b => (b.exclusionReasons?.length ?? 0) > 0);
+  const withoutReasons = excluded.filter(b => (b.exclusionReasons?.length ?? 0) === 0);
+  const exclusionKeys = exclusionLegalKeys(project);
 
   // صياغة اللجنة تُطبع بدل صياغة النظام ما دامت هناك توصية (لا قبل الكلفة التخمينية)
   const savedEdit = rec.kind !== 'no-estimate' ? savedRecommendationEdit(project) : undefined;
@@ -204,7 +213,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           <div className="border-b-2 border-slate-900 pb-4 mb-6 text-center relative">
             <div className="flex items-center justify-between mb-2">
               <div className="text-right text-xs font-bold text-slate-700">
-                {project.entityName && (
+                {/* المحضر محضر اللجنة: باسمها يُكتب الرأس وحده، فاللجنة ليست الجهة المتعاقدة (قرار أسامة 2026-11-09).
+                    بلا اسم لجنة يبقى الرأس باسم الجهة كما كان */}
+                {committeeName ? (
+                  <div className="text-amber-900 font-extrabold text-sm">{committeeName}</div>
+                ) : project.entityName && (
                   <div className="text-amber-900 font-extrabold text-sm">{project.entityName}</div>
                 )}
               </div>
@@ -283,7 +296,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       </>)}
                       <td className="border border-slate-300 p-2 text-center font-bold">
                         {isRejected ? (
-                          <span className="text-rose-800">مستبعد بقرار اللجنة</span>
+                          <span className="text-rose-800">{exclusionLegalLabels(b) ? `مستبعد — ${exclusionLegalLabels(b)}` : 'مستبعد بقرار اللجنة'}</span>
                         ) : isExcluded ? (
                           <span className="text-rose-800">مستبعد تجارياً — المادة (13)/ثالثاً/أ</span>
                         ) : isRec ? (
@@ -315,6 +328,30 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 ))}
               </div>
             )}
+            {withReasons.length > 0 && (
+              <div className="border border-slate-300 rounded-xl p-3 text-xs leading-relaxed bg-white mt-3">
+                <strong>أسباب استبعاد العطاءات:</strong>
+                {withReasons.map(b => (
+                  <div key={b.id} className="mt-1.5">
+                    <p>استُبعد عطاء ({b.name}) {b.exclusionReasons!.length > 1 ? 'للأسباب الآتية' : 'للسبب الآتي'}:</p>
+                    <ol className="list-decimal pr-6 space-y-0.5">
+                      {b.exclusionReasons!.map((r, i) => <li key={i}>{reasonLine(r, project)}</li>)}
+                    </ol>
+                  </div>
+                ))}
+                <LegalTextsList keys={exclusionKeys} />
+              </div>
+            )}
+            {withoutReasons.map(b => (
+              <div key={b.id} className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                لم تُذكر أسباب استبعاد عطاء ({b.name})؛ تُسجَّل من «أسباب الاستبعاد». (هذه الملاحظة لا تظهر في الطباعة)
+              </div>
+            ))}
+            {needsOpinionSource(project) && (
+              <div className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                لم يُذكر مصدر الرأي الفني (الفنيون المستعان بهم وكتابهم). (هذه الملاحظة لا تظهر في الطباعة)
+              </div>
+            )}
           </div>
 
           {/* 2. التحليل التفصيلي للفقرات للعطاء الموصى به */}
@@ -339,12 +376,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <thead className="bg-slate-100 font-bold border-b border-slate-400">
                 <tr>
                   <th className="border border-slate-300 p-2 text-center w-8">ت</th>
-                  <th className="border border-slate-300 p-2">المفرد التخميني</th>
-                  <th className="border border-slate-300 p-2 text-center">مفرد المجهز</th>
+                  <th className="border border-slate-300 p-2 text-center">المبلغ التخميني</th>
+                  <th className="border border-slate-300 p-2 text-center">مبلغ المجهز</th>
                   <th className="border border-slate-300 p-2 text-center">نسبة الانحراف</th>
                   <th className="border border-slate-300 p-2 text-center">الفقرة المنحرفة (&gt;{project.deviationThreshold}%)</th>
                   <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>
-                  <th className="border border-slate-300 p-2 text-center">المفرد الموزون (المعتمد)</th>
+                  <th className="border border-slate-300 p-2 text-center">المبلغ الموزون (المعتمد)</th>
                   <th className="border border-slate-300 p-2 text-center">التقييم</th>
                 </tr>
               </thead>
@@ -405,7 +442,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
           {/* 3. توصية وقرار اللجنة القانوني */}
           <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed bg-slate-50">
-            <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: توصية لجنة التحليل:</h4>
+            <h4 className="font-bold text-slate-900 mb-1 text-sm">ثالثاً: توصية {committeeName || 'لجنة التحليل'}:</h4>
 
             {/* صياغة اللجنة: إعادة صياغة فقط، لا تضيف شروطاً (قرار أسامة 2026-10-23). أدواتها لا تُطبع */}
             {editable && !editing && (
@@ -604,6 +641,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           )}
 
           {/* 4. توقيعات اللجنة (رئيس اللجنة ثابت + عدد الأعضاء حسب حجم اللجنة الفعلي) */}
+          {/* حاوية block تمنع انقسام التواقيع بين صفحتين: break-inside على حاوية grid قد لا يُحترم عند الطباعة */}
+          <div className="break-inside-avoid">
           <div
             className="grid gap-6 pt-6 text-center text-xs font-bold"
             style={{ gridTemplateColumns: `repeat(${Math.min(signatories.length, 3)}, minmax(0, 1fr))` }}
@@ -615,6 +654,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <div className="mt-6 text-slate-600">التوقيع: .....................</div>
               </div>
             ))}
+          </div>
           </div>
 
         </div>

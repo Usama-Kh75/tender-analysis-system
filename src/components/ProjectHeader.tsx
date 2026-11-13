@@ -3,6 +3,7 @@ import { Pencil, Settings } from 'lucide-react';
 import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
+import { formatOrderNumber } from '../utils/orderNumber';
 import { announcementLabel } from '../utils/tenderDetails';
 import type { NextStepAction } from '../utils/tenderPath';
 import { NextStepBar } from './NextStepBar';
@@ -22,6 +23,12 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
+  // التوحيد عند الحفظ لا مع كل ضغطة مفتاح كي لا يتشوش الكتابة
+  const commitRefNumber = () => {
+    const formatted = formatOrderNumber(currentProject.referenceNumber);
+    if (formatted !== currentProject.referenceNumber) onChangeProjectField('referenceNumber', formatted);
+    setIsEditingRefNumber(false);
+  };
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
@@ -47,12 +54,12 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   const val = e.target.value;
                   onChangeProjectField('referenceNumber', val);
                 }}
-                onKeyDown={(e) => e.key === 'Enter' && setIsEditingRefNumber(false)}
+                onKeyDown={(e) => e.key === 'Enter' && commitRefNumber()}
                 className="bg-white border border-amber-400 text-amber-900 text-xs font-black font-mono px-3 py-1 rounded-full focus:outline-none ring-2 ring-amber-500/20 w-40"
                 autoFocus
               />
               <button
-                onClick={() => setIsEditingRefNumber(false)}
+                onClick={commitRefNumber}
                 className="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shrink-0 cursor-pointer"
               >
                 حفظ

@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject, sanitizeStatusFields } from '../src/utils/storageService';
 import {
-  statusText, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
+  statusText, statusLine, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
 } from '../src/utils/orderStatus';
+import { createStatusHandlers } from '../src/app/statusHandlers';
+import { compareOrderNumbers, orderNumberParts } from '../src/utils/orderNumber';
 import * as XLSX from 'xlsx-js-style';
-import { buildStatusSheetWorkbook } from '../src/utils/statusSheetExcel';
+import { buildStatusSheetWorkbook, defaultStatusColumns } from '../src/utils/statusSheetExcel';
 import type { StatusEntry, TenderProject } from '../src/types/tender';
 
 const entry = (o: Partial<StatusEntry>): StatusEntry => ({ id: 'e', stage: 'analysis', memoDate: '2026-10-05', recordedAt: '2026-10-05T00:00:00.000Z', ...o });
@@ -33,8 +35,10 @@ test('فرع لا يتبع إجراءه يُرفض', () => {
   assert.match(validateStatusEntry({ stage: 'analysis', branch: 'negotiation', memoDate: '2026-10-05' }) ?? '', /[؀-ۿ]/);
 });
 
-test('تاريخ غير صالح يُرفض', () => {
-  for (const d of ['', 'x', '2026-02-30', '2026-13-01']) {
+test('تاريخ غير صالح يُرفض، وغيابه مقبول', () => {
+  assert.equal(validateStatusEntry({ stage: 'audit' }), null);
+  assert.equal(validateStatusEntry({ stage: 'audit', memoDate: '' }), null);
+  for (const d of ['x', '2026-02-30', '2026-13-01']) {
     assert.match(validateStatusEntry({ stage: 'analysis', memoDate: d }) ?? '', /[؀-ۿ]/);
   }
   assert.equal(validateStatusEntry({ stage: 'analysis', branch: 'technical', memoDate: '2026-10-05' }), null);
@@ -43,7 +47,9 @@ test('تاريخ غير صالح يُرفض', () => {
 test('التنظيف يتجاوز الفاسد ولا يتعطل', () => {
   assert.deepEqual(sanitizeStatusLog('x'), []);
   assert.deepEqual(sanitizeStatusLog(null), []);
-  assert.deepEqual(sanitizeStatusLog([{ stage: 'analysis', memoDate: '' }, { memoDate: '2026-10-05' }, null, 5]), []);
+  // الإدخال بلا مرحلة نصية يُحذف؛ وبلا تاريخ يبقى لأن التاريخ اختياري
+  assert.deepEqual(sanitizeStatusLog([{ memoDate: '2026-10-05' }, { stage: 5 }, null, 5]), []);
+  assert.equal(sanitizeStatusLog([{ stage: 'analysis', memoDate: '' }]).length, 1);
   const out = sanitizeStatusLog([entry({ id: 'a', branch: 'negotiation' }), entry({ id: 'b', stage: 'audit' })]);
   assert.equal(out.length, 2);
   assert.equal(out[0].id, 'a');
@@ -51,16 +57,67 @@ test('التنظيف يتجاوز الفاسد ولا يتعطل', () => {
   assert.equal(out[1].id, 'b');
 });
 
-test('ترتيب الكشف', () => {
+test('ترتيب الكشف برقم الطلبية: السنة ثم التسلسل ثم الرمز', () => {
   const rows = statusSheetRows([
-    tender('9', { receivedAt: '2026-10-10' }),
-    tender('3'),
-    tender('5', { receivedAt: '2026-09-01' })
+    tender('2 / 26 / 9012'),
+    tender('19 / 25 / 9030'),
+    tender('11 / 26 / 9014'),
+    tender('11 / 26 / 9009')
   ]);
-  assert.deepEqual(rows.map(r => r.referenceNumber), ['5', '9', '3']);
-  assert.deepEqual(rows.map(r => r.no), [1, 2, 3]);
-  const tie = statusSheetRows([tender('10', { receivedAt: '2026-10-10' }), tender('2', { receivedAt: '2026-10-10' })]);
-  assert.deepEqual(tie.map(r => r.referenceNumber), ['2', '10']);
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['19 / 25 / 9030', '2 / 26 / 9012', '11 / 26 / 9009', '11 / 26 / 9014']);
+  assert.deepEqual(rows.map(r => r.no), [1, 2, 3, 4]);
+  // تاريخ الاستلام لا يدخل في الترتيب
+  const byNumber = statusSheetRows([tender('3 / 26 / 9001', { receivedAt: '2026-01-01' }), tender('1 / 26 / 9001', { receivedAt: '2026-09-01' })]);
+  assert.deepEqual(byNumber.map(r => r.referenceNumber), ['1 / 26 / 9001', '3 / 26 / 9001']);
+});
+
+test('غير الموحَّد بعد الموحَّد، والفارغ أخيراً', () => {
+  const rows = statusSheetRows([tender(''), tender('ب'), tender('5 / 26 / 9001'), tender('أ')]);
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['5 / 26 / 9001', 'أ', 'ب', '']);
+  assert.equal(compareOrderNumbers('9 / 26 / 1', '10 / 26 / 1') < 0, true);
+  assert.equal(orderNumberParts('x'), null);
+  assert.deepEqual(orderNumberParts('2 / 26 / 9012'), { seq: 2, year: 26, code: 9012 });
+});
+
+test('ترتيب الكشف بالإجراء: مجموعات بترتيب المراحل، والمجهول بعد «آخر»، وبلا موقف أخيراً', () => {
+  const unknown = { ...entry({}), stage: 'future' as unknown as StatusEntry['stage'] };
+  const rows = statusSheetRows([
+    tender('1 / 26 / 9001'),
+    tender('2 / 26 / 9001', { statusLog: [unknown] }),
+    tender('3 / 26 / 9001', { statusLog: [entry({ stage: 'audit' })] }),
+    tender('4 / 26 / 9001', { statusLog: [entry({ stage: 'other', customText: 'س' })] }),
+    tender('6 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] }),
+    tender('5 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] })
+  ], [], 'stage');
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['5 / 26 / 9001', '6 / 26 / 9001', '3 / 26 / 9001', '4 / 26 / 9001', '2 / 26 / 9001', '1 / 26 / 9001']);
+  assert.deepEqual(rows.map(r => r.no), [1, 2, 3, 4, 5, 6]);
+});
+
+test('ترتيب الكشف «الإحالة أولاً»: الإحالة ثم قيد الإحالة ثم التحليل، والمجهول بعد إعادة الإعلان، وبلا موقف أخيراً', () => {
+  const unknown = { ...entry({}), stage: 'future' as unknown as StatusEntry['stage'] };
+  const rows = statusSheetRows([
+    tender('1 / 26 / 9001'),
+    tender('2 / 26 / 9001', { statusLog: [entry({ stage: 'readvertise' })] }),
+    tender('3 / 26 / 9001', { statusLog: [unknown] }),
+    tender('4 / 26 / 9001', { statusLog: [entry({ stage: 'awaitingBidders' })] }),
+    tender('5 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] }),
+    tender('7 / 26 / 9001', { statusLog: [entry({ stage: 'referralPending' })] }),
+    tender('8 / 26 / 9001', { statusLog: [entry({ stage: 'referred' })] }),
+    tender('6 / 26 / 9001', { statusLog: [entry({ stage: 'referred' })] })
+  ], [], 'referral');
+  assert.deepEqual(rows.map(r => r.referenceNumber), [
+    '6 / 26 / 9001', '8 / 26 / 9001', '7 / 26 / 9001', '5 / 26 / 9001', '4 / 26 / 9001', '2 / 26 / 9001', '3 / 26 / 9001', '1 / 26 / 9001'
+  ]);
+});
+
+test('الملاحظة متعددة الأسطر: تُنظَّف أطرافها وتبقى أسطرها الداخلية في الكشف', () => {
+  const { saved } = (() => {
+    let s: TenderProject | undefined;
+    createStatusHandlers(tender('1'), p => { s = p; }).handleAddStatus({ stage: 'audit', note: '  أولاً \r\nثانياً  \n\n' });
+    return { saved: s };
+  })();
+  assert.equal(currentStatus(saved!)?.note, 'أولاً\nثانياً');
+  assert.equal(statusSheetRows([saved!])[0].note, 'أولاً\nثانياً');
 });
 
 test('صف سليم لعنوان ورقم فارغين وبلا موقف', () => {
@@ -132,7 +189,7 @@ test('بلا تاريخ استلام لا موقف ولا خطأ', () => {
 
 test('ورقة Excel: العنوان والرأس والصفوف', () => {
   const rows = statusSheetRows([
-    tender('9', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('1', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
     tender('3')
   ]);
   const wb = buildStatusSheetWorkbook(rows, '2026-11-01');
@@ -143,10 +200,61 @@ test('ورقة Excel: العنوان والرأس والصفوف', () => {
   assert.deepEqual(data[1], ['ت', 'رقم الطلبية', 'الموضوع', 'الإعلان', 'تاريخ الاستلام', 'الإجراء', 'رقم المذكرة', 'التاريخ', 'الملاحظات']);
   // بعد صفوف الطلبيات: سطر فارغ ثم «رئيس اللجنة» ثم سطر التوقيع
   assert.equal(data.length - 2, rows.length + 3);
-  assert.equal(data[2 + rows.length + 1][0], 'رئيس اللجنة');
-  assert.equal(data[2 + rows.length + 2][0], 'التوقيع: .....................');
+  // التوقيع في آخر الأعمدة (يسار الصفحة) لا في العمود الأول
+  const signRow = 2 + rows.length + 1;
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow, c: 7 })].v, 'رئيس اللجنة');
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow + 1, c: 7 })].v, 'التوقيع: .....................');
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow, c: 0 })]?.v ?? '', '');
+  assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 7 && m.e.c === 8));
   assert.equal(data[2][6], '77');
   assert.equal(data[2][7], '12/10/2026');
+  // رقم الطلبية سطر واحد لا يلتفّ (B3)، والموضوع يلتفّ كما كان (C3)
+  assert.equal(ws.B3.s.alignment.wrapText, false);
+  assert.equal(ws.C3.s.alignment.wrapText, true);
+});
+
+test('الأعمدة الافتراضية: ما فيه بيانات فقط', () => {
+  const rows = statusSheetRows([
+    tender('1', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('3')
+  ]);
+  assert.deepEqual(defaultStatusColumns(rows), ['receivedAt', 'memoNo', 'date']);
+  assert.deepEqual(defaultStatusColumns([]), []);
+});
+
+test('ورقة Excel بلا عمودي الإعلان وتاريخ الاستلام', () => {
+  const rows = statusSheetRows([
+    tender('1', { receivedAt: '2026-10-10', statusLog: [entry({ memoNo: '77', memoDate: '2026-10-12' })] }),
+    tender('3')
+  ]);
+  const wb = buildStatusSheetWorkbook(rows, '2026-11-01', ['memoNo', 'date', 'note']);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  assert.deepEqual(data[1], ['ت', 'رقم الطلبية', 'الموضوع', 'الإجراء', 'رقم المذكرة', 'التاريخ', 'الملاحظات']);
+  assert.equal(data[2].length, 7);
+  const signRow = 2 + rows.length + 1;
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow, c: 5 })].v, 'رئيس اللجنة');
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow + 1, c: 6 })]?.v ?? '', '');
+  assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 5 && m.e.c === 6));
+  assert.ok(ws['!merges']!.some(m => m.s.r === 0 && m.e.c === 6));
+});
+
+test('ورقة Excel باسم اللجنة: سطر مدموج فوق العنوان وتنزاح الصفوف', () => {
+  const rows = statusSheetRows([tender('9'), tender('3')]);
+  const wb = buildStatusSheetWorkbook(rows, '2026-11-01', undefined, '  لجنة التحليل  ');
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  assert.equal(ws.A1.v, 'لجنة التحليل');
+  assert.equal(ws.A2.v, 'موقف الطلبيات لغاية 01/11/2026');
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  assert.equal(data[2][1], 'رقم الطلبية');
+  assert.equal(data.length - 3, rows.length + 3);
+  const signRow = 3 + rows.length + 1;
+  assert.equal(ws[XLSX.utils.encode_cell({ r: signRow, c: 7 })].v, 'رئيس اللجنة');
+  assert.ok(ws['!merges']!.some(m => m.s.r === 0 && m.e.c === 8));
+  assert.ok(ws['!merges']!.some(m => m.s.r === 1 && m.e.c === 8));
+  assert.ok(ws['!merges']!.some(m => m.s.r === signRow && m.s.c === 7 && m.e.c === 8));
+  // بلا اسم: الورقة كما كانت
+  assert.equal(buildStatusSheetWorkbook(rows, '2026-11-01', undefined, '  ').Sheets['موقف الطلبيات'].A1.v, 'موقف الطلبيات لغاية 01/11/2026');
 });
 
 test('فروع إجراء مجهول فارغة ولا ترمي', () => {
@@ -168,4 +276,55 @@ test('التنظيف: معرّف مكرر أو مفقود يُصلح، ونص غ
 test('sanitizeStatusFields تعيد الكائن نفسه حين لا يتغير شيء', () => {
   const p = tender('1', { receivedAt: '2026-10-05', statusLog: [entry({ id: 'a' })] });
   assert.equal(sanitizeStatusFields(p), p);
+});
+
+test('نصوص الإجراءات الجديدة والتفصيل', () => {
+  assert.equal(statusText(entry({ stage: 'referred', customText: 'شركة الرافدين' })), 'تمت الإحالة\nشركة الرافدين');
+  assert.equal(statusLine(entry({ stage: 'referred', customText: 'شركة الرافدين' })), 'تمت الإحالة — شركة الرافدين');
+  assert.equal(statusLine(entry({ stage: 'audit' })), 'لدى قسم الرقابة والتدقيق الداخلي');
+  assert.equal(statusText(entry({ stage: 'referred' })), 'تمت الإحالة');
+  assert.equal(statusText(entry({ stage: 'referralPending' })), 'قيد الإحالة');
+  assert.equal(statusText(entry({ stage: 'awaitingBidders', customText: 'على تقديم الأعمال المماثلة' })), 'بانتظار إجابة الشركات على تقديم الأعمال المماثلة');
+  assert.equal(statusText(entry({ stage: 'readvertise', customText: ' لعدم الانسجام مع معايير التأهيل ' })), 'إعادة إعلان لعدم الانسجام مع معايير التأهيل');
+  assert.equal(statusText(entry({ stage: 'analysis', branch: 'commercial', customText: 'تفصيل' })), 'قيد التحليل: التحليل التجاري تفصيل');
+  assert.equal(statusText(entry({ stage: 'audit', customText: '  ' })), 'لدى قسم الرقابة والتدقيق الداخلي');
+});
+
+test('التنظيف: تاريخ باطل يُحذف ويبقى الإدخال، والسليم بمراجعه', () => {
+  const good = entry({ id: 'a' });
+  const undated = { ...entry({ id: 'b' }), memoDate: undefined };
+  const out = sanitizeStatusLog([good, undated, { ...entry({ id: 'c' }), memoDate: '2026-02-30' }]);
+  assert.equal(out.length, 3);
+  assert.equal(out[0], good);
+  assert.equal(out[2].memoDate, undefined);
+  assert.equal(out[2].id, 'c');
+});
+
+test('كشف الموقف يدمج المناقصات والطلبيات بلا تحليل مرتبةً وبنوعها ومعرّفها', () => {
+  const order = { id: 'o1', referenceNumber: '4', title: 'طلبية بلا تحليل', announcementNo: 2, receivedAt: '2026-09-15', createdAt: 'x', updatedAt: 'x', statusLog: [entry({ stage: 'readvertise', customText: 'لعدم الاستيفاء', memoDate: undefined })] };
+  const t = tender('9', { receivedAt: '2026-10-10' });
+  const rows = statusSheetRows([t, tender('3')], [order]);
+  assert.deepEqual(rows.map(r => r.referenceNumber), ['3', '4', '9']);
+  assert.deepEqual(rows.map(r => r.no), [1, 2, 3]);
+  assert.deepEqual(rows.map(r => r.kind), ['tender', 'order', 'tender']);
+  assert.equal(rows[1].id, 'o1');
+  assert.equal(rows[2].id, t.id);
+  assert.equal(rows[1].action, 'إعادة إعلان لعدم الاستيفاء');
+  assert.equal(rows[1].date, '');
+  assert.equal(rows[1].announcement, 'الإعلان الثاني');
+  assert.equal(statusSheetRows([], [order]).length, 1);
+});
+
+test('Excel: الإجراء والملاحظة متعددا الأسطر يبقى فاصل السطر في الخلية مع التفاف النص', () => {
+  const rows = statusSheetRows([tender('1 / 26 / 9001', { statusLog: [entry({ stage: 'referred', customText: 'شركة س', note: 'أولاً\nثانياً' })] })]);
+  const ws = buildStatusSheetWorkbook(rows, '2026-11-10', ['note']).Sheets['موقف الطلبيات'];
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  const actionCol = data[1].indexOf('الإجراء');
+  const noteCol = data[1].indexOf('الملاحظات');
+  const a = ws[XLSX.utils.encode_cell({ r: 2, c: actionCol })];
+  const n = ws[XLSX.utils.encode_cell({ r: 2, c: noteCol })];
+  assert.equal(a.v, 'تمت الإحالة\nشركة س');
+  assert.equal(n.v, 'أولاً\nثانياً');
+  assert.equal(a.s.alignment.wrapText, true);
+  assert.equal(n.s.alignment.wrapText, true);
 });

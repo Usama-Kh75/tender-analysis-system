@@ -11,13 +11,20 @@ import {
   parseAllProjectsBackupFile,
   resetAllData
 } from '../utils/storageService';
+import { formatOrderNumber } from '../utils/orderNumber';
 import { CONTRACT_TYPES } from '../utils/contractTypes';
 import { BUDGET_TYPES } from '../utils/budgetTypes';
-import { TenderProject, ContractType, BudgetType } from '../types/tender';
+import { saveCommitteeName } from '../utils/committeeName';
+import { normalizeStatusOrders, saveStatusOrders } from '../utils/statusOrders';
+import { TenderProject, ContractType, BudgetType, StatusOrder } from '../types/tender';
 
 interface ProjectHandlersArgs {
   projects: TenderProject[];
   setProjects: Dispatch<SetStateAction<TenderProject[]>>;
+  statusOrders: StatusOrder[];
+  setStatusOrders: Dispatch<SetStateAction<StatusOrder[]>>;
+  committeeName: string | null;
+  setCommitteeName: (name: string | null) => void;
   setActiveId: (id: string) => void;
   recordBackup: (marks: BackupMarks) => void;
   // قد يكون undefined قبل الرجوع المبكر (شاشة البداية)
@@ -28,12 +35,12 @@ interface ProjectHandlersArgs {
 
 // معالجات مستوى المناقصات: لا تعتمد على مجهز نشط، فتُستدعى قبل الرجوعين المبكرين في App
 export function createProjectHandlers({
-  projects, setProjects, setActiveId, recordBackup, currentProject, closeSettings, closeProjects
+  projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, setActiveId, recordBackup, currentProject, closeSettings, closeProjects
 }: ProjectHandlersArgs) {
   // النسخة الشاملة تستبدل كل العلامات، فتسقط علامات المناقصات المحذوفة
   const handleBackupAll = async () => {
-    const at = await downloadAllProjectsBackup(projects);
-    if (at) recordBackup(Object.fromEntries(projects.map(p => [p.id, at])));
+    const at = await downloadAllProjectsBackup(projects, statusOrders, committeeName);
+    if (at) recordBackup(Object.fromEntries([...projects, ...statusOrders].map(p => [p.id, at])));
   };
   // قراءة العلامات من جديد بعد await مقصودة، لتفادي القيمة القديمة في الإغلاق (closure)
   const handleBackupProject = async () => {
@@ -44,7 +51,7 @@ export function createProjectHandlers({
   // Create New Project
   // مناقصة جديدة فارغة تماماً (createNewTenderProject) بشركة لكل اسم مُدخل وجدول مصفّر
   const handleCreateProject = ({ title, referenceNumber, announcementNo, receivedAt, contractType, budgetType, bidderNames }: { title: string; referenceNumber: string; announcementNo?: number; receivedAt?: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => {
-    const refNo = referenceNumber || `TND-${Date.now().toString().slice(-4)}`;
+    const refNo = formatOrderNumber(referenceNumber) || `TND-${Date.now().toString().slice(-4)}`;
     const blank = createNewTenderProject({ title, referenceNumber: refNo, announcementNo, receivedAt, contractType, budgetType, bidderNames });
 
     const newProj: TenderProject = {
@@ -125,6 +132,8 @@ export function createProjectHandlers({
 
     resetAllData();
     setProjects([]);
+    setStatusOrders([]);
+    setCommitteeName(null);
     setActiveId('');
     closeSettings();
   };
@@ -142,19 +151,42 @@ export function createProjectHandlers({
   // Import All Projects Backup (JSON) — يستبدل كل المناقصات الحالية بالنسخة الشاملة المستوردة
   const handleImportAllBackup = async (file: File) => {
     try {
-      const imported = await parseAllProjectsBackupFile(file);
+      const { projects: imported, statusOrders: rawOrders, committeeName: importedName } = await parseAllProjectsBackupFile(file);
+      // نسخة بلا اسم تترك اسم اللجنة الحالي؛ وهو لا يُذكر في التأكيد إلا إن اختلف
+      const nameChanges = importedName !== undefined && importedName !== committeeName;
+      // نسخة قديمة بلا حقل الطلبيات تترك ما في المتصفح منها كما هو
+      const orders = rawOrders ? normalizeStatusOrders(rawOrders) : undefined;
 
-      if (!window.confirm(`⚠️ سيتم استبدال كل مناقصاتك الحالية (${projects.length}) بالنسخة الاحتياطية الشاملة المستوردة (${imported.length} مناقصة). هل أنت متأكد؟`)) {
+      // الجزء الذي لا عدد فيه على الجانبين لا يُذكر (نسخة طلبيات فقط على شاشة البداية)
+      const replaced = [
+        projects.length || imported.length ? `المناقصات الحالية (${projects.length}) بمناقصات النسخة (${imported.length})` : '',
+        orders ? `طلبيات الكشف بلا تحليل الحالية (${statusOrders.length}) بطلبيات النسخة (${orders.length})` : '',
+        nameChanges ? `واسم اللجنة (${committeeName ?? 'غير مُدخل'}) باسم النسخة (${importedName})` : ''
+      ].filter(Boolean).join(' و');
+      const restored = [imported.length ? `(${imported.length}) مناقصة` : '', orders?.length ? `(${orders.length}) طلبية بلا تحليل` : '']
+        .filter(Boolean).join(' و') || 'النسخة';
+      if (!window.confirm(`⚠️ سيتم استبدال ${replaced} من النسخة الاحتياطية الشاملة المستوردة. هل أنت متأكد؟`)) {
         return;
       }
 
       saveAllProjects(imported);
       setProjects(imported);
-      // المناقصات المستعادة محفوظة في الملف الذي استُعيدت منه
-      recordBackup(Object.fromEntries(imported.map(p => [p.id, new Date().toISOString()])));
-      setActiveId(imported[0].id);
-      setActiveProjectId(imported[0].id);
-      alert(`تم استيراد (${imported.length}) مناقصة بنجاح من النسخة الاحتياطية الشاملة.`);
+      if (orders) {
+        saveStatusOrders(orders);
+        setStatusOrders(orders);
+      }
+      if (importedName !== undefined) {
+        saveCommitteeName(importedName);
+        setCommitteeName(importedName);
+      }
+      // المستعاد محفوظ في الملف الذي استُعيد منه
+      const at = new Date().toISOString();
+      recordBackup(Object.fromEntries([...imported, ...(orders ?? [])].map(p => [p.id, at])));
+      // نسخة طلبيات فقط: لا مناقصة تُفتح
+      const firstId = imported[0]?.id ?? '';
+      setActiveId(firstId);
+      setActiveProjectId(firstId);
+      alert(`تم استيراد ${restored} بنجاح من النسخة الاحتياطية الشاملة.`);
       closeSettings();
     } catch (err: any) {
       alert(`فشل استيراد النسخة الاحتياطية الشاملة: ${err.message}`);

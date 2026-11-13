@@ -1,4 +1,3 @@
-import type { TenderProject } from '../types/tender';
 
 // متى حُفظت كل مناقصة آخر مرة في نسخة احتياطية (JSON)، لتذكير المستخدم بما تغيّر بعدها:
 // البيانات في المتصفح وحده، فمسح بيانات المتصفح يُضيّع كل مناقصة لم تُحفظ في ملف.
@@ -20,7 +19,8 @@ export function saveBackupMarks(marks: BackupMarks): void {
 
 // المناقصات التي تغيّرت بعد آخر نسخة تحويها، أو لم تُحفظ في نسخة قط.
 // التغيير يُعرف من updatedAt، فكل تعديل على بيانات المناقصة يحدّثه (اختيار المجهز المعروض لا يحدّثه عمداً).
-export function unsavedProjects(projects: TenderProject[], marks: BackupMarks): TenderProject[] {
+// تصلح للمناقصات والطلبيات بلا تحليل معاً: لكل منهما id وupdatedAt
+export function unsavedProjects<T extends { id: string; updatedAt?: string; createdAt?: string }>(projects: T[], marks: BackupMarks): T[] {
   return projects.filter(p => {
     const at = marks[p.id];
     if (!at) return true;

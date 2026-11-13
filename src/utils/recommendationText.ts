@@ -5,6 +5,7 @@ import { preferenceReference } from './contractTypes';
 import { budgetApprovalNote } from './budgetTypes';
 import { assessBalance, correctedBalanceRows, isOfferFinal, pricingClause } from './weightedOffer';
 import { uniqueLegalKeys } from './legalTexts';
+import { allExcludedHaveReasons } from './exclusionReasons';
 
 /**
  * نص توصية المحضر (ثالثاً) مصدراً واحداً: منه يُطبع المحضر، ومنه تبدأ صياغة اللجنة، وبه تُقارن صياغتها بعد ذلك.
@@ -88,6 +89,11 @@ function recommendationBlocks({ project, rec, subject, exclusion, pricingText, a
         strong(`(${x.name})`), ' بمبلغ ', strong(`(${money(x)})`),
         ` ويقل عن الكلفة التخمينية بنسبة (${pct(x)})، فلا ينطبق عليه استثناء المادة (13)/ثالثاً/ب المشروط بزيادة أقل العطاءات على الحدود. وعليه توصي لجنة التحليل `,
         strong('بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة'), ' استناداً إلى المادة (20)/رابعاً.'
+      )
+      : allExcludedHaveReasons(project)
+      ? para(
+        'استبعدت اللجنة جميع العطاءات المقدمة للأسباب المبينة في (أولاً)، وعليه توصي لجنة التحليل ',
+        strong('بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة'), ' استناداً إلى المادة (20)/ثالثاً.'
       )
       : para(
         'استبعدت اللجنة جميع العطاءات المقدمة. وإذا كان استبعادها لعدم مطابقتها لشروط ومعايير المناقصة، توصي لجنة التحليل ',

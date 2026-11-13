@@ -15,12 +15,15 @@ import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
 import { rankingEffect } from '../utils/rankingEffect';
+import { decisionSensitivity } from '../utils/decisionSensitivity';
+import { exclusionLabels } from '../utils/exclusionReasons';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
   project: TenderProject;
   onSelectBidder: (id: string) => void;
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
+  onOpenExclusionReasons: (id: string) => void;
   onOpenPrint: () => void;
   onExportExcel: () => void;
   // مقارنة المجهزين والرسوم: زرّان بجانب الطباعة (كانا في الشريط العلوي وتبويب مستقل)
@@ -33,6 +36,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   project,
   onSelectBidder,
   onUpdateBidderStatus,
+  onOpenExclusionReasons,
   onOpenPrint,
   onExportExcel,
   onOpenMatrix,
@@ -60,7 +64,8 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
     if (bidder.status === 'disqualified') {
       commercialStatus = 'excluded';
-      commercialReason = 'مستبعد بقرار اللجنة';
+      const why = exclusionLabels(bidder);
+      commercialReason = why ? `مستبعد بقرار اللجنة: ${why}` : 'مستبعد بقرار اللجنة';
     } else if (noEstimate) {
       // كان يُكتب «عطاء متوازن تجارياً وضمن الحدود المقبولة قانونياً» قبل أي مقارنة ممكنة
       commercialStatus = 'pending';
@@ -196,7 +201,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
-            <div className="text-slate-400 font-semibold mb-1">المستبعدة تجارياً (انحرافات)</div>
+            <div className="text-slate-400 font-semibold mb-1">المستبعدة</div>
             <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-rose-400'}`}>
               {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus === 'excluded').length} عروض`}
             </div>
@@ -230,7 +235,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 <th className="p-3.5 text-center w-32 border-l border-slate-800">الانحراف الجزئي %</th>
                 <th className="p-3.5 text-center w-28 border-l border-slate-800 text-purple-200">النسبة السعرية</th>
                 <th className="p-3.5 text-center w-44 border-l border-slate-800">الموقف التجاري والرقابي</th>
-                <th className="p-3.5 min-w-[260px] border-l border-slate-800">أسباب القبول أو الاستبعاد التجاري</th>
+                <th className="p-3.5 min-w-[260px] border-l border-slate-800">أسباب القبول أو الاستبعاد</th>
                 <th className="p-3.5 text-center w-28">قرار اللجنة</th>
               </tr>
             </thead>
@@ -343,6 +348,15 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                       <div className="text-slate-700 font-semibold">
                         {bidder.commercialReason}
                       </div>
+                      {bidder.status === 'disqualified' && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenExclusionReasons(bidder.id)}
+                          className="mt-1.5 text-[11px] font-bold text-rose-700 hover:underline cursor-pointer"
+                        >
+                          أسباب الاستبعاد
+                        </button>
+                      )}
                     </td>
 
                     {/* قرار اللجنة */}
@@ -503,6 +517,29 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
             <div className={`p-4 text-xs sm:text-sm font-black ${effect.changed ? 'text-amber-800' : 'text-slate-700'}`}>
               {effect.changed ? 'غيّر التصحيح الحسابي ترتيب المجهزين' : 'لم يغيّر التصحيح الحسابي ترتيب المجهزين'}
             </div>
+          </div>
+        );
+      })()}
+
+      {(() => {
+        const s = decisionSensitivity(project);
+        if (!s) return null;
+        return (
+          <div role="alert" className="no-print bg-amber-50 border border-amber-300 rounded-3xl shadow-sm p-4 sm:p-5 text-amber-900">
+            <h3 className="font-black text-sm sm:text-base"><span aria-hidden="true">⚠️ </span>لا تعتمد الترسية قبل مطابقة فقرات بالورقة</h3>
+            <div className="text-xs sm:text-sm font-semibold mt-1.5 leading-relaxed">
+              الفرق بين <bdi>{s.primary.name}</bdi> و<bdi>{s.rival.name}</bdi> هو <bdi className="font-mono">{formatNumber(s.gap)}</bdi> {project.currency}،
+              وفقرات القراءة الآلية التي لم تُطابَق بالورقة بعد تبلغ عند هذين العطاءين <bdi className="font-mono">{formatNumber(s.primary.amount + s.rival.amount)}</bdi> {project.currency}:
+              فخطأ قراءة واحد بهذا الحجم قد يبدّل الترتيب.
+            </div>
+            <ul className="text-xs sm:text-sm mt-1.5 list-disc pr-5">
+              {[s.primary, s.rival].filter(e => e.rows > 0).map(e => (
+                <li key={e.bidderId}>
+                  <bdi>{e.name}</bdi>: <bdi className="font-mono">{e.rows}</bdi> فقرة بمبلغ <bdi className="font-mono">{formatNumber(e.amount)}</bdi> {project.currency}
+                </li>
+              ))}
+            </ul>
+            <div className="text-xs font-semibold mt-1.5">تجدها في بطاقة «موثوقية القراءة» فوق جدول المجهز في تبويب «العطاءات». المبلغ حدّ أعلى متحفظ: يعدّ كل مبلغ الفقرة معرَّضاً للخطأ.</div>
           </div>
         );
       })()}

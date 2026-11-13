@@ -16,6 +16,8 @@ interface MultiBidderMatrixProps {
   onSelectBidder: (id: string) => void;
   onAddNewBidder: (name: string) => void;
   onUpdateBidderStatus: (bidderId: string, status: Bidder['status']) => void;
+  // تفتح نافذة أسباب استبعاد العطاء (عند اختيار «مستبعد» وبزر «الأسباب»)
+  onOpenExclusionReasons: (bidderId: string) => void;
   onDeleteBidder: (bidderId: string) => void;
 }
 
@@ -26,6 +28,7 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
   onSelectBidder,
   onAddNewBidder,
   onUpdateBidderStatus,
+  onOpenExclusionReasons,
   onDeleteBidder
 }) => {
   const [newBidderName, setNewBidderName] = useState('');
@@ -225,7 +228,11 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                       <td className="p-3 text-center">
                         <select
                           value={bidder.status}
-                          onChange={(e) => onUpdateBidderStatus(bidder.id, e.target.value as any)}
+                          aria-label={`حالة عطاء ${bidder.name}`}
+                          onChange={(e) => {
+                            onUpdateBidderStatus(bidder.id, e.target.value as any);
+                            if (e.target.value === 'disqualified') onOpenExclusionReasons(bidder.id);
+                          }}
                           className="bg-slate-100 border border-slate-300 rounded px-2 py-1 text-xs font-semibold focus:outline-none cursor-pointer"
                         >
                           <option value="pending">قيد التدقيق</option>
@@ -233,6 +240,15 @@ export const MultiBidderMatrix: React.FC<MultiBidderMatrixProps> = ({
                           <option value="recommended">موصى بالترسية</option>
                           <option value="disqualified">مستبعد</option>
                         </select>
+                        {bidder.status === 'disqualified' && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenExclusionReasons(bidder.id)}
+                            className="mr-1.5 text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold px-2 py-1 rounded border border-rose-200 cursor-pointer"
+                          >
+                            الأسباب ({bidder.exclusionReasons?.length ?? 0})
+                          </button>
+                        )}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">

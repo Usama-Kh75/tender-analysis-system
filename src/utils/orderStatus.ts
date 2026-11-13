@@ -1,18 +1,22 @@
-import type { StatusBranch, StatusEntry, StatusStage, TenderProject } from '../types/tender';
+import type { StatusBranch, StatusEntry, StatusOrder, StatusStage, TenderProject } from '../types/tender';
 import { announcementLabel } from './tenderDetails';
+import { compareOrderNumbers } from './orderNumber';
 
 /**
  * موقف الطلبية: سجل وعرض فقط، لا يدخل في أي حساب أو توصية.
  * الموقف الحالي هو آخر إدخال في السجل لا الأحدث تاريخاً.
  */
 
-export const STAGE_ORDER: StatusStage[] = ['analysis', 'audit', 'returnedFromAudit', 'reviewCommittee', 'sentToContracts', 'readvertise', 'other'];
+export const STAGE_ORDER: StatusStage[] = ['analysis', 'awaitingBidders', 'audit', 'returnedFromAudit', 'reviewCommittee', 'referralPending', 'referred', 'sentToContracts', 'readvertise', 'other'];
 
 export const STAGE_LABELS: Record<StatusStage, string> = {
   analysis: 'قيد التحليل',
+  awaitingBidders: 'بانتظار إجابة الشركات',
   audit: 'لدى قسم الرقابة والتدقيق الداخلي',
   returnedFromAudit: 'معادة من التدقيق إلى اللجنة',
   reviewCommittee: 'لدى لجنة المراجعة',
+  referralPending: 'قيد الإحالة',
+  referred: 'تمت الإحالة',
   sentToContracts: 'أُرسلت إلى العقود',
   readvertise: 'إعادة إعلان',
   other: 'إجراء آخر'
@@ -20,9 +24,12 @@ export const STAGE_LABELS: Record<StatusStage, string> = {
 
 export const BRANCHES_OF: Record<StatusStage, StatusBranch[]> = {
   analysis: ['technical', 'commercial', 'documents'],
+  awaitingBidders: [],
   audit: [],
   returnedFromAudit: [],
   reviewCommittee: ['negotiation'],
+  referralPending: [],
+  referred: [],
   sentToContracts: [],
   readvertise: [],
   other: []
@@ -44,19 +51,27 @@ function isValidDate(v: unknown): v is string {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
-export function statusText(e: StatusEntry): string {
+export function statusText(e: Pick<StatusEntry, 'stage' | 'branch' | 'customText'>): string {
+  const detail = typeof e.customText === 'string' ? e.customText.trim() : '';
   if (e.stage === 'other') return e.customText ?? '';
   // مرحلة غير معروفة (من نسخة أحدث) تُعامل «غير محدد» ولا تُحذف
   if (!isStage(e.stage)) return 'غير محدد';
+  // الإجراء في سطر والتفصيل في السطر التالي (التفصيل حقل حر قد يكون جهة أو جملة، فلا «إلى»)
+  if (e.stage === 'referred') return detail ? `${STAGE_LABELS.referred}\n${detail}` : STAGE_LABELS.referred;
   const label = STAGE_LABELS[e.stage];
-  return e.branch ? `${label}: ${BRANCH_LABELS[e.branch]}` : label;
+  const base = e.branch ? `${label}: ${BRANCH_LABELS[e.branch]}` : label;
+  return detail ? `${base} ${detail}` : base;
 }
+
+/** نص الموقف في سطر واحد (سجل التدقيق، الترويسة، بطاقة المناقصة): الأسطر تُوصل بـ « — ». */
+export const statusLine = (e: Pick<StatusEntry, 'stage' | 'branch' | 'customText'>): string => statusText(e).replace(/\s*\n\s*/g, ' — ');
 
 export function validateStatusEntry(e: Pick<StatusEntry, 'stage' | 'branch' | 'customText' | 'memoDate'>): string | null {
   if (!isStage(e.stage)) return 'الإجراء غير معروف';
   if (e.stage === 'other' && !e.customText?.trim()) return 'اكتب نص الإجراء الآخر';
   if (e.branch && !BRANCHES_OF[e.stage].includes(e.branch)) return 'الفرع المختار لا يتبع هذا الإجراء';
-  if (!isValidDate(e.memoDate)) return 'تاريخ المذكرة أو الإجراء غير صالح';
+  // التاريخ اختياري؛ إن وُجد فيجب أن يكون صالحاً
+  if (e.memoDate !== undefined && e.memoDate !== '' && !isValidDate(e.memoDate)) return 'تاريخ المذكرة أو الإجراء غير صالح';
   return null;
 }
 
@@ -77,10 +92,12 @@ export function sanitizeStatusLog(raw: unknown): StatusEntry[] {
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
     const e = item as StatusEntry;
-    if (typeof e.stage !== 'string' || !isValidDate(e.memoDate)) continue;
+    if (typeof e.stage !== 'string') continue;
     let copy: Record<string, unknown> | null = null;
     const edit = () => (copy ??= { ...e });
     if (!isText(e.id) || e.id === '' || seen.has(e.id)) edit().id = `status-fix-${out.length}-${Math.random().toString(36).substring(2, 8)}`;
+    // تاريخ غير صالح يُحذف ويبقى الإدخال (التاريخ اختياري)
+    if (e.memoDate !== undefined && !isValidDate(e.memoDate)) delete edit().memoDate;
     if (e.branch !== undefined && !(isStage(e.stage) && BRANCHES_OF[e.stage].includes(e.branch))) delete edit().branch;
     for (const key of ['memoNo', 'note', 'customText'] as const) {
       if (e[key] !== undefined && !isText(e[key])) delete edit()[key];
@@ -103,6 +120,8 @@ export function formatSheetDate(iso?: string): string {
 
 export interface StatusSheetRow {
   no: number;
+  kind: 'tender' | 'order';
+  id: string;
   referenceNumber: string;
   title: string;
   announcement: string;
@@ -113,22 +132,43 @@ export interface StatusSheetRow {
   note: string;
 }
 
-export function statusSheetRows(projects: TenderProject[]): StatusSheetRow[] {
-  const received = (p: TenderProject) => (isValidDate(p.receivedAt) ? p.receivedAt : undefined);
-  const sorted = [...projects].sort((a, b) => {
-    const ra = received(a);
-    const rb = received(b);
-    if (ra !== rb) {
-      if (!ra) return 1;
-      if (!rb) return -1;
-      return ra < rb ? -1 : 1;
+export type StatusSortKey = 'number' | 'stage' | 'referral';
+
+export const REFERRAL_FIRST_ORDER: StatusStage[] = ['referred', 'referralPending', 'sentToContracts', 'reviewCommittee', 'returnedFromAudit', 'audit', 'analysis', 'awaitingBidders', 'other', 'readvertise'];
+
+type SheetSource = { kind: 'tender' | 'order'; item: TenderProject | StatusOrder };
+
+/**
+ * كشف الموقف: المناقصات المحفوظة والطلبيات بلا تحليل معاً.
+ * 'number' (الافتراضي): برقم الطلبية (السنة ثم التسلسل ثم الرمز).
+ * 'stage': مجموعات بحسب الإجراء الحالي بترتيب STAGE_ORDER (المجهول بعد «إجراء آخر»، وبلا موقف أخيراً)، وداخل المجموعة برقم الطلبية.
+ * 'referral': كـ 'stage' لكن بترتيب REFERRAL_FIRST_ORDER (الإحالة أولاً؛ المجهول بعد القائمة، وبلا موقف أخيراً).
+ */
+export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[] = [], sortBy: StatusSortKey = 'number'): StatusSheetRow[] {
+  const sources: SheetSource[] = [
+    ...projects.map(item => ({ kind: 'tender' as const, item })),
+    ...orders.map(item => ({ kind: 'order' as const, item }))
+  ];
+  const order = sortBy === 'referral' ? REFERRAL_FIRST_ORDER : STAGE_ORDER;
+  const stageRank = (p: TenderProject | StatusOrder): number => {
+    const s = p.statusLog?.at(-1);
+    if (!s) return order.length + 1;
+    const i = order.indexOf(s.stage);
+    return i === -1 ? order.length : i;
+  };
+  const sorted = sources.sort((a, b) => {
+    if (sortBy !== 'number') {
+      const d = stageRank(a.item) - stageRank(b.item);
+      if (d) return d;
     }
-    return (a.referenceNumber ?? '').localeCompare(b.referenceNumber ?? '', 'ar', { numeric: true });
+    return compareOrderNumbers(a.item.referenceNumber ?? '', b.item.referenceNumber ?? '');
   });
-  return sorted.map((p, i) => {
-    const s = currentStatus(p);
+  return sorted.map(({ kind, item: p }, i) => {
+    const s = p.statusLog?.at(-1);
     return {
       no: i + 1,
+      kind,
+      id: p.id,
       referenceNumber: p.referenceNumber ?? '',
       title: p.title ?? '',
       announcement: announcementLabel(p.announcementNo) ?? '',
@@ -140,3 +180,5 @@ export function statusSheetRows(projects: TenderProject[]): StatusSheetRow[] {
     };
   });
 }
+
+export { isValidDate };

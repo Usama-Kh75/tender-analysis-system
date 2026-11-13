@@ -8,23 +8,70 @@ const FONT = 'Arial';
 const THIN = { style: 'thin', color: { rgb: 'FF000000' } };
 const BOX = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 
-export const STATUS_SHEET_HEADERS = ['ت', 'رقم الطلبية', 'الموضوع', 'الإعلان', 'تاريخ الاستلام', 'الإجراء', 'رقم المذكرة', 'التاريخ', 'الملاحظات'];
-const WIDTHS = [5, 14, 40, 14, 14, 40, 14, 14, 30];
+export type StatusColumnKey = 'no' | 'referenceNumber' | 'title' | 'announcement' | 'receivedAt' | 'action' | 'memoNo' | 'date' | 'note';
+export type OptionalStatusColumnKey = 'announcement' | 'receivedAt' | 'memoNo' | 'date' | 'note';
+
+export interface StatusColumnDef {
+  key: StatusColumnKey;
+  header: string;
+  wch: number;
+  align: 'right' | 'center';
+  optional: boolean;
+}
+
+// تعريف أعمدة الكشف: مصدر واحد للمعاينة والطباعة وExcel. الأعمدة الاختيارية تُعرض أو تُخفى
+export const STATUS_COLUMNS: StatusColumnDef[] = [
+  { key: 'no', header: 'ت', wch: 5, align: 'center', optional: false },
+  { key: 'referenceNumber', header: 'رقم الطلبية', wch: 18, align: 'center', optional: false },
+  { key: 'title', header: 'الموضوع', wch: 40, align: 'right', optional: false },
+  { key: 'announcement', header: 'الإعلان', wch: 14, align: 'center', optional: true },
+  { key: 'receivedAt', header: 'تاريخ الاستلام', wch: 14, align: 'center', optional: true },
+  { key: 'action', header: 'الإجراء', wch: 40, align: 'right', optional: false },
+  { key: 'memoNo', header: 'رقم المذكرة', wch: 14, align: 'center', optional: true },
+  { key: 'date', header: 'التاريخ', wch: 14, align: 'center', optional: true },
+  { key: 'note', header: 'الملاحظات', wch: 30, align: 'right', optional: true }
+];
+
+export const STATUS_SHEET_HEADERS = STATUS_COLUMNS.map(c => c.header);
+
+/** الأعمدة الاختيارية التي فيها قيمة غير فارغة في صف واحد على الأقل (الافتراضي عند فتح الكشف). */
+export function defaultStatusColumns(rows: StatusSheetRow[]): OptionalStatusColumnKey[] {
+  return STATUS_COLUMNS
+    .filter(c => c.optional && rows.some(r => String(r[c.key as keyof StatusSheetRow] ?? '').trim() !== ''))
+    .map(c => c.key as OptionalStatusColumnKey);
+}
+
+/** الأعمدة المعروضة: الثابتة دائماً، والاختيارية المختارة فقط (بلا تحديد = كلها). */
+export function shownStatusColumns(optional?: Iterable<OptionalStatusColumnKey>): StatusColumnDef[] {
+  const chosen = optional ? new Set<string>(optional) : null;
+  return STATUS_COLUMNS.filter(c => !c.optional || !chosen || chosen.has(c.key));
+}
 
 export const statusSheetTitle = (asOf: string): string => `موقف الطلبيات لغاية ${formatSheetDate(asOf)}`;
 
-export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): XLSX.WorkBook {
-  const lastCol = STATUS_SHEET_HEADERS.length - 1;
+export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>, committeeName?: string | null): XLSX.WorkBook {
+  const cols = shownStatusColumns(columns);
+  const lastCol = cols.length - 1;
+  // اسم اللجنة سطر مدموج فوق العنوان إن وُجد؛ وبلا اسم تبقى الورقة كما كانت (o = إزاحة الصفوف)
+  const name = committeeName?.trim() ?? '';
+  const o = name ? 1 : 0;
   const aoa: (string | number)[][] = [
+    ...(name ? [[name]] : []),
     [statusSheetTitle(asOf)],
-    STATUS_SHEET_HEADERS,
-    ...rows.map(r => [r.no, r.referenceNumber, r.title, r.announcement, r.receivedAt, r.action, r.memoNo, r.date, r.note])
+    cols.map(c => c.header),
+    ...rows.map(r => cols.map(c => r[c.key]))
   ];
   const signRow = aoa.length + 1;
-  aoa.push([], ['رئيس اللجنة'], ['التوقيع: .....................']);
+  const pad = Array<string>(cols.length - 2).fill('');
+  aoa.push([], [...pad, 'رئيس اللجنة'], [...pad, 'التوقيع: .....................']);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = WIDTHS.map(wch => ({ wch }));
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }];
+  ws['!cols'] = cols.map(c => ({ wch: c.wch }));
+  // توقيع رئيس اللجنة في آخر عمودين (يسار الصفحة في ورقة RTL): كل سطر دمج الأخيرين
+  const signCol = lastCol - 1;
+  ws['!merges'] = [
+    ...Array.from({ length: o + 1 }, (_, r) => ({ s: { r, c: 0 }, e: { r, c: lastCol } })),
+    ...[signRow, signRow + 1].map(r => ({ s: { r, c: signCol }, e: { r, c: lastCol } }))
+  ];
 
   const style = (r: number, c: number, s: object) => {
     const ref = XLSX.utils.encode_cell({ r, c });
@@ -32,27 +79,31 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): 
     ws[ref].s = s;
   };
   for (let c = 0; c <= lastCol; c++) {
-    style(0, c, { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } });
-    style(1, c, {
+    if (name) style(0, c, { font: { name: FONT, sz: 12, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } });
+    style(o, c, { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } });
+    style(o + 1, c, {
       font: { name: FONT, sz: 10, bold: true, color: { rgb: 'FFFFFFFF' } },
       fill: { patternType: 'solid', fgColor: { rgb: 'FF1F4E78' } },
       border: BOX,
       alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
     });
-    for (let r = 2; r < aoa.length; r++) {
+    for (let r = o + 2; r < aoa.length; r++) {
       style(r, c, {
         font: { name: FONT, sz: 10 },
         border: BOX,
-        alignment: { horizontal: c === 2 || c === 5 || c === 8 ? 'right' : 'center', vertical: 'center', wrapText: true },
+        // رقم الطلبية سطر واحد لا يلتفّ عند المسافات حول «/» (طلب أسامة 2026-11-10)
+        alignment: { horizontal: cols[c].align, vertical: 'center', wrapText: cols[c].key !== 'referenceNumber' },
         // أرقام الطلبية والمذكرة والتواريخ نصوص تُحفظ كما كُتبت؛ عمود «ت» رقم فلا يُنسَّق نصاً
-        ...(c === 0 ? {} : { numFmt: '@' })
+        ...(cols[c].key === 'no' ? {} : { numFmt: '@' })
       });
     }
   }
 
-  // توقيع رئيس اللجنة تحت الجدول في العمود الأول، بلا حدود
+  // توقيع رئيس اللجنة تحت الجدول في آخر عمودين، بلا حدود
   for (const r of [signRow, signRow + 1]) {
-    style(r, 0, { font: { name: FONT, sz: 10, bold: r === signRow }, alignment: { horizontal: 'right', vertical: 'center' } });
+    for (const c of [signCol, lastCol]) {
+      style(r, c, { font: { name: FONT, sz: 10, bold: r === signRow }, alignment: { horizontal: 'center', vertical: 'center' } });
+    }
   }
 
   const wb = XLSX.utils.book_new();
@@ -61,6 +112,6 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string): 
   return wb;
 }
 
-export function exportStatusSheetToExcel(rows: StatusSheetRow[], asOf: string): void {
-  XLSX.writeFile(buildStatusSheetWorkbook(rows, asOf), `موقف الطلبيات ${asOf}.xlsx`);
+export function exportStatusSheetToExcel(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>, committeeName?: string | null): void {
+  XLSX.writeFile(buildStatusSheetWorkbook(rows, asOf, columns, committeeName), `موقف الطلبيات ${asOf}.xlsx`);
 }

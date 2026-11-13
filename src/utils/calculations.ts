@@ -200,7 +200,10 @@ export function calculateBOQMetrics(
       offerUnitPrice: item.offerUnitPrice,
       offerTotal: item.offerTotal,
       unreasonablePrice: item.unreasonablePrice,
-      bidderSignedAt: item.bidderSignedAt
+      bidderSignedAt: item.bidderSignedAt,
+      readBy: item.readBy,
+      readCheck: item.readCheck,
+      readCorrected: item.readCorrected
     };
   });
 

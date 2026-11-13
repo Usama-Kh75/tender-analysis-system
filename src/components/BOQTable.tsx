@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AuditLogEntry, BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
+import type { UnitOutlier } from '../utils/unitOutliers';
 import { isOfferEdited, offerItemView } from '../utils/weightedOffer';
 
 // حقل مبلغ يعرض فواصل الآلاف (60,000,000) خارج التعديل والرقم المجرد أثناء الكتابة: بلا فواصل كان
@@ -138,6 +139,7 @@ const OfferAmountCell: React.FC<{ item: BOQItem }> = ({ item }) => {
 };
 
 interface BOQTableProps {
+  unitOutliers?: UnitOutlier[];
   items: BOQItem[];
   totals?: TenderTotals;
   currency?: string;
@@ -184,6 +186,7 @@ interface BOQTableProps {
 export const BOQTable: React.FC<BOQTableProps> = ({
   items,
   totals,
+  unitOutliers = [],
   deviationThreshold,
   bidderName,
   onUpdateItem,
@@ -547,6 +550,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                 </tr>
               ) : filteredItems.map((item) => {
                 const actualIndex = items.findIndex(i => i.id === item.id);
+                const unitOutlier = unitOutliers.find(row => row.itemId === item.id);
                 const view = deviationView(item);
                 const isDeviated = view.isDeviated;
                 const isSaving = view.diffAmount < 0;
@@ -646,6 +650,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           placeholder={derivedUnitPrice > 0 ? displayAmount(derivedUnitPrice) : '0.00'}
                           className="w-full min-w-[6rem] text-center bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-lg p-1.5 font-mono font-black text-indigo-950 text-xs shadow-2xs"
                         />
+                      )}
+                      {!locked && unitOutlier && (
+                        <span className="print:hidden inline-block mt-1 text-[10px] leading-tight font-black text-amber-800 bg-amber-50 border border-amber-400 rounded-md px-2 py-0.5"
+                          title="سعر المفرد يبعد عن وسيط بقية المجهزين بعامل عشري: راجع الفاصلة العشرية — ضوابط رقم (4) خامساً/ب/2">
+                          <bdi dir="ltr">{unitOutlier.direction === 'high' ? '×' : '÷'}{10 ** Math.abs(Math.round(Math.log10(unitOutlier.factor)))}</bdi> عن بقية المجهزين
+                        </span>
                       )}
                     </td>
 

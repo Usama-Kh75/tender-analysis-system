@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { unitPriceOutliers } from './utils/unitOutliers';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
 import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
@@ -10,6 +11,8 @@ import { Navbar } from './components/Navbar';
 import { KPIStatsCards } from './components/KPIStatsCards';
 import { BOQTable } from './components/BOQTable';
 import { WeightedOfferBar } from './components/WeightedOfferBar';
+import { ReadingReliabilityCard } from './components/ReadingReliabilityCard';
+import { readingReliability } from './utils/readingReliability';
 import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
 import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
@@ -24,6 +27,10 @@ import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
 import { CorrectionNoticeModal } from './components/modals/CorrectionNoticeModal';
+import { CommitteeNameModal } from './components/modals/CommitteeNameModal';
+import { ExclusionReasonsModal } from './components/modals/ExclusionReasonsModal';
+import { createExclusionHandlers } from './app/exclusionHandlers';
+import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
 import { OrderStatusPanel } from './components/OrderStatusPanel';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -46,14 +53,16 @@ import { createBidderHandlers } from './app/bidderHandlers';
 import { createProjectHandlers } from './app/projectHandlers';
 import { createRecommendationHandlers } from './app/recommendationHandlers';
 import { createStatusHandlers } from './app/statusHandlers';
+import { createStatusOrderHandlers } from './app/statusOrderHandlers';
 import { downloadRecommendationEdits } from './utils/storageService';
 import { APP_VERSION } from './changelog';
 
 export function App() {
   const {
-    projects, setProjects, activeProjectId, setActiveId, loaded, recovered, backupMarks,
+    projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, activeProjectId, setActiveId, loaded, recovered, backupMarks,
     unsaved, recordBackup, downloadRecovered, dismissRecovered
   } = useProjectStore();
+  const [isCommitteeEditOpen, setIsCommitteeEditOpen] = useState(false);
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
   const [activeTab, setActiveTab] = useState<MainTab>(RESUMED_STATE?.tab ?? 'bids');
 
@@ -82,9 +91,12 @@ export function App() {
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
   const [auditInitialFilter, setAuditInitialFilter] = useState<AuditFilter>('pending');
   const [auditFocusItemId, setAuditFocusItemId] = useState<string | undefined>(undefined);
+  // العطاء الذي تُسجَّل أسباب استبعاده في نافذة «أسباب الاستبعاد»؛ null = مغلقة
+  const [exclusionBidderId, setExclusionBidderId] = useState<string | null>(null);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
-  const blockingWork = isOcrOpen ? 'قراءة جدول من PDF / صورة'
+  const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
+    : isOcrOpen ? 'قراءة جدول من PDF / صورة'
     : isSmartImportOpen ? 'استيراد جدول'
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isStatusDirty ? 'موقف الطلبية'
@@ -92,6 +104,7 @@ export function App() {
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
     : isPrintOpen && isRecEditing ? 'صياغة التوصية'
+    : exclusionBidderId ? 'أسباب الاستبعاد'
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
@@ -107,10 +120,32 @@ export function App() {
 
   const { handleBackupAll, handleBackupProject, handleCreateProject, handleImportBackup, handleDeleteProject,
     handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup } = createProjectHandlers({
-    projects, setProjects, setActiveId, recordBackup, currentProject,
+    projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, setActiveId, recordBackup, currentProject,
     closeSettings: () => setIsSettingsOpen(false),
     closeProjects: () => setIsProjectsOpen(false)
   });
+
+  // اسم اللجنة: إلزامي عند أول فتح بلا اسم محفوظ (في شاشة البداية والواجهة الرئيسية)، ويُعدَّل من الشريط العلوي
+  const committeeNameModal = loaded && (committeeName === null || isCommitteeEditOpen) ? (
+    <CommitteeNameModal
+      mode={committeeName === null ? 'required' : 'edit'}
+      initialName={committeeName ?? ''}
+      onSave={(name) => {
+        // فشل الحفظ لا يُبقي النافذة الإلزامية فوق المناقصات والنسخة الاحتياطية: يُستعمل الاسم لهذه الجلسة وحدها
+        try {
+          saveCommitteeName(name);
+        } catch {
+          // في التعديل يبقى المحفوظ هو الاسم السابق، فيعود عند الفتح التالي ولا يُطلب الاسم
+          alert(committeeName === null
+            ? 'تعذر حفظ اسم اللجنة في المتصفح (قد تكون مساحة التخزين ممتلئة أو ممنوعة). سيُستعمل الاسم في هذه الجلسة فقط، ويُطلب ثانيةً عند الفتح التالي.'
+            : 'تعذر حفظ اسم اللجنة الجديد في المتصفح (قد تكون مساحة التخزين ممتلئة أو ممنوعة). سيُستعمل في هذه الجلسة فقط، ويعود الاسم السابق عند الفتح التالي.');
+        }
+        setCommitteeName(name);
+        setIsCommitteeEditOpen(false);
+      }}
+      onClose={() => setIsCommitteeEditOpen(false)}
+    />
+  ) : null;
 
   const recoveryNotice = (
     <RecoveryNotice
@@ -123,12 +158,37 @@ export function App() {
 
   // لا مناقصة محفوظة (بعد «إعادة ضبط النظام» أو حذف آخر مناقصة): شاشة بداية بدل مناقصة فارغة تُنشأ تلقائياً
   if (loaded && projects.length === 0) {
+    const hasOrders = statusOrders.length > 0;
+    // زر الاستيراد هنا يقبل النسختين: الشاملة (ومنها نسخة الطلبيات وحدها) تُستعاد كاملة، وغيرها مناقصة واحدة
+    const importAnyBackup = async (file: File) => {
+      let full = false;
+      // النسخة الشاملة القديمة قائمة مناقصات مجردة بلا __type، ويقرؤها parseAllBackupText أيضاً
+      try { const raw = JSON.parse(await file.text()); full = raw?.__type === 'boc-tender-backup-all' || Array.isArray(raw); } catch { /* يُترك لرسالة الاستيراد */ }
+      return full ? handleImportAllBackup(file) : handleImportBackup(file);
+    };
     return (
-      <StartScreen
-        recoveryNotice={recoveryNotice}
-        onCreate={handleCreateProject}
-        onImportBackup={handleImportBackup}
-      />
+      <>
+        <StartScreen
+          recoveryNotice={recoveryNotice}
+          onCreate={handleCreateProject}
+          onImportBackup={importAnyBackup}
+          onOpenStatusSheet={hasOrders ? () => setIsStatusSheetOpen(true) : undefined}
+          onBackupAll={hasOrders ? handleBackupAll : undefined}
+        />
+        {/* مركَّب دائماً (يرجع null وهو مغلق): لو رُبط بوجود الطلبيات لأزاله حذف آخر طلبية وهو مفتوح فيبقى isStatusSheetOpen عالقاً */}
+        <StatusSheetModal
+          key={`status-sheet-${isStatusSheetOpen}`}
+          isOpen={isStatusSheetOpen}
+          onClose={() => setIsStatusSheetOpen(false)}
+          projects={projects}
+          orders={statusOrders}
+          committeeName={committeeName}
+          // بلا مناقصات لا صفوف مناقصة تُعدَّل؛ المعالج يُمرَّر لإرضاء نوع الخاصية فقط
+          makeTenderHandlers={(p) => createStatusHandlers(p, up => setProjects(prev => prev.map(x => x.id === up.id ? up : x)))}
+          orderHandlers={createStatusOrderHandlers(statusOrders, setStatusOrders)}
+        />
+        {committeeNameModal}
+      </>
     );
   }
 
@@ -141,7 +201,7 @@ export function App() {
   }
 
   const ctx = createEditContext(currentProject, activeBidder, setProjects);
-  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleAdoptTafqeetThousands,
+  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handleStartOffer, handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
@@ -149,7 +209,10 @@ export function App() {
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
-  const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(ctx);
+  const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
+  const exclusionBidder = exclusionBidderId ? currentProject.bidders.find(b => b.id === exclusionBidderId) : undefined;
+  const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(currentProject, ctx.saveProject);
+  const orderHandlers = createStatusOrderHandlers(statusOrders, setStatusOrders);
 
   const handleApplyPageBreaks = (pages: (number | undefined)[]) => {
     applyPageBreaks(pages);
@@ -212,6 +275,8 @@ export function App() {
         unsavedCount={unsaved.length}
         lastBackupAt={lastBackupTime(backupMarks)}
         onBackupAll={handleBackupAll}
+        committeeName={committeeName}
+        onEditCommitteeName={() => setIsCommitteeEditOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -263,6 +328,11 @@ export function App() {
                 <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)} />
               </div>
             )}
+            {readingReliability(activeBidder) && (
+              <div className="mb-4 no-print">
+                <ReadingReliabilityCard key={`${currentProject.id}:${activeBidder.id}`} bidder={activeBidder} onConfirm={handleConfirmReadCheck} />
+              </div>
+            )}
             <BOQTable
               auditMode={auditMode}
               onAuditModeChange={handleAuditModeChange}
@@ -271,6 +341,7 @@ export function App() {
               bidderId={activeBidder.id}
               auditLogs={currentProject.auditLogs}
               items={activeBidder.items}
+              unitOutliers={unitPriceOutliers(currentProject).filter(row => row.bidderId === activeBidder.id)}
               totals={activeBidder.totals}
               currency={currentProject.currency}
               deviationThreshold={currentProject.deviationThreshold}
@@ -315,6 +386,7 @@ export function App() {
               project={currentProject}
               onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
+              onOpenExclusionReasons={setExclusionBidderId}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
@@ -377,8 +449,19 @@ export function App() {
         onSelectBidder={handlePickBidder}
         onAddNewBidder={handleAddNewBidder}
         onUpdateBidderStatus={handleUpdateBidderStatus}
+        onOpenExclusionReasons={setExclusionBidderId}
         onDeleteBidder={handleDeleteBidder}
       />
+
+      {exclusionBidder && (
+        <ExclusionReasonsModal
+          key={exclusionBidder.id}
+          project={currentProject}
+          bidder={exclusionBidder}
+          onSave={(bidderId, reasons, opinion) => { handleSaveExclusionReasons(bidderId, reasons, opinion); setExclusionBidderId(null); }}
+          onClose={() => setExclusionBidderId(null)}
+        />
+      )}
 
       <AuditTrailModal
         isOpen={isAuditOpen}
@@ -457,18 +540,25 @@ export function App() {
         isOpen={isStatusSheetOpen}
         onClose={() => setIsStatusSheetOpen(false)}
         projects={projects}
+        orders={statusOrders}
+        committeeName={committeeName}
+        makeTenderHandlers={(p) => createStatusHandlers(p, ctx.saveProject)}
+        orderHandlers={orderHandlers}
       />
 
       <PrintReportModal
         // خيار جدول الأسعار الموزونة يبدأ بقيمته الافتراضية مع كل فتح، كما في ProjectSettingsModal
-        key={`${currentProject.id}-${isPrintOpen}`}
+        key={`${currentProject.id}-print-${isPrintOpen}`}
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
         project={currentProject}
         activeBidder={activeBidder}
+        committeeName={committeeName}
         onSaveRecommendationEdit={handleSaveRecommendationEdit}
         onEditingChange={setIsRecEditing}
       />
+
+      {committeeNameModal}
 
     </div>
   );

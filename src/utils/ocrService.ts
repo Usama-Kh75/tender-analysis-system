@@ -65,20 +65,37 @@ export function normalizeArabicNumbers(str: string): string {
  * فقد يكون قديماً أو مخففاً أو نموذج صوت/صور. الآن: المستقر قبل التجريبي، ثم flash ثم pro ثم flash-lite،
  * والأحدث إصداراً أولاً. تُستبعد نماذج الصوت وتوليد الصور والبث المباشر وغيرها مما لا يقرأ المستندات
  */
+export const PREFERRED_GEMINI_MODEL = 'gemini-4-hydrogen';
+
 export function rankGeminiModels(names: string[]): string[] {
-  const notForDocuments = /(embedding|aqa|tts|image|live|transcribe|translate|robotics|veo|lyria|imagen|deep-research|antigravity|omni|computer-use|gemma|learnlm|audio)/i;
+  const notForDocuments = /(embedding|aqa|tts|image|live|transcribe|translate|robotics|veo|lyria|imagen|deep-research|antigravity|omni|computer-use|gemma|learnlm|audio|nano-banana)/i;
   const version = (n: string) => parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/i)?.[1] || '0');
   const family = (n: string) => /flash-lite/i.test(n) ? 2 : /flash/i.test(n) ? 0 : /pro/i.test(n) ? 1 : 3;
   const unstable = (n: string) => /(preview|exp|latest)/i.test(n) ? 1 : 0;
+  // النموذج المعتمد (قرار أسامة 2026-11-13) أولاً إن ظهر في الحساب، والبقية بالترتيب العام بديلاً عند تعذره
+  const preferred = (n: string) => n === PREFERRED_GEMINI_MODEL ? 0 : 1;
   return names
     .filter(n => /^gemini-/i.test(n) && !notForDocuments.test(n))
-    .sort((a, b) => unstable(a) - unstable(b) || family(a) - family(b) || version(b) - version(a));
+    .sort((a, b) => preferred(a) - preferred(b) || unstable(a) - unstable(b) || family(a) - family(b) || version(b) - version(a));
+}
+
+/** رد Google 402: رصيد الحساب المدفوع مسبقاً صفر، أو لم يُفعَّل الدفع. ينطبق على كل النماذج */
+export const GEMINI_CREDIT_MESSAGE = 'نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه. أضف رصيداً من aistudio.google.com/billing ثم أعد المحاولة.';
+export const GEMINI_QUOTA_MESSAGE = 'نفدت حصة الطلبات في Gemini مؤقتاً (429). انتظر دقيقة أو دقيقتين ثم أعد القراءة.';
+
+/** يصنّف رسالة خطأ Gemini: مفتاح غير صالح، أو رصيد منتهٍ، أو حصة طلبات، وإلا null */
+export function geminiFailureKind(message: string): 'key' | 'credit' | 'quota' | null {
+  if (/\(402\)|PAYMENT_REQUIRED/i.test(message)) return 'credit';
+  if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(message)) return 'key';
+  if (/\(429\)|RESOURCE_EXHAUSTED|quota/i.test(message)) return 'quota';
+  return null;
 }
 
 /**
- * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المتاحة بالضبط
+ * فحص واختبار مفتاح Gemini واسترجاع نماذج الرؤية المتاحة بالضبط.
+ * قائمة النماذج لا تستهلك رصيداً فتنجح والرصيد صفر، لذا يرسل الفحص (probe) طلب توليد صغيراً بنموذج واحد
  */
-export async function testGeminiApiKey(apiKey: string): Promise<{ success: boolean; message: string; models: string[] }> {
+export async function testGeminiApiKey(apiKey: string, probe = false): Promise<{ success: boolean; message: string; models: string[] }> {
   const cleanKey = apiKey.trim();
   if (!cleanKey) {
     return { success: false, message: 'يرجى إدخال مفتاح API أولاً', models: [] };
@@ -112,6 +129,16 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ success: boole
         message: 'تم الاتصال ولكن لم يتم العثور على نماذج Gemini نشطة في هذا المشروع. تأكد من إنشاء المفتاح من aistudio.google.com',
         models: []
       };
+    }
+
+    if (probe) {
+      const test = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelsList[0]}:generateContent?key=${cleanKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cleanKey },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'ok' }] }], generationConfig: { maxOutputTokens: 8 } })
+      });
+      if (test.status === 402) return { success: false, message: GEMINI_CREDIT_MESSAGE, models: modelsList };
+      if (test.status === 429) return { success: false, message: GEMINI_QUOTA_MESSAGE, models: modelsList };
     }
 
     return {
@@ -169,10 +196,12 @@ function extractJsonArray(text: string): any[] {
   }
 }
 
-// الصفحات في طلب Gemini الواحد: يرى النموذج الجدول الممتد عبر الصفحات، ويُستهلك طلب واحد من الحصة
-// المجانية بدل طلب لكل صفحة (عرض من 7 صفحات كان 7 طلبات). تُقسم الدفعة أيضاً إن تجاوز حجم صورها
-// GEMINI_MAX_BATCH_CHARS، لتبقى دون حد حجم الطلب المضمَّن
-export const GEMINI_PAGES_PER_REQUEST = 8;
+// صفحة واحدة في كل طلب Gemini: في تجربة 2026-11-03 على عطاء بخط اليد أصاب النموذج 6/7 و5/7 من الفقرات الصعبة
+// في الصفحة الواحدة مقابل 2/7 و2/7 حين أُرسلت أربع صفحات معاً، وأخطاء الدفعة ثابتة بين التشغيلين فلا تكشفها القراءة المزدوجة.
+// يبقى الثابت لتقسيم الدفعة إن تجاوز حجم صورها GEMINI_MAX_BATCH_CHARS (حد حجم الطلب المضمَّن)
+export const GEMINI_PAGES_PER_REQUEST = 1;
+// الطلبات المتزامنة: الصفحة تستغرق نحو دقيقتين، والتتابع يطيل عطاءً من 19 صفحة إلى نصف ساعة
+const GEMINI_PARALLEL_REQUESTS = 4;
 const GEMINI_MAX_BATCH_CHARS = 14_000_000;
 
 // صيغة رد إلزامية (مخطط OpenAPI في responseSchema): بدونها كان النظام يبحث عن JSON داخل نص الرد.
@@ -229,6 +258,78 @@ interface GeminiRawResult {
   modelUsed: string;
   truncated: boolean;
 }
+
+// قراءة عمود المبلغ وحده (القراءة الثانية في القراءة المزدوجة): في تجربة 2026-11-03 على عطاء بخط اليد كان النموذج
+// يحسب المبلغ (الكمية × المفرد) بدل نقله في كل القراءات الكاملة، فيصحّح بصمت خطأ حسابياً كتبه المجهز (الفقرتان 328 و373).
+// حين لا يُطلب منه إلا رقم الفقرة وخانة المبلغ لا يكون أمامه مفرد يحسب منه فينقل المكتوب
+const AMOUNT_COLUMN_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    rows: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { itemNo: { type: 'STRING' }, amountDigits: { type: 'STRING' } },
+        required: ['itemNo', 'amountDigits'],
+        propertyOrdering: ['itemNo', 'amountDigits']
+      }
+    }
+  },
+  required: ['rows']
+};
+
+const amountColumnPrompt = () => `الصورة صفحة من عطاء فيها جدول كميات. المطلوب عمود واحد فقط: «مبلغ الفقرة» (خانة المبلغ بالأرقام)، مع رقم الفقرة (ت) في عمودها.
+لكل صف أعد itemNo (رقم الفقرة كما في الجدول) وamountDigits: الأرقام المكتوبة في خانة المبلغ حرفاً بحرف كما تراها، بلا فواصل ولا عملة. الشرطات (- - -) التي يكتبها المجهز في الخانة أصفار، ثلاثة لكل مجموعة. إن كانت الخانة فارغة أو شرطة وحدها فاجعل amountDigits نصاً فارغاً.
+لا تنظر إلى أي عمود آخر، ولا تحسب ولا تتحقق ولا تصحّح: قد يكون المكتوب خطأً حسابياً وهو المطلوب كما هو. لا تُدرج صفوف العناوين ولا المجموع. أعد كائن JSON فقط: {"rows":[{"itemNo":"322","amountDigits":"19200000"}]}`;
+
+/** يفكك رد قراءة عمود المبلغ: كائن {rows:[{itemNo, amountDigits}]}، وإلا يُرفض الرد فيُجرَّب النموذج التالي */
+export function parseAmountColumn(text: string): { rows: any[]; grandTotal: null } {
+  const clean = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  let parsed: any;
+  try { parsed = JSON.parse(clean); } catch {
+    const obj = clean.match(/\{[\s\S]*\}/);
+    try { parsed = obj ? JSON.parse(obj[0]) : undefined; } catch { parsed = undefined; }
+  }
+  const container = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.rows) ? parsed.rows : null;
+  if (!container) throw new Error('رد بلا مصفوفة صفوف');
+  const rows = container.filter((r: unknown) => r !== null && typeof r === 'object' && !Array.isArray(r));
+  if (rows.length !== container.length) throw new Error('رد فيه عناصر ليست صفوفاً');
+  return { rows, grandTotal: null };
+}
+
+/** ما يختلف بين القراءة الكاملة وقراءة عمود المبلغ: الطلب النصي ومخطط الرد وتفكيكه، وهل تُسند الصفحات إلى الصفوف */
+interface GeminiReadSpec {
+  prompt: (pages: number) => string;
+  schema: object;
+  parse: (text: string) => { rows: any[]; grandTotal: number | null; grandTotalText?: string };
+  attachPages: boolean;
+}
+// تصنيف نوع الكتابة في الأرقام قبل القراءة (تنبيه ما قبل القراءة): تصنيف لا نسخ، فيصيب فيه النموذج حيث يخطئ في قراءة الخط اليدوي
+export type Writing = 'handwritten' | 'printed' | 'mixed';
+const WRITING_VALUES: Writing[] = ['handwritten', 'printed', 'mixed'];
+const WRITING_CHECK_SCHEMA = {
+  type: 'OBJECT',
+  properties: { writing: { type: 'STRING', enum: WRITING_VALUES } },
+  required: ['writing']
+};
+const writingCheckPrompt = () => `الصورة صفحة من عطاء فيها جدول كميات وأسعار. المطلوب تصنيف نوع الكتابة في خانات الأسعار والمبالغ (الأرقام) وحدها، لا في العناوين: handwritten إن كانت مكتوبة بخط اليد، printed إن كانت مطبوعة أو مكتوبة بالحاسوب، mixed إن اجتمع النوعان. أعد كائن JSON فقط: {"writing":"handwritten"}`;
+
+/** يفكك رد تصنيف الكتابة: كائن {writing} بإحدى القيم الثلاث، وإلا يُرفض الرد */
+export function parseWritingCheck(text: string): { rows: { writing: Writing }[]; grandTotal: null } {
+  const clean = (text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  let parsed: any;
+  try { parsed = JSON.parse(clean); } catch {
+    const obj = clean.match(/\{[\s\S]*\}/);
+    try { parsed = obj ? JSON.parse(obj[0]) : undefined; } catch { parsed = undefined; }
+  }
+  const writing = parsed?.writing;
+  if (!WRITING_VALUES.includes(writing)) throw new Error('رد بلا تصنيف معروف');
+  return { rows: [{ writing }], grandTotal: null };
+}
+
+const FULL_READ: GeminiReadSpec = { prompt: geminiPrompt, schema: GEMINI_RESPONSE_SCHEMA, parse: parseGeminiTable, attachPages: true };
+const AMOUNT_READ: GeminiReadSpec = { prompt: amountColumnPrompt, schema: AMOUNT_COLUMN_SCHEMA, parse: parseAmountColumn, attachPages: false };
+const WRITING_CHECK: GeminiReadSpec = { prompt: writingCheckPrompt, schema: WRITING_CHECK_SCHEMA, parse: parseWritingCheck, attachPages: false };
 
 /**
  * يفكك رد Gemini: الشكل الجديد كائن {items, grandTotal, grandTotalText}، ويُقبل الشكل القديم
@@ -355,6 +456,8 @@ const toInlinePart = (dataUrl: string) => {
   return { inlineData: { mimeType: head.replace('data:', '') || 'image/jpeg', data } };
 };
 
+class CreditExhaustedError extends Error {}
+
 // نماذج رفضت صيغة الرد الإلزامية في هذه الجلسة: تُطلب بلا مخطط مباشرة بدل طلب مرفوض لكل دفعة
 const modelsWithoutSchema = new Set<string>();
 
@@ -363,7 +466,8 @@ async function requestGeminiRows(
   images: string[],
   apiKey: string,
   models: string[],
-  onStatus: (status: string) => void
+  onStatus: (status: string) => void,
+  spec: GeminiReadSpec = FULL_READ
 ): Promise<GeminiRawResult> {
   const errorReports: string[] = [];
   let hadRateLimitError = false;
@@ -378,10 +482,11 @@ async function requestGeminiRows(
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: geminiPrompt(images.length) }, ...images.map(toInlinePart)] }],
+            contents: [{ parts: [{ text: spec.prompt(images.length) }, ...images.map(toInlinePart)] }],
             generationConfig: {
-              temperature: 0.1,
-              ...(structured ? { responseMimeType: 'application/json', responseSchema: GEMINI_RESPONSE_SCHEMA } : {})
+              // 0 لا 0.1: في تجربة 2026-11-03 على عطاء بخط اليد أصاب 10/12 و8/12 من الفقرات الصعبة مقابل 6/12 و5/12
+              temperature: 0,
+              ...(structured ? { responseMimeType: 'application/json', responseSchema: spec.schema } : {})
             }
           })
         });
@@ -392,8 +497,8 @@ async function requestGeminiRows(
           const rawText = (candidate?.content?.parts || []).map((p: any) => p?.text || '').join('');
           const truncated = candidate?.finishReason === 'MAX_TOKENS';
           if (rawText.trim().length > 1) {
-            let parsed: ReturnType<typeof parseGeminiTable> | null = null;
-            try { parsed = parseGeminiTable(rawText); } catch { parsed = null; }
+            let parsed: ReturnType<GeminiReadSpec['parse']> | null = null;
+            try { parsed = spec.parse(rawText); } catch { parsed = null; }
             if (parsed) return { ...parsed, rawText, modelUsed: model, truncated };
             // رد مقطوع لا يُفكك: تُقسم الدفعة؛ وغير المقطوع يُجرَّب بالنموذج التالي
             if (truncated) return { rows: [], grandTotal: null, rawText, modelUsed: model, truncated: true };
@@ -422,6 +527,8 @@ async function requestGeminiRows(
           }
           break;
         }
+        // الرصيد للحساب كله: تجربة بقية النماذج تضيّع الوقت ولا تغيّر النتيجة
+        if (response.status === 402) throw new CreditExhaustedError();
         if (response.status === 404) {
           errorReports.push(`${model}: هذا النموذج غير متاح لمفتاحك الحالي (404)`);
           break;
@@ -430,6 +537,7 @@ async function requestGeminiRows(
         errorReports.push(`${model}: (${response.status}) ${errText.substring(0, 100)}`);
         break;
       } catch (err: any) {
+        if (err instanceof CreditExhaustedError) throw new Error(GEMINI_CREDIT_MESSAGE);
         errorReports.push(`${model}: تعذر الاتصال بالإنترنت - ${err.message}`);
         break;
       }
@@ -437,9 +545,58 @@ async function requestGeminiRows(
   }
 
   if (hadRateLimitError) {
-    throw new Error('تم تجاوز الحد المسموح من الطلبات لهذه الدقيقة (حصة مجانية محدودة من Google) (429). يرجى الانتظار دقيقة واحدة ثم إعادة المحاولة.');
+    throw new Error(GEMINI_QUOTA_MESSAGE);
   }
   throw new Error(`تعذر الاتصال بالنماذج: ${errorReports.join(' | ')}`);
+}
+
+/** فقرة مقروءة، مع تعليم القراءة المزدوجة إن اختلفت القراءتان فيها (للمعاينة فقط، لا يدخل الجدول) */
+export type ReadItem = Partial<BOQItem> & {
+  readDiff?: { fields: string[]; second: string };
+};
+
+// أرقام نص أو رقم بلاتينية خالصة بلا أي رمز آخر، ثم بلا الأصفار الأخيرة (فلا يُعدّ اختلاف الحجم وحده خلافاً)
+const latinDigits = (v: unknown): string =>
+  String(v ?? '')
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/\D/g, '');
+const digitsKey = (v: unknown): string => latinDigits(v).replace(/0+$/, '');
+
+/**
+ * مقارنة القراءة الكاملة بقراءة عمود المبلغ وحده: تُقابَل الفقرات برقمها (والتكرار بترتيب ورودهما)،
+ * وتُعلَّم فقرة الأولى إن اختلفت سلسلة أرقام مبلغها عن سلسلة الثانية بعد حذف الأصفار الأخيرة. تبقى قيم القراءة الأولى.
+ * لا تُعلَّم الفقرة غير المسعّرة أو ذات المبلغ الفارغ، ولا ذات الخانة الفارغة في الثانية، ولا الغائبة عنها (قراءة العمود وحدها قد تفوّت صفوفاً).
+ * الصفوف التي وردت في الثانية وحدها تُعدّ فقط (onlyInSecond).
+ * حدّ الطريقة: خطأ الحجم وحده (أصفار زائدة أو ناقصة) لا يُكشف لأن قراءة العمود تخطئ في الأصفار، ولا يُكشف خطأ تتفق عليه القراءتان
+ */
+export function compareAmountColumn(
+  first: Partial<BOQItem>[],
+  amountRows: { itemNo: unknown; amountDigits: unknown }[]
+): { items: ReadItem[]; onlyInSecond: number } {
+  const keyed = (nos: string[]) => {
+    const seen = new Map<string, number>();
+    return nos.map(no => {
+      const n = (seen.get(no) || 0) + 1;
+      seen.set(no, n);
+      return `${no}#${n}`;
+    });
+  };
+  const secondKeys = keyed(amountRows.map(r => normalizeItemNo(String(r.itemNo ?? '').trim())));
+  const secondByKey = new Map<string, string>();
+  secondKeys.forEach((k, idx) => secondByKey.set(k, latinDigits(amountRows[idx].amountDigits)));
+
+  const firstKeys = keyed(first.map(i => String(i.itemNo ?? '')));
+  const firstKeySet = new Set(firstKeys);
+  const items = first.map((a, idx): ReadItem => {
+    const secondDigits = secondByKey.get(firstKeys[idx]);
+    if (a.unpriced || !a.bidderTotal || !secondDigits) return a;
+    const secondKey = secondDigits.replace(/0+$/, '');
+    if (secondKey === '' || secondKey === digitsKey(a.bidderTotal)) return a;
+    return { ...a, readDiff: { fields: ['المبلغ'], second: 'خانة المبلغ وحدها: ' + Number(secondDigits).toLocaleString('en-US') } };
+  });
+  const onlyInSecond = secondKeys.filter(k => secondByKey.get(k) && !firstKeySet.has(k)).length;
+  return { items, onlyInSecond };
 }
 
 export interface GeminiExtraction extends ExtractedTableData {
@@ -451,6 +608,8 @@ export interface GeminiExtraction extends ExtractedTableData {
   /** توقفت القراءة قبل آخر صفحة: رقم أول صفحة لم تُقرأ وسبب التوقف، وما قبلها مقروء في items */
   stoppedAtPage?: number;
   error?: string;
+  /** القراءة المزدوجة: items عُلّمت فيها الفقرات المختلفة؛ onlyInSecond فقرات وردت في الثانية وحدها؛ secondReadError سبب تعذّر الثانية */
+  doubleRead?: { onlyInSecond: number; secondReadError?: string };
 }
 
 /** الصفحات التي تُقرأ الآن (بترتيبها من الصفر)، لتتابعها المعاينة */
@@ -461,17 +620,66 @@ export interface ReadingPages {
 
 /**
  * محرك استخراج الجداول عبر Gemini: كل الصفحات في دفعات (لا صفحة صفحة)، بصيغة رد إلزامية،
- * ثم دمج الأوصاف الممتدة عبر الصفحات وتعليم الفقرات غير المسعّرة وقراءة الإجمالي المكتوب
+ * ثم دمج الأوصاف الممتدة عبر الصفحات وتعليم الفقرات غير المسعّرة وقراءة الإجمالي المكتوب.
+ * القراءة المزدوجة: الثانية قراءة عمود المبلغ وحده، وتُقارَن بالأولى في المبلغ فقط (compareAmountColumn)
  */
 export async function extractBOQWithGeminiVision(
   images: string[],
   apiKey: string,
   onProgress?: (progress: number, status: string, reading?: ReadingPages) => void,
-  knownModels?: string[]
+  knownModels?: string[],
+  doubleRead = false
 ): Promise<GeminiExtraction> {
-  const cleanKey = apiKey.trim();
+  if (!doubleRead) return readGeminiOnce(images, apiKey, onProgress, knownModels);
 
-  // قائمة النماذج تُستكشف مرة واحدة لكل قراءة (لا لكل دفعة) حفاظاً على الحصة المجانية
+  // الأولى هي المعتمدة، والثانية فاحصة: لا تُجرى إن لم تكتمل الأولى (رصيد أو حصة)، ويبقى ما قُرئ إن فشلت الثانية
+  const half = (from: number, label: string): typeof onProgress => (p, status, reading) =>
+    onProgress?.(Math.round(from + p / 2), `${label}: ${status}`, reading);
+  const first = await readGeminiOnce(images, apiKey, half(0, 'القراءة الأولى'), knownModels);
+  if (first.stoppedAtPage) return first;
+  try {
+    const second = await readAmountColumn(images, apiKey, half(50, 'القراءة الثانية (عمود المبلغ)'), first.models);
+    if (second.stoppedAtPage) throw new Error(second.error || 'توقفت القراءة الثانية');
+    const { items, onlyInSecond } = compareAmountColumn(first.items, second.rows);
+    return { ...first, items, doubleRead: { onlyInSecond } };
+  } catch (err: any) {
+    return { ...first, doubleRead: { onlyInSecond: 0, secondReadError: err?.message || String(err) } };
+  }
+}
+
+/**
+ * نوع كتابة أرقام العطاء من صفحة واحدة مصغّرة (طلب صغير الكلفة)، أو null إن تعذّر لأي سبب: التنبيه استشاري فلا يمنع القراءة
+ * ولا يُظهر خطأً (الرصيد والحصة يظهران عند القراءة نفسها)
+ */
+export async function detectWriting(pageDataUrl: string, apiKey: string, knownModels?: string[]): Promise<Writing | null> {
+  try {
+    const cleanKey = apiKey.trim();
+    const small = await compressImageDataUrl(pageDataUrl, 1100, 0.7);
+    const models = await findGeminiModels(cleanKey, knownModels);
+    const { rows, stoppedAtPage } = await runGeminiRequests([small], cleanKey, models, WRITING_CHECK);
+    return stoppedAtPage === undefined ? (rows[0]?.writing ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** القراءة الثانية: عمود المبلغ وحده (رقم الفقرة وخانة المبلغ) بالطلب نفسه لكل صفحة */
+async function readAmountColumn(
+  images: string[],
+  apiKey: string,
+  onProgress: ((progress: number, status: string, reading?: ReadingPages) => void) | undefined,
+  models: string[]
+): Promise<{ rows: { itemNo: unknown; amountDigits: unknown }[]; stoppedAtPage?: number; error?: string }> {
+  const { rows, stoppedAtPage, error } = await runGeminiRequests(images, apiKey.trim(), models, AMOUNT_READ, onProgress);
+  return { rows, stoppedAtPage, error };
+}
+
+/** قائمة النماذج تُستكشف مرة واحدة لكل قراءة (لا لكل دفعة) حفاظاً على الحصة المجانية */
+async function findGeminiModels(
+  cleanKey: string,
+  knownModels: string[] | undefined,
+  onProgress?: (progress: number, status: string, reading?: ReadingPages) => void
+): Promise<string[]> {
   let models = knownModels && knownModels.length > 0 ? knownModels : [];
   if (models.length === 0) {
     onProgress?.(5, 'جاري استكشاف النماذج النشطة في حساب Google الخاص بك...');
@@ -480,15 +688,35 @@ export async function extractBOQWithGeminiVision(
       if (checkRes.success) models = checkRes.models;
     } catch {}
   }
-  if (models.length === 0) models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+  if (models.length === 0) models = [PREFERRED_GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+  return models;
+}
 
+interface GeminiRunResult {
+  rows: any[];
+  rawTexts: string[];
+  grandTotal: number | null;
+  grandTotalText?: string;
+  modelUsed: string;
+  stoppedAtPage?: number;
+  error?: string;
+}
+
+/** يرسل صفحات العطاء بالطلب المحدد في spec ويجمع صفوف الردود (قراءة كاملة أو عمود المبلغ وحده) */
+async function runGeminiRequests(
+  images: string[],
+  cleanKey: string,
+  models: string[],
+  spec: GeminiReadSpec,
+  onProgress?: (progress: number, status: string, reading?: ReadingPages) => void
+): Promise<GeminiRunResult> {
   // دفعة قُطع ردها لطوله تُقسم نصفين وتُقرأ من جديد. start موضع أول صفحاتها في الملف
   let percent = 10;
   const readBatch = async (imgs: string[], label: string, start: number): Promise<GeminiRawResult> => {
     const reading = { start, count: imgs.length };
-    const r = await requestGeminiRows(imgs, cleanKey, models, s => onProgress?.(percent, `${label}: ${s}`, reading));
+    const r = await requestGeminiRows(imgs, cleanKey, models, s => onProgress?.(percent, `${label}: ${s}`, reading), spec);
     // الصفحات تُسند هنا عند أصغر دفعة قُرئت فعلاً، فلا تتضاعف الإزاحة بعد تقسيم دفعة مقطوعة
-    if (!r.truncated) return { ...r, rows: attachPages(r.rows, start, imgs.length) };
+    if (!r.truncated) return spec.attachPages ? { ...r, rows: attachPages(r.rows, start, imgs.length) } : r;
     if (imgs.length === 1) {
       throw new Error('رد النموذج على هذه الصفحة طويل جداً فقُطع قبل اكتماله.');
     }
@@ -508,26 +736,62 @@ export async function extractBOQWithGeminiVision(
   let stoppedAtPage: number | undefined;
   let error: string | undefined;
 
+  // طلبات متزامنة (GEMINI_PARALLEL_REQUESTS): قراءة الصفحة الواحدة تستغرق نحو دقيقتين، فالتتابع يطيل عطاءً من 19 صفحة إلى نصف ساعة.
+  // بعد أول فشل لا تبدأ دفعات جديدة؛ ما قبل الفاشلة الأولى يُحتفظ به، وبعدها يُهمل
+  const outcomes: (GeminiRawResult | { failure: any } | undefined)[] = new Array(batches.length);
+  let nextBatch = 0;
+  let finished = 0;
+  let failed = false;
+  const worker = async () => {
+    while (!failed && nextBatch < batches.length) {
+      const b = nextBatch++;
+      const { start, images: imgs } = batches[b];
+      const label = images.length === 1 ? 'الصفحة (1)'
+        : imgs.length === 1 ? `الصفحة (${start + 1}) من (${images.length})`
+        : `الصفحات (${start + 1}–${start + imgs.length}) من (${images.length})`;
+      onProgress?.(percent, `${label}: جاري الإرسال...`, { start, count: imgs.length });
+      try {
+        outcomes[b] = await readBatch(imgs, label, start);
+        finished++;
+        percent = Math.round(10 + (80 * finished) / batches.length);
+        onProgress?.(percent, `${label}: تمت القراءة`, { start, count: imgs.length });
+      } catch (err: any) {
+        failed = true;
+        outcomes[b] = { failure: err };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(GEMINI_PARALLEL_REQUESTS, batches.length) }, worker));
+
   for (let b = 0; b < batches.length; b++) {
-    const { start, images: imgs } = batches[b];
-    const label = images.length === 1 ? 'الصفحة (1)'
-      : `الصفحات (${start + 1}–${start + imgs.length}) من (${images.length})`;
-    percent = Math.round(10 + (80 * b) / batches.length);
-    onProgress?.(percent, `${label}: جاري الإرسال...`, { start, count: imgs.length });
-    try {
-      const r = await readBatch(imgs, label, start);
-      rows.push(...r.rows);
-      rawTexts.push(r.rawText);
-      if (r.grandTotal !== null) { grandTotal = r.grandTotal; grandTotalText = r.grandTotalText; }
-      modelUsed = r.modelUsed;
-    } catch (err: any) {
+    const outcome = outcomes[b];
+    if (!outcome) break;
+    if ('failure' in outcome) {
       // دفعة أولى فاشلة = فشل القراءة كلها؛ بعدها يُحتفظ بما قُرئ ويُبلَّغ عن موضع التوقف
-      if (b === 0) throw err;
-      stoppedAtPage = start + 1;
-      error = err?.message || String(err);
+      if (b === 0) throw outcome.failure;
+      stoppedAtPage = batches[b].start + 1;
+      error = outcome.failure?.message || String(outcome.failure);
       break;
     }
+    rows.push(...outcome.rows);
+    rawTexts.push(outcome.rawText);
+    if (outcome.grandTotal !== null) { grandTotal = outcome.grandTotal; grandTotalText = outcome.grandTotalText; }
+    modelUsed = outcome.modelUsed;
   }
+
+  return { rows, rawTexts, grandTotal, grandTotalText, modelUsed, stoppedAtPage, error };
+}
+
+async function readGeminiOnce(
+  images: string[],
+  apiKey: string,
+  onProgress?: (progress: number, status: string, reading?: ReadingPages) => void,
+  knownModels?: string[]
+): Promise<GeminiExtraction> {
+  const cleanKey = apiKey.trim();
+  const models = await findGeminiModels(cleanKey, knownModels, onProgress);
+  const { rows, rawTexts, grandTotal, grandTotalText, modelUsed, stoppedAtPage, error } =
+    await runGeminiRequests(images, cleanKey, models, FULL_READ, onProgress);
 
   const items = mergeContinuationRows(rows).map(mapGeminiRow);
   onProgress?.(100, `تم استخراج (${items.length}) فقرة عبر الذكاء الاصطناعي${modelUsed ? ` (${modelUsed})` : ''}`);

@@ -39,6 +39,13 @@ export interface BOQItem {
   // تأشير اللجنة أن المجهز حضر ووقّع وختم إزاء تصحيحها الحسابي لهذه الفقرة (ضوابط رقم (4) خامساً/ب/3)، بتاريخ
   // التأشير. لا معنى له إلا على فقرة مصحَّحة (isSignedCorrection)، ويسقط مع إلغاء التصحيح
   bidderSignedAt?: string;
+  // أثر القراءة الآلية للعطاء (لا يدخل في أي حساب، ويغذّي بطاقة موثوقية القراءة فقط، utils/readingReliability.ts):
+  // محرك القراءة الذي أنتج أرقام الفقرة، ويُمسح إن حلّ محلها استيراد من Excel
+  readBy?: 'ai' | 'ocr';
+  // القراءتان (الأولى وقراءة عمود المبلغ) اختلفتا في الفقرة ولم تُطابقها اللجنة بالورقة بعد، يزول بمطابقتها أو بتصحيح قراءتها
+  readCheck?: { fields: string[]; second: string };
+  // عدّلت اللجنة قراءة هذه الفقرة بعد القراءة الآلية (handleCorrectReading): مقياس دقة القراءة في هذه المناقصة
+  readCorrected?: boolean;
 }
 
 // الحقول التي يُعدّ تعديلها اليدوي في الجدول تصحيحاً لما قُرئ من العطاء (handleCorrectReading في App.tsx)
@@ -78,6 +85,26 @@ export interface Bidder {
   weightedOffer?: WeightedOfferState;
   status: 'pending' | 'qualified' | 'disqualified' | 'recommended' | 'awarded';
   notes?: string;
+  // أسباب استبعاد العطاء كله (status 'disqualified')، بنود التعليمات التي استندت إليها اللجنة (utils/exclusionReasons.ts).
+  // تبقى محفوظة إن تغيّرت الحالة، ولا تُعرض ولا تُطبع إلا والعطاء مستبعد
+  exclusionReasons?: ExclusionReason[];
+}
+
+export type ExclusionGround =
+  | 'technical' | 'qualification' | 'conditions' | 'incomplete' | 'bidBond' | 'bondInvalid' | 'legalDocs'
+  | 'blacklist' | 'derivedDiscount' | 'erasures' | 'refusedCorrection' | 'duplicateManager' | 'duplicatePartner' | 'other';
+
+export interface ExclusionReason {
+  ground: ExclusionGround | string;   // نص غير معروف (من إصدار أحدث) يبقى ويُعرض «سبب غير محدد»
+  item?: number;                      // المتطلب المطلوب استكماله (1..9)، لسبب 'incomplete' وحده
+  detail?: string;
+}
+
+// مصدر الرأي الفني الذي استندت إليه اللجنة في استبعاد عطاء فنياً (المادة 13/ثانياً)، للمناقصة كلها
+export interface TechnicalOpinion {
+  source?: string;
+  letterNo?: string;
+  letterDate?: string;   // YYYY-MM-DD
 }
 
 export interface AuditLogEntry {
@@ -123,18 +150,30 @@ export interface RecommendationBasis {
 export type InvitationType = 'general' | 'limited' | 'twoStage' | 'direct' | 'singleSource';
 
 /** موقف الطلبية: الإجراء الحالي وفرعه الاختياري (انظر utils/orderStatus.ts). */
-export type StatusStage = 'analysis' | 'audit' | 'returnedFromAudit' | 'reviewCommittee' | 'sentToContracts' | 'readvertise' | 'other';
+export type StatusStage = 'analysis' | 'awaitingBidders' | 'audit' | 'returnedFromAudit' | 'reviewCommittee' | 'referralPending' | 'referred' | 'sentToContracts' | 'readvertise' | 'other';
 export type StatusBranch = 'technical' | 'commercial' | 'documents' | 'negotiation';
 
 export interface StatusEntry {
   id: string;
   stage: StatusStage;
   branch?: StatusBranch;
-  customText?: string;   // مطلوب عند stage = 'other'
+  customText?: string;   // تفصيل اختياري يُلحق بالإجراء؛ مطلوب عند 'other' (هو النص كله)، واسم الجهة عند 'referred'
   memoNo?: string;
-  memoDate: string;      // YYYY-MM-DD: تاريخ المذكرة أو الإجراء
+  memoDate?: string;     // YYYY-MM-DD: تاريخ المذكرة أو الإجراء (اختياري)
   note?: string;
   recordedAt: string;
+}
+
+/** طلبية في كشف الموقف بلا تحليل (أُعيد إعلانها مثلاً): ليست مناقصة، ولا تظهر في قائمة المناقصات (utils/statusOrders.ts). */
+export interface StatusOrder {
+  id: string;
+  referenceNumber: string;
+  title: string;
+  announcementNo?: number;
+  receivedAt?: string;
+  statusLog: StatusEntry[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TenderProject {
@@ -158,6 +197,7 @@ export interface TenderProject {
   exclusionThreshold?: number;        // حد استبعاد العطاء بانحرافه الكلي؛ غائب = deviationThreshold (exclusionThresholdOf)
   thresholdBasis?: string;            // سند الحد المعتمد إن اختلف أحد الحدّين عن نص التعليمات (20%)
   recommendationEdit?: RecommendationEdit;
+  technicalOpinion?: TechnicalOpinion;
   activeBidderId: string;
   bidders: Bidder[];
   auditLogs: AuditLogEntry[];
