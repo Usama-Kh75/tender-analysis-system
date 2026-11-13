@@ -214,7 +214,7 @@ export function createItemHandlers(ctx: EditContext) {
       updatedProj,
       'تصحيح قراءة',
       `تصحيح قراءة ${label} للفقرة رقم (${before.itemNo}) ${isQuantity ? '(مشتركة لكل المجهزين)' : `في عطاء (${activeBidder.name})`} من (${fmt(oldValue)}) إلى (${fmt(newValue)})، وأُعيد فحصها`,
-      { itemNo: before.itemNo, oldValue, newValue }
+      { itemNo: before.itemNo, ...(isQuantity ? {} : { bidderId: activeBidder.id }), fieldName: field, oldValue, newValue }
     );
 
     saveProject(updatedProj);
@@ -283,7 +283,7 @@ export function createItemHandlers(ctx: EditContext) {
       updatedProj,
       'تصحيح قراءة',
       `طابقت اللجنة الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) بالورقة، فكانت القراءة هي الخطأ لا المجهز: ${changes}، وأُعيد فحصها`,
-      { itemNo: before.itemNo, bidderId: activeBidder.id, oldValue: oldTotal, newValue: bidderTotal }
+      { itemNo: before.itemNo, bidderId: activeBidder.id, fieldName: hasTotal || unit === undefined ? 'total' : 'unitPrice', oldValue: hasTotal || unit === undefined ? oldTotal : oldUnit, newValue: hasTotal || unit === undefined ? bidderTotal : unit }
     );
     saveProject(updatedProj);
   };
@@ -349,7 +349,7 @@ export function createItemHandlers(ctx: EditContext) {
       },
       'تصحيح قراءة',
       `اعتُبر المعتمد في الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) هو ما كتبه المجهز في الورقة، وكانت القراءة هي الخطأ: المفرد من (${fmt(readUnit)}) إلى (${fmt(before.enteredUnitPrice)})، والمبلغ من (${fmt(before.enteredBidderTotal)}) إلى (${fmt(before.bidderTotal)})${before.bidderSignedAt ? '، وسقط تأشير توقيع المجهز إزاء التصحيح الملغى' : ''}، وأُعيد فحصها`,
-      { itemNo: before.itemNo, bidderId: activeBidder.id, oldValue: before.enteredBidderTotal, newValue: before.bidderTotal }
+      { itemNo: before.itemNo, bidderId: activeBidder.id, fieldName: 'total', oldValue: before.enteredBidderTotal, newValue: before.bidderTotal }
     );
     saveProject(updatedProj);
   };

@@ -90,6 +90,7 @@ export function App() {
   // إشعار تصحيح المجهز: مفتاحه مناقصة ومجهز فيُغلق وحده إذا تغيّر أحدهما (نافذة عرض بلا إدخال: خارج blockingWork)
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
   const [auditInitialFilter, setAuditInitialFilter] = useState<AuditFilter>('pending');
+  const [revealRequest, setRevealRequest] = useState<{ itemId: string; seq: number } | undefined>(undefined);
   const [auditFocusItemId, setAuditFocusItemId] = useState<string | undefined>(undefined);
   // العطاء الذي تُسجَّل أسباب استبعاده في نافذة «أسباب الاستبعاد»؛ null = مغلقة
   const [exclusionBidderId, setExclusionBidderId] = useState<string | null>(null);
@@ -337,13 +338,14 @@ export function App() {
             )}
             {readingReliability(activeBidder) && (
               <div className="mb-4 no-print">
-                <ReadingReliabilityCard key={`${currentProject.id}:${activeBidder.id}`} bidder={activeBidder} onConfirm={handleConfirmReadCheck} />
+                <ReadingReliabilityCard key={`${currentProject.id}:${activeBidder.id}`} bidder={activeBidder} onConfirm={handleConfirmReadCheck} onReveal={(itemId) => setRevealRequest(r => ({ itemId, seq: (r?.seq ?? 0) + 1 }))} />
               </div>
             )}
             <BOQTable
               auditMode={auditMode}
               onAuditModeChange={handleAuditModeChange}
               auditFocusItemId={auditFocusItemId}
+              revealRequest={revealRequest}
               auditInitialFilter={auditInitialFilter}
               bidderId={activeBidder.id}
               auditLogs={currentProject.auditLogs}

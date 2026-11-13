@@ -37,6 +37,25 @@ export const findAdoption = (item: BOQItem, bidderId: string, logs: AuditLogEntr
     && toLatinDigits(String(l.itemNo)) === toLatinDigits(String(item.itemNo)) && Math.abs(Number(l.newValue) - item.bidderTotal) < 0.01);
 
 /**
+ * ما قُرئ قبل آخر تصحيح قراءة للفقرة (عرض فقط): آخر مدخل «تصحيح قراءة» لمجهز الفقرة نفسه ورقمها، حقله المفرد أو المبلغ.
+ * مدخلات الكمية والتفقيط لا تُستعمل. مدخل بلا bidderId يُهمل (قد يخص مجهزاً آخر). مدخل بلا fieldName هو من
+ * «الورقة تقول»/«الأرقام كما في الورقة» قبل تسجيل الحقل، وكان oldValue فيه المبلغ. السجل من الأحدث. لا يُستخرج شيء من details
+ */
+export const readingBeforeCorrection = (item: BOQItem, bidderId: string, logs: AuditLogEntry[]): { field: 'unitPrice' | 'total'; value: number } | null => {
+  const no = toLatinDigits(String(item.itemNo));
+  for (const l of logs) {
+    if (l.action !== 'تصحيح قراءة' || !l.bidderId || l.bidderId !== bidderId) continue;
+    if (toLatinDigits(String(l.itemNo)) !== no) continue;
+    const field = l.fieldName ?? 'total';
+    if (field !== 'unitPrice' && field !== 'total') continue;
+    if (typeof l.oldValue !== 'number' || !Number.isFinite(l.oldValue) || l.oldValue <= 0) continue;
+    if (typeof l.newValue === 'number' && Math.abs(l.newValue - l.oldValue) < 0.01) continue;
+    return { field, value: l.oldValue };
+  }
+  return null;
+};
+
+/**
  * اعتماد التفقيط سعراً للمفرد قبل v1.12.0 كان يكتب فوق المفرد المدون ولا يحفظ الأصل: إن لم يُحفظ originalUnitPrice
  * فالمفرد الحالي هو التفقيط نفسه، ولا يُعرف ما دوّنه المجهز. المصدر الواحد لورقة «واقع الحال» وللشاشة
  */

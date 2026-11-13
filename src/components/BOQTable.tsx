@@ -1,4 +1,4 @@
-import { asSubmitted, findAdoption, isCommitteeCorrected, submittedFlags, submittedTotal, unitLostOf } from '../utils/bidderAuditEngine';
+import { asSubmitted, findAdoption, isCommitteeCorrected, readingBeforeCorrection, submittedFlags, submittedTotal, unitLostOf } from '../utils/bidderAuditEngine';
 import { AuditCell } from './AuditCell';
 import { MoreMenu } from './MoreMenu';
 import { auditFilterMatch, isHandled, isPending, pinPending, type AuditFilter, type NormalFilter } from '../utils/tableFilters';
@@ -177,6 +177,8 @@ interface BOQTableProps {
   auditMode: boolean;
   onAuditModeChange: (open: boolean, focusItemId?: string) => void;
   auditFocusItemId?: string;
+  /** طلب انتقال إلى فقرة (من بطاقة الموثوقية): يُظهر الجدول الفقرة إن أخفاها مرشح أو بحث ثم ينزل إليها */
+  revealRequest?: { itemId: string; seq: number };
   auditInitialFilter: AuditFilter;
   // يُمسح تثبيت «بانتظار قرار» عند تبديل الشركة
   bidderId: string;
@@ -212,6 +214,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   auditMode,
   onAuditModeChange,
   auditFocusItemId,
+  revealRequest,
   auditInitialFilter,
   bidderId,
   auditLogs = []
@@ -299,6 +302,42 @@ export const BOQTable: React.FC<BOQTableProps> = ({
     setPinned(new Set());
     setSearchTerm('');
   };
+
+  // انتقال مطلوب إلى فقرة: إن أخفاها المرشح أو البحث يُعاد الجدول إلى «الكل» أولاً، ثم يُنزل الصف ويُبرز؛ وإن لم توجد الفقرة تظهر رسالة
+  const [revealNote, setRevealNote] = useState('');
+  const [prevReveal, setPrevReveal] = useState(revealRequest);
+  const [pendingReveal, setPendingReveal] = useState<{ itemId: string; seq: number } | null>(null);
+  if (prevReveal !== revealRequest) {
+    setPrevReveal(revealRequest);
+    if (revealRequest) {
+      if (!items.some(i => i.id === revealRequest.itemId)) {
+        setRevealNote('تعذّر إظهار الفقرة: لم تعد موجودة في الجدول.');
+      } else {
+        setRevealNote('');
+        if (!filteredItems.some(i => i.id === revealRequest.itemId)) {
+          setNormalFilter('all');
+          setAuditFilter('all');
+          setPinned(new Set());
+          setSearchTerm('');
+        }
+        setPendingReveal(revealRequest);
+      }
+    }
+  }
+  useEffect(() => {
+    if (!pendingReveal) return;
+    const row = document.getElementById(`audit-row-${pendingReveal.itemId}`);
+    if (!row) { setTimeout(() => setRevealNote('تعذّر إظهار الفقرة في الجدول.'), 0); return; }
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const cls = ['outline', 'outline-2', 'outline-blue-500', 'bg-blue-100'];
+    row.classList.add(...cls);
+    setTimeout(() => row.classList.remove(...cls), 1600);
+  }, [pendingReveal]);
+  useEffect(() => {
+    if (!revealNote) return;
+    const t = setTimeout(() => setRevealNote(''), 5000);
+    return () => clearTimeout(t);
+  }, [revealNote]);
 
   return (
     <div className="space-y-4" style={{ '--bidder-bar-h': `${barHeight}px`, '--toolbar-h': `${auditMode ? 0 : toolbarHeight}px` } as React.CSSProperties}>
@@ -489,6 +528,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           )}
         </div>
 
+        {revealNote && (
+          <div role="status" className="print:hidden px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs font-bold text-amber-900">{revealNote}</div>
+        )}
+
         {/* كل مرشح مفعَّل يُعلن عن نفسه ويُلغى بزر واحد */}
         {filterActive && (
           <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs font-bold text-blue-900 flex flex-wrap items-center gap-3">
@@ -664,7 +707,18 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                     {/* Bidder Total Amount (مبلغ المجهز الإجمالي) — تصحيح قراءة؛ مسحه يمسح سعر المفرد معه */}
                     <td className="p-2 text-center border-l border-slate-200 bg-indigo-50/60 font-mono font-black text-indigo-950 text-xs">
                       {asSub ? (
+                        <>
                         <span className="font-mono font-black text-xs text-slate-800">{sub.total > 0 ? displayAmount(sub.total) : '-'}</span>
+                        {item.readCorrected && (() => {
+                          const before = readingBeforeCorrection(item, bidderId, auditLogs);
+                          return (
+                            <div className="print:hidden mt-0.5 text-[10px] leading-tight font-bold text-slate-500">
+                              صُحّحت القراءة بمطابقة الورقة
+                              {before && <> (قُرئ {before.field === 'unitPrice' ? 'المفرد' : 'المبلغ'}: <bdi dir="ltr" className="font-mono">{displayAmount(before.value)}</bdi>)</>}
+                            </div>
+                          );
+                        })()}
+                        </>
                       ) : locked ? <OfferAmountCell item={item} /> : (
                         <>
                         <AmountInput

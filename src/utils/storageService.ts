@@ -646,7 +646,7 @@ export function addAuditLog(
   project: TenderProject,
   action: string,
   details: string,
-  extra?: { itemNo?: string | number; bidderId?: string; oldValue?: any; newValue?: any; userName?: string }
+  extra?: { itemNo?: string | number; bidderId?: string; fieldName?: string; oldValue?: any; newValue?: any; userName?: string }
 ): TenderProject {
   const newLog: AuditLogEntry = {
     id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -656,6 +656,7 @@ export function addAuditLog(
     details,
     itemNo: extra?.itemNo,
     bidderId: extra?.bidderId,
+    fieldName: extra?.fieldName,
     oldValue: extra?.oldValue,
     newValue: extra?.newValue
   };

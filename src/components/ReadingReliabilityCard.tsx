@@ -6,21 +6,14 @@ import type { Bidder } from '../types/tender';
 interface ReadingReliabilityCardProps {
   bidder: Bidder;
   onConfirm: (index: number) => void;
+  /** الانتقال إلى الفقرة في الجدول (يتولاه BOQTable: يُظهر الصف إن أخفاه مرشح ثم يُبرزه) */
+  onReveal: (itemId: string) => void;
 }
 
 const SHOWN = 8;
 
-// يُنزَل صف الفقرة إلى وسط الشاشة ويُبرز لحظة (معرّف الصف ثابت في BOQTable). لا يغيّر شيئاً في البيانات
-function focusRow(itemId: string) {
-  const row = document.getElementById(`audit-row-${itemId}`);
-  if (!row) return;
-  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  row.classList.add('outline', 'outline-2', 'outline-blue-500', 'bg-blue-100');
-  setTimeout(() => row.classList.remove('outline', 'outline-2', 'outline-blue-500', 'bg-blue-100'), 1600);
-}
-
 // بطاقة موثوقية القراءة (عرض فقط، بلا أثر في أي حساب): ما يُطابَق بالورقة أولاً، وما عدّلته اللجنة بعد القراءة
-export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ bidder, onConfirm }) => {
+export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ bidder, onConfirm, onReveal }) => {
   const [all, setAll] = useState(false);
   const [order, setOrder] = useState<'amount' | 'sequence'>('amount');
   const rel = readingReliability(bidder);
@@ -61,7 +54,7 @@ export const ReadingReliabilityCard: React.FC<ReadingReliabilityCardProps> = ({ 
               <li key={r.index} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-white/70 px-2 py-1">
                 <button
                   type="button"
-                  onClick={() => { const id = bidder.items[r.index]?.id; if (id) focusRow(id); }}
+                  onClick={() => { const id = bidder.items[r.index]?.id; if (id) onReveal(id); }}
                   title="ينقلك إلى الفقرة في الجدول"
                   className="min-w-0 grow basis-60 text-right cursor-pointer hover:bg-amber-100 rounded"
                 >
