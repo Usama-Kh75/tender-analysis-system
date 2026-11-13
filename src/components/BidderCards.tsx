@@ -33,7 +33,6 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
   return (
     <>
     <p
-      aria-label="عدّاد العطاءات"
       className={`mb-2 inline-block text-xs font-black rounded-full px-3 py-1 border ${
         complete ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-slate-50 text-slate-700 border-slate-300'
       }`}
@@ -72,7 +71,6 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
               <>
                 <button
                   onClick={() => onSelect(b.id)}
-                  aria-pressed={active}
                   aria-current={active ? 'true' : undefined}
                   className={`grid flex-1 min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] items-center gap-3 py-2 text-right cursor-pointer border-r-4 pr-2 ${active ? 'border-blue-600' : 'border-transparent'}`}
                 >
@@ -103,7 +101,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                     onClick={() => { setTempName(b.name); setEditingId(b.id); }}
                     className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                     title="تعديل اسم الشركة"
-                    aria-label="تعديل اسم الشركة"
+                    aria-label={`تعديل اسم ${b.name}`}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -114,13 +112,15 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
         );
       })}
 
-      <button
-        onClick={onAdd}
-        className="w-full text-right px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer transition"
-        title="إضافة شركة / مقاول جديد للمناقصة"
-      >
-        + مجهز
-      </button>
+      <div role="listitem">
+        <button
+          onClick={onAdd}
+          className="w-full text-right px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer transition"
+          title="إضافة شركة / مقاول جديد للمناقصة"
+        >
+          + مجهز
+        </button>
+      </div>
     </div>
     </>
   );

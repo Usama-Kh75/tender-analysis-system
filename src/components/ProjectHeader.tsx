@@ -184,7 +184,24 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       </div>
 
       {/* تبويبات المراحل: تحت العنوان مباشرة، والمفتوح بخط سفلي */}
-      <div role="tablist" aria-label="مراحل المناقصة" className="mt-4 flex items-stretch gap-1 overflow-x-auto border-b border-slate-200">
+      <div
+        role="tablist"
+        aria-label="مراحل المناقصة"
+        className="mt-4 flex items-stretch gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200"
+        onKeyDown={(e) => {
+          // اتجاه RTL: السهم الأيسر = التالي بصرياً
+          const i = TABS.findIndex(t => t.id === activeTab);
+          let n = -1;
+          if (e.key === 'ArrowLeft') n = (i + 1) % TABS.length;
+          else if (e.key === 'ArrowRight') n = (i - 1 + TABS.length) % TABS.length;
+          else if (e.key === 'Home') n = 0;
+          else if (e.key === 'End') n = TABS.length - 1;
+          if (n < 0) return;
+          e.preventDefault();
+          onSelectTab(TABS[n].id);
+          e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[n]?.focus();
+        }}
+      >
         {TABS.map(({ id, label, question, Icon }) => {
           const on = activeTab === id;
           return (
@@ -193,9 +210,9 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               type="button"
               role="tab"
               aria-selected={on}
+              tabIndex={on ? 0 : -1}
               onClick={() => onSelectTab(id)}
-              aria-label={id === 'bids' && pendingAudit > 0 ? `${label}، ${pendingAudit} فقرة بانتظار قرار` : label}
-              className={`flex items-center gap-2 px-4 py-2 whitespace-nowrap border-b-4 -mb-px transition cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 whitespace-nowrap border-b-4 transition cursor-pointer ${
                 on ? 'border-blue-600 text-blue-800' : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
@@ -209,6 +226,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   {pendingAudit}
                 </span>
               )}
+              {id === 'bids' && pendingAudit > 0 && <span className="sr-only">{pendingAudit} فقرة بانتظار قرار</span>}
             </button>
           );
         })}
