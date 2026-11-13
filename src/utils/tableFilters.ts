@@ -5,8 +5,9 @@ import { isCommitteeCorrected } from './bidderAuditEngine';
 export type NormalFilter = 'all' | 'deviated' | 'savings';
 export type AuditFilter = 'all' | 'pending' | 'corrected';
 
-/** فقرة بانتظار قرار اللجنة: خطأ ضرب أو خلاف تفقيط */
-export const isPending = (i: BOQItem): boolean => !!(i.hasMathError || i.hasTextDiscrepancy);
+/** فقرة فيها أخطاء لم تُعالج: خطأ ضرب أو خلاف تفقيط، أو اختلاف القراءتين لم يُطابَق بالورقة بعد */
+export const isPending = (i: BOQItem): boolean =>
+  !!(i.hasMathError || i.hasTextDiscrepancy || (i.readCheck && !i.unpriced && !isCommitteeCorrected(i)));
 
 /**
  * معرّفات الفقرات المعلّقة لحظة اختيار مرشح «بانتظار قرار». الفقرة لا تختفي من تحت يد من يصححها:

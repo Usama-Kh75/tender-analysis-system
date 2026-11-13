@@ -95,8 +95,8 @@ test('الخطوة 2: فقرات بانتظار قرار، ويفتح أول ش�
   const p = setup();
   const s = nextStep(p)!;
   assert.equal(s.kind, 'audit');
-  assert.equal(s.text, 'الخطوة التالية: تصحيح الأخطاء الحسابية، 3 فقرة بانتظار قرار اللجنة');
-  assert.deepEqual(s.actions, [{ label: 'فتح التدقيق', target: 'audit', bidderId: p.bidders[1].id }]);
+  assert.equal(s.text, 'الخطوة التالية: 3 فقرات فيها أخطاء لم تُعالج');
+  assert.deepEqual(s.actions, [{ label: 'عرض الفقرات التي فيها أخطاء', target: 'audit', bidderId: p.bidders[1].id }]);
 });
 
 test('الخطوة 3: شركة بلا مبالغ باسمها', () => {
@@ -159,4 +159,18 @@ test('الحالة الأخيرة: ترسية وسجل موقف ← null، وا�
   const done = { ...chosen(allIn()), statusLog: [e] };
   assert.equal(nextStep(done), null);
   assert.equal(nextStep({ ...done, bidders: done.bidders.map(b => ({ ...b, status: 'qualified' as const })) })!.kind, 'award');
+});
+
+test('اختلاف القراءتين يُعدّ فقرة فيها أخطاء مرة واحدة، ولا تُعدّ المسعّرة بلا سعر ولا المصحَّحة', () => {
+  const p = setup();
+  const diff = { fields: ['unitPrice'], second: '1' };
+  const [a] = p.bidders;
+  const withCheck = { ...a, items: a.items.map((it, i) => i === 0 ? { ...it, readCheck: diff } : i === 1 ? { ...it, readCheck: diff, unpriced: true } : it) };
+  const q = { ...p, bidders: [withCheck, ...p.bidders.slice(1)] };
+  assert.deepEqual(bidderAuditState(withCheck), { kind: 'pending', count: 1 });
+  assert.equal(tenderPath(q).audit.pending, 4);
+  assert.equal(tenderPath(q).audit.firstBidderId, a.id);
+  // فقرة فيها خطأ ضرب واختلاف قراءتين تُعدّ مرة
+  const both = { ...a, items: a.items.map((it, i) => i === 0 ? { ...it, readCheck: diff, hasMathError: true } : it) };
+  assert.deepEqual(bidderAuditState(both), { kind: 'pending', count: 1 });
 });

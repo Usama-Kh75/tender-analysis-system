@@ -8,6 +8,7 @@ import { formatOrderNumber } from '../utils/orderNumber';
 import { announcementLabel, tenderDetailParts } from '../utils/tenderDetails';
 import { statusLine } from '../utils/orderStatus';
 import type { NextStepAction } from '../utils/tenderPath';
+import { itemsWithErrorsText } from '../utils/arabicCount';
 import { NextStepBar } from './NextStepBar';
 
 // ثلاثة تبويبات لمراحل المناقصة الواحدة: لكل واحد سؤال واحد يظهر تحت اسمه
@@ -20,7 +21,7 @@ const TABS: { id: MainTab; label: string; question: string; Icon: React.ElementT
 interface ProjectHeaderProps {
   activeTab: MainTab;
   onSelectTab: (t: MainTab) => void;
-  /** فقرات بانتظار قرار اللجنة: شارة على تبويب العطاءات والتدقيق تختفي عند الصفر */
+  /** فقرات فيها أخطاء: شارة على تبويب العطاءات والتدقيق تختفي عند الصفر */
   pendingAudit: number;
   project: TenderProject;
   onChangeProjectField: (field: 'title' | 'referenceNumber', value: string) => void;
@@ -222,11 +223,11 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 <span className="text-[11px] font-medium text-slate-500">{question}</span>
               </span>
               {id === 'bids' && pendingAudit > 0 && (
-                <span aria-hidden="true" title={`${pendingAudit} فقرة بانتظار قرار اللجنة`} className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[1.25rem] px-1.5 py-0.5 text-center">
+                <span aria-hidden="true" title={itemsWithErrorsText(pendingAudit)} className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[1.25rem] px-1.5 py-0.5 text-center">
                   {pendingAudit}
                 </span>
               )}
-              {id === 'bids' && pendingAudit > 0 && <span className="sr-only">{pendingAudit} فقرة بانتظار قرار</span>}
+              {id === 'bids' && pendingAudit > 0 && <span className="sr-only">{itemsWithErrorsText(pendingAudit)}</span>}
             </button>
           );
         })}

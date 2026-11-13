@@ -3,6 +3,7 @@ import { Pencil } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { hasBidAmounts } from '../utils/recommendation';
+import { errorsCountText } from '../utils/arabicCount';
 import { formatNumber } from '../utils/calculations';
 
 interface BidderCardsProps {
@@ -13,7 +14,7 @@ interface BidderCardsProps {
   onAdd: () => void;
 }
 
-// الشركات قائمة بعرض الصفحة: الاسم، المبلغ بعد التدقيق، حالة التدقيق (أخضر مدقّق، كهرماني معلّقة، رمادي لم يُدخل)، وشارة الترسية
+// الشركات قائمة بعرض الصفحة: الاسم، المبلغ بعد التدقيق، حالة التدقيق (أخضر مدقّق، كهرماني فيها أخطاء، رمادي لم يُدخل)، وشارة الترسية
 export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd }) => {
   // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -88,7 +89,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                   <span className={`text-xs font-bold ${
                     state.kind === 'done' ? 'text-emerald-700' : state.kind === 'pending' ? 'text-amber-700' : 'text-slate-500'
                   }`}>
-                    {state.kind === 'done' ? '✓ مدقّق' : state.kind === 'pending' ? `${state.count} معلّقة` : 'لم يُدخل'}
+                    {state.kind === 'done' ? '✓ مدقّق' : state.kind === 'pending' ? errorsCountText(state.count) : 'لم يُدخل'}
                   </span>
                   <span className="min-w-[7rem]">
                     {b.status === 'recommended' && (

@@ -48,8 +48,8 @@ export function analysisPath(p: TenderProject): PathStage[] {
         { text: 'الفحص الحسابي الآلي للفقرات', ok: hasBids, actor: 'النظام' },
         {
           text: path.audit.pending > 0
-            ? `قرارات اللجنة على الفقرات المعلّمة (${path.audit.pending} متبقية)`
-            : 'قرارات اللجنة على الفقرات المعلّمة',
+            ? `قرارات اللجنة على الفقرات التي فيها أخطاء (${path.audit.pending} متبقية)`
+            : 'قرارات اللجنة على الفقرات التي فيها أخطاء',
           ok: hasBids && path.audit.pending === 0,
           actor: 'اللجنة',
           date: hasBids && path.audit.pending === 0 ? logDate(logs, /اعتماد|تصحيح خطأ الضرب|تصحيح قراءة/) : undefined

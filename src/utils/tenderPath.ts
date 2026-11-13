@@ -2,12 +2,14 @@
 // كل ما هنا يُستنتج من بيانات المناقصة ولا يُخزَّن، فلا تحويل للمناقصات القديمة،
 // وإن رجعت اللجنة عن خطوة (ألغت اختيار الترسية) رجع الشريط إليها.
 import type { Bidder, TenderProject } from '../types/tender';
+import { isPending } from './tableFilters';
+import { itemsCountText } from './arabicCount';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate } from './recommendation';
 
 export type BidderAuditState = { kind: 'empty' } | { kind: 'pending'; count: number } | { kind: 'done' };
 
-/** فقرات بانتظار قرار اللجنة: خطأ ضرب أو خلاف تفقيط، والفقرة التي فيها الاثنان تُعدّ مرة */
-const pendingCount = (b: Bidder): number => b.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length;
+/** فقرات فيها أخطاء لم تُعالج (خطأ ضرب، خلاف تفقيط، اختلاف قراءتين)، والفقرة التي فيها أكثر من واحد تُعدّ مرة */
+const pendingCount = (b: Bidder): number => b.items.filter(isPending).length;
 
 export function bidderAuditState(b: Bidder): BidderAuditState {
   if (!hasBidAmounts(b)) return { kind: 'empty' };
@@ -60,11 +62,11 @@ export function nextStep(p: TenderProject): NextStep | null {
     };
   }
   if (path.audit.pending > 0) {
-    const action: NextStepAction = { label: 'فتح التدقيق', target: 'audit' };
+    const action: NextStepAction = { label: 'عرض الفقرات التي فيها أخطاء', target: 'audit' };
     if (path.audit.firstBidderId) action.bidderId = path.audit.firstBidderId;
     return {
       kind: 'audit',
-      text: `الخطوة التالية: تصحيح الأخطاء الحسابية، ${path.audit.pending} فقرة بانتظار قرار اللجنة`,
+      text: `الخطوة التالية: ${itemsCountText(path.audit.pending)} فيها أخطاء لم تُعالج`,
       actions: [action]
     };
   }

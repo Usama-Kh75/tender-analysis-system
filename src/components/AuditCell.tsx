@@ -61,18 +61,35 @@ interface AuditCellProps {
   onMarkBidderSigned?: (index: number, signed: boolean) => void;
   onAcceptAsReading?: (index: number) => void;
   onReadingFromPaper?: (index: number, paper: { unitPrice?: number; total?: number }) => void;
+  onConfirmReadCheck?: (index: number) => void;
 }
 
 // خلية «تدقيق الأخطاء الحسابية والتفقيط» وأزرار قرارات اللجنة فيها (منقولة من BOQTable كما هي)،
 // وتظهر في عرض التدقيق وحده
 export const AuditCell: React.FC<AuditCellProps> = ({
   item, index, editingText, onEditText, onUpdateFields, onCorrectReading, onAdoptTafqeetThousands,
-  onMarkUnreasonable, onMarkBidderSigned, onAcceptAsReading, onReadingFromPaper
+  onMarkUnreasonable, onMarkBidderSigned, onAcceptAsReading, onReadingFromPaper, onConfirmReadCheck
 }) => {
   // زر «الورقة تقول»: ثانوي الشكل، ويُبرز حين يرجّح التلميح أن الرقم المقروء هو الخطأ
   const paperBtn = 'text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer';
   return (
                       <div className="space-y-1.5">
+
+                        {/* اختلاف القراءتين: قد يكون خطأ قراءة لا خطأ مجهز، يُحسم بمطابقة الورقة */}
+                        {item.readCheck && !item.unpriced && !isCommitteeCorrected(item) && (
+                          <div className="bg-amber-50 text-amber-950 border border-amber-300 px-2.5 py-1.5 rounded-lg font-bold flex flex-wrap items-center gap-2 shadow-2xs">
+                            <span>اختلفت القراءتان في هذه الفقرة: قد يكون خطأ قراءة. طابقها بالورقة.</span>
+                            {onConfirmReadCheck && !item.hasMathError && !item.hasTextDiscrepancy && (
+                              <button
+                                type="button"
+                                onClick={() => onConfirmReadCheck(index)}
+                                className="bg-amber-700 hover:bg-amber-800 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs transition cursor-pointer"
+                              >
+                                طابقتُ الورقة
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* 1. خطأ الضرب الحسابي (أحمر) */}
                         {item.hasMathError && (

@@ -365,6 +365,7 @@ export function App() {
               onCorrectReading={handleCorrectReading}
               onAcceptAsReading={handleAcceptAsReading}
               onReadingFromPaper={handleReadingFromPaper}
+              onConfirmReadCheck={handleConfirmReadCheck}
               onAdoptTafqeetThousands={handleAdoptTafqeetThousands}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}

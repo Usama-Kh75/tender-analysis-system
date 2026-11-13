@@ -18,6 +18,7 @@ import { rankingEffect } from '../utils/rankingEffect';
 import { decisionSensitivity } from '../utils/decisionSensitivity';
 import { exclusionLabels } from '../utils/exclusionReasons';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
+import { errorsCountText } from '../utils/arabicCount';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
 
 interface ExecutiveSummaryViewProps {
@@ -26,7 +27,7 @@ interface ExecutiveSummaryViewProps {
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
   onOpenExclusionReasons: (id: string) => void;
   onOpenPrint: () => void;
-  /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات معلّقة */
+  /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات فيها أخطاء */
   onOpenAudit: () => void;
   onExportExcel: () => void;
   // مقارنة المجهزين والرسوم: زرّان بجانب الطباعة (كانا في الشريط العلوي وتبويب مستقل)
@@ -223,12 +224,12 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
             onClick={onOpenAudit}
             className="w-full flex flex-wrap items-center justify-between gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm font-black cursor-pointer transition no-print"
           >
-            <span>فقرات بانتظار قرار اللجنة: <bdi className="font-mono">{pending}</bdi></span>
-            <span className="text-xs underline">فتح التدقيق</span>
+            <span>فقرات فيها أخطاء لم تُعالج: <bdi className="font-mono">{pending}</bdi></span>
+            <span className="text-xs underline">عرض الفقرات التي فيها أخطاء</span>
           </button>
         ) : (
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl px-4 py-3 text-sm font-black no-print">
-            <span aria-hidden="true">✓ </span>لا شيء بانتظار قرار اللجنة
+            <span aria-hidden="true">✓ </span>لا أخطاء لم تُعالج
           </div>
         );
       })()}
@@ -353,7 +354,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                       {(() => {
                         const st = bidderAuditState(bidder);
                         return st.kind === 'pending'
-                          ? <span className="text-amber-800">{st.count} معلّقة</span>
+                          ? <span className="text-amber-800">{errorsCountText(st.count)}</span>
                           : <span className="text-emerald-700">مكتمل</span>;
                       })()}
                     </td>

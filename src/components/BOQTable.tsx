@@ -154,6 +154,7 @@ interface BOQTableProps {
   // فقرة عليها تصحيح حسابي تبيّن أن خطأها قراءة النظام للورقة: الأرقام الحالية تصير المدوَّنة (handleAcceptAsReading في itemHandlers.ts)
   onAcceptAsReading?: (index: number) => void;
   onReadingFromPaper?: (index: number, paper: { unitPrice?: number; total?: number }) => void;
+  onConfirmReadCheck?: (index: number) => void;
   // تفقيط ناقص «آلاف»: تعتمده اللجنة بعد إضافتها دون أن يتغير رقم (handleAdoptTafqeetThousands في App.tsx)
   onAdoptTafqeetThousands: (index: number, correctedText: string) => void;
   onAddItem: () => void;
@@ -213,6 +214,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onMarkBidderSigned,
   onAcceptAsReading,
   onReadingFromPaper,
+  onConfirmReadCheck,
   offerControl,
   auditMode,
   onAuditModeChange,
@@ -452,7 +454,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                   </button>
                 ))}
               </div>
-              {([['all', `الكل (${items.length})`], ['pending', `بانتظار قرار (${pendingItems.length})`], ['corrected', `مصحّحة (${correctedCount})`]] as const).map(([v, label]) => (
+              {([['all', `الكل (${items.length})`], ['pending', `فيها أخطاء (${pendingItems.length})`], ['corrected', `مصحّحة (${correctedCount})`]] as const).map(([v, label]) => (
                 <button
                   key={v}
                   type="button"
@@ -791,6 +793,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                           onMarkBidderSigned={onMarkBidderSigned}
                           onAcceptAsReading={onAcceptAsReading}
                           onReadingFromPaper={onReadingFromPaper}
+                          onConfirmReadCheck={onConfirmReadCheck}
                         />
                       )}
                       {handled && (
