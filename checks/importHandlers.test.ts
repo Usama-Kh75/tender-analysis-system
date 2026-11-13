@@ -101,3 +101,43 @@ test('يرفض الاستيراد حين يكون عرض موزون فعّالا
   assert.equal(out, undefined);
   assert.equal(alerts.length, 1);
 });
+
+// الإدخال اليدوي (ManualEntryModal): المسار نفسه بمصدر 'manual'
+test('manual: مجهز على جدول موجود يبقي الكمية، يعلّم خطأ الضرب، بلا readBy/readCorrected، ومدخل سجل واحد', () => {
+  const p = mkProject();
+  const logsBefore = p.auditLogs.length;
+  // فقرتان فقط من ثلاث (الأولى والثالثة؛ الوسطى موضع فارغ تبقى كما هي): المبلغ 1,155 يخالف 110 × 10
+  const items: Partial<BOQItem>[] = [];
+  items[0] = { itemNo: 1, quantity: 10, bidderTotal: 1155, enteredUnitPrice: 110, enteredBidderTotal: 1155 };
+  items[2] = { itemNo: 3, quantity: 2, bidderTotal: 0, enteredUnitPrice: 90 };
+  const out = run(p, items, 'bidder_only', undefined, undefined, 'manual');
+  assert.ok(out);
+  const it = out.bidders[0].items;
+  assert.deepEqual(it.map(i => i.quantity), [10, 5, 2]);
+  assert.equal(it[0].hasMathError, true);
+  assert.equal(it[0].bidderTotal, 1155);
+  // الوسطى لم تُكتب فتبقى
+  assert.equal(it[1].bidderTotal, 500);
+  // مفرد بلا مبلغ: يُحسب بالكمية ولا خطأ ضرب
+  assert.equal(it[2].bidderTotal, 180);
+  assert.ok(!it[2].hasMathError);
+  for (const i of it) { assert.equal(i.readBy, undefined); assert.equal(i.readCorrected, undefined); }
+  assert.equal(out.auditLogs.length, logsBefore + 1);
+  assert.equal(out.auditLogs.filter(l => l.action === 'إدخال يدوي').length, 1);
+});
+
+test('manual: جدول جديد بفقرتين ينشئ الصفوف', () => {
+  const blank = createNewTenderProject({ title: 'ت', referenceNumber: '2', contractType: 'works', budgetType: 'operating', bidderNames: ['x'] });
+  const out = run(blank, [
+    { itemNo: '1', description: 'حفر', unit: 'م3', quantity: 4, bidderTotal: 400, enteredUnitPrice: 100, enteredBidderTotal: 400 },
+    { itemNo: '2', description: 'ردم', unit: 'م3', quantity: 3, bidderTotal: 0, unpriced: true }
+  ], 'bidder_only', undefined, undefined, 'manual');
+  assert.ok(out);
+  const it = out.bidders[0].items;
+  assert.equal(it.length, 2);
+  assert.deepEqual(it.map(i => i.description), ['حفر', 'ردم']);
+  assert.deepEqual(it.map(i => i.quantity), [4, 3]);
+  assert.equal(it[0].bidderTotal, 400);
+  assert.equal(it[1].unpriced, true);
+  assert.ok(!it[0].hasMathError);
+});

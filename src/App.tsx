@@ -23,6 +23,7 @@ import { initialAuditFilter, type AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
 
 import { SmartTableImportModal } from './components/modals/SmartTableImportModal';
+import { ManualEntryModal } from './components/modals/ManualEntryModal';
 import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
@@ -83,6 +84,9 @@ export function App() {
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
+  // أرقام مكتوبة في «إدخال يدوي» لم تُحفظ بعد (يمنع التحديث)
+  const [isManualDirty, setIsManualDirty] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
   const [chartsOpen, setChartsOpen] = useState(false);
   // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
@@ -99,6 +103,7 @@ export function App() {
   const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
     : isOcrOpen ? 'قراءة جدول من PDF / صورة'
     : isSmartImportOpen ? 'استيراد جدول'
+    : isManualOpen && isManualDirty ? 'إدخال يدوي'
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isStatusDirty ? 'موقف الطلبية'
     : isStatusSheetOpen ? 'كشف موقف الطلبيات'
@@ -373,6 +378,11 @@ export function App() {
                 setSmartImportDocType('bidder');
                 setIsSmartImportOpen(true);
               }}
+              onOpenManualEntry={() => {
+                // الإدخال مشترك (الكمية والهوية والكلفة) فيرفضه قفل عرض أي مجهز قبل فتح النافذة، كالاستيراد
+                if (ctx.blockedByOffer({ shared: true })) return;
+                setIsManualOpen(true);
+              }}
               offerMode={activeBidder.weightedOffer?.status === 'active' ? 'active' : activeBidder.weightedOffer?.status === 'adopted' ? 'adopted' : 'none'}
               sharedLocked={currentProject.bidders.some(isOfferLocked)}
               onEditOfferUnit={handleEditOfferUnit}
@@ -443,6 +453,16 @@ export function App() {
           setOcrHandoff({ id: Date.now(), files, destination: docType === 'estimated' ? 'estimated_only' : 'bidder_only' });
           setIsOcrOpen(true);
         }}
+      />
+
+      <ManualEntryModal
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
+        onApply={(items, mode, name) => handleApplyExtractedItems(items, mode, name, undefined, 'manual')}
+        currentBidderName={activeBidder.name}
+        tableRows={referenceRows}
+        tableUnits={activeBidder.items.map(i => i.unit)}
+        onDirtyChange={setIsManualDirty}
       />
 
       <ImageOcrModal

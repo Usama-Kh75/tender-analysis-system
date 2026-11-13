@@ -46,9 +46,14 @@ export function createImportHandlers(ctx: EditContext) {
     extracted: Partial<BOQItem>[],
     mode: 'estimated_only' | 'bidder_only' | 'new_bidder' | 'full_replace' | boolean,
     bidderName?: string,
-    statedTotal?: number // الإجمالي المكتوب في العطاء كما قرأه الاستخراج (قبل التصحيح الحسابي)
+    statedTotal?: number, // الإجمالي المكتوب في العطاء كما قرأه الاستخراج (قبل التصحيح الحسابي)
+    // 'manual': إدخال يدوي من الورقة (ManualEntryModal): المسار والدمج نفسهما، والسجل يقول «إدخال يدوي» بمدخل واحد.
+    // قد تكون المصفوفة متفرقة (فقرة لم تُكتب = موضع فارغ يُبقي صفها كما هو)، فيُعدّ ما كُتب فقط
+    source?: 'manual'
   ) => {
     if (blockedByOffer({ shared: true })) return;
+    const manual = source === 'manual';
+    const count = extracted.filter(Boolean).length;
     const isNew = mode === 'new_bidder' || mode === true;
     const isEstimatedOnly = mode === 'estimated_only';
     const isBidderOnly = mode === 'bidder_only';
@@ -118,11 +123,13 @@ export function createImportHandlers(ctx: EditContext) {
         updatedAt: new Date().toISOString()
       };
 
-      updatedProj = addAuditLog(
-        updatedProj,
-        'استيراد عطاء شركة جديدة',
-        `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة${statedNote}`
-      );
+      updatedProj = manual
+        ? addAuditLog(updatedProj, 'إدخال يدوي', `إدخال يدوي من الورقة لمجهز جديد (${newBidder.name}): (${count}) فقرة`)
+        : addAuditLog(
+          updatedProj,
+          'استيراد عطاء شركة جديدة',
+          `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة${statedNote}`
+        );
 
       saveProject(updatedProj);
 
@@ -180,11 +187,13 @@ export function createImportHandlers(ctx: EditContext) {
         updatedAt: new Date().toISOString()
       };
 
-      updatedProj = addAuditLog(
-        updatedProj,
-        'تحديث الكلفة التخمينية للمشروع',
-        `تم استيراد وتحديث جدول الكلفة التخمينية للمشروع (${extracted.length} فقرة)${estimateMergeLogNote(plan)}`
-      );
+      updatedProj = manual
+        ? addAuditLog(updatedProj, 'إدخال يدوي', `إدخال يدوي من الورقة للكلفة التخمينية: (${count}) فقرة${estimateMergeLogNote(plan)}`)
+        : addAuditLog(
+          updatedProj,
+          'تحديث الكلفة التخمينية للمشروع',
+          `تم استيراد وتحديث جدول الكلفة التخمينية للمشروع (${extracted.length} فقرة)${estimateMergeLogNote(plan)}`
+        );
 
       saveProject(updatedProj);
 
@@ -252,11 +261,13 @@ export function createImportHandlers(ctx: EditContext) {
         updatedAt: new Date().toISOString()
       };
 
-      updatedProj = addAuditLog(
-        updatedProj,
-        'تحديث أسعار مجهز',
-        `تم تحديث وتعبئة أسعار المجهز (${activeBidder.name}) لـ (${extracted.length}) فقرة${statedNote}`
-      );
+      updatedProj = manual
+        ? addAuditLog(updatedProj, 'إدخال يدوي', `إدخال يدوي من الورقة لأسعار المجهز (${activeBidder.name}): (${count}) فقرة`)
+        : addAuditLog(
+          updatedProj,
+          'تحديث أسعار مجهز',
+          `تم تحديث وتعبئة أسعار المجهز (${activeBidder.name}) لـ (${extracted.length}) فقرة${statedNote}`
+        );
 
       saveProject(updatedProj);
 

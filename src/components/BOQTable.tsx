@@ -14,7 +14,8 @@ import {
   FileSpreadsheet,
   Search,
   Download,
-  Printer
+  Printer,
+  Keyboard
 } from 'lucide-react';
 import { AuditLogEntry, BOQItem, TenderTotals, ReadingField } from '../types/tender';
 import { formatNumber, parseArabicNumber, toLatinDigits } from '../utils/calculations';
@@ -160,6 +161,7 @@ interface BOQTableProps {
   onDuplicateItem: (index: number) => void;
   onClearBidderPrices?: () => void;
   onOpenSmartImport?: () => void;
+  onOpenManualEntry?: () => void;
   // جدول واقع الحال والجدول المعدل لهذا المجهز في ملف Excel (exportBidderAuditToExcel)
   onExportAudit?: () => void;
   onOpenCorrectionNotice?: () => void;
@@ -201,6 +203,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   onDuplicateItem,
   onClearBidderPrices,
   onOpenSmartImport,
+  onOpenManualEntry,
   onExportAudit,
   onOpenCorrectionNotice,
   offerMode = 'none',
@@ -368,6 +371,16 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4 text-indigo-200" />
               <span>استيراد جدول <bdi dir="ltr">(Excel / Word / PDF)</bdi> أو صورة</span>
+            </button>
+          )}
+          {onOpenManualEntry && !locked && (
+            <button
+              onClick={onOpenManualEntry}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-slate-600"
+              title="للعطاءات ذات الفقرات القليلة: إدخال الأرقام من الورقة دون قراءة آلية"
+            >
+              <Keyboard className="w-4 h-4 text-slate-300" />
+              <span>إدخال يدوي</span>
             </button>
           )}
           {onAuditModeChange && hasAmounts && (
