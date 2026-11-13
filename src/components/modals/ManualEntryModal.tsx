@@ -148,7 +148,10 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
         quantity: qty > 0 ? qty : undefined
       };
       if (isEstimate) {
-        return { ...identity, estimatedTotal: amount > 0 ? amount : unit * qty, enteredUnitPrice: unit > 0 ? unit : undefined };
+        // بلا مفرد ولا مبلغ (تغيير الكمية وحدها): لا يُرسل estimatedTotal فيبقى تقدير الفقرة القائم،
+        // وإلا وصل صفراً فمحا التقدير بصمت (مراجعة Codex لـ 9a5c193)
+        const estimate = amount > 0 ? amount : unit * qty;
+        return { ...identity, ...(estimate > 0 ? { estimatedTotal: estimate } : {}), enteredUnitPrice: unit > 0 ? unit : undefined };
       }
       if (row.unpriced) return { ...identity, bidderTotal: 0, unpriced: true };
       // بلا مبلغ مكتوب: يبقى المبلغ فارغاً فيشتقه calculateBOQMetrics من المفرد × الكمية (بلا فحص ضرب)

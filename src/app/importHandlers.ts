@@ -165,6 +165,8 @@ export function createImportHandlers(ctx: EditContext) {
             id: existing?.id || `item-${i + 1}-${Date.now()}`,
             itemNo,
             description: desc,
+            // وحدة الجدول القائمة تبقى؛ الفقرة الجديدة أو الفارغة تأخذ وحدة الإدخال (كانت تُترك فتصير «عدد»)
+            unit: (existing && !isBlankRow(i) ? existing.unit : undefined) || ext?.unit || existing?.unit,
             quantity,
             estimatedTotal: ext?.estimatedTotal !== undefined ? ext.estimatedTotal : (existing?.estimatedTotal || 0),
             // تخميني جديد: يُصفَّر المفرد القديم ليُعاد حسابه منه (وإلا أعاد calculateBOQMetrics بناء القديم)
