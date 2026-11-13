@@ -295,8 +295,6 @@ export function App() {
         {/* Project Header Info Banner */}
         <ProjectHeader
           project={currentProject}
-          onChangeProjectField={(field, value) =>
-            setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, [field]: value, updatedAt: new Date().toISOString() } : p))}
           onOpenSettings={() => setIsSettingsOpen(true)}
           activeTab={activeTab}
           onSelectTab={setActiveTab}
