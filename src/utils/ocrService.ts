@@ -65,14 +65,18 @@ export function normalizeArabicNumbers(str: string): string {
  * فقد يكون قديماً أو مخففاً أو نموذج صوت/صور. الآن: المستقر قبل التجريبي، ثم flash ثم pro ثم flash-lite،
  * والأحدث إصداراً أولاً. تُستبعد نماذج الصوت وتوليد الصور والبث المباشر وغيرها مما لا يقرأ المستندات
  */
+export const PREFERRED_GEMINI_MODEL = 'gemini-4-hydrogen';
+
 export function rankGeminiModels(names: string[]): string[] {
   const notForDocuments = /(embedding|aqa|tts|image|live|transcribe|translate|robotics|veo|lyria|imagen|deep-research|antigravity|omni|computer-use|gemma|learnlm|audio|nano-banana)/i;
   const version = (n: string) => parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/i)?.[1] || '0');
   const family = (n: string) => /flash-lite/i.test(n) ? 2 : /flash/i.test(n) ? 0 : /pro/i.test(n) ? 1 : 3;
   const unstable = (n: string) => /(preview|exp|latest)/i.test(n) ? 1 : 0;
+  // النموذج المعتمد (قرار أسامة 2026-11-13) أولاً إن ظهر في الحساب، والبقية بالترتيب العام بديلاً عند تعذره
+  const preferred = (n: string) => n === PREFERRED_GEMINI_MODEL ? 0 : 1;
   return names
     .filter(n => /^gemini-/i.test(n) && !notForDocuments.test(n))
-    .sort((a, b) => unstable(a) - unstable(b) || family(a) - family(b) || version(b) - version(a));
+    .sort((a, b) => preferred(a) - preferred(b) || unstable(a) - unstable(b) || family(a) - family(b) || version(b) - version(a));
 }
 
 /** رد Google 402: رصيد الحساب المدفوع مسبقاً صفر، أو لم يُفعَّل الدفع. ينطبق على كل النماذج */
@@ -684,7 +688,7 @@ async function findGeminiModels(
       if (checkRes.success) models = checkRes.models;
     } catch {}
   }
-  if (models.length === 0) models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+  if (models.length === 0) models = [PREFERRED_GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
   return models;
 }
 
