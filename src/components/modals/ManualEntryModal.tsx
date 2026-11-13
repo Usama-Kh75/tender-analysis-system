@@ -48,6 +48,8 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
   const keySeq = useRef(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ r: number; c: number } | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef<() => void>(() => {});
 
   const blankRow = (itemNo: string, i?: number): Row => ({
     key: keySeq.current++, itemNo, description: '', unit: '',
@@ -55,7 +57,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
     unitPrice: '', amount: '', written: '', unpriced: false
   });
   const initialRows = () => tableMode
-    ? tableRows.map((t, i) => ({ ...blankRow(String(t.itemNo), i), description: t.description?.startsWith('فقرة ') ? '' : (t.description || ''), unit: tableUnits[i] || '' }))
+    ? tableRows.map((t, i) => ({ ...blankRow(String(t.itemNo), i), description: t.description === `فقرة ${t.itemNo}` ? '' : (t.description || ''), unit: tableUnits[i] || '' }))
     : [blankRow('1')];
 
   useEffect(() => {
@@ -85,6 +87,13 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
     bodyRef.current?.querySelector<HTMLInputElement>(`[data-r="${p.r}"][data-c="${p.c}"]:not(:disabled)`)?.focus();
   }, [rows.length]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [isOpen]);
+
   const live = useMemo(() => {
     let total = 0, priced = 0;
     rows.forEach((row, i) => {
@@ -112,7 +121,10 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>, r: number, c: number) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const next = bodyRef.current?.querySelector<HTMLInputElement>(`[data-r="${r + 1}"][data-c="${c}"]:not(:disabled)`);
+    let next: HTMLInputElement | null | undefined = null;
+    for (let j = r + 1; j < rows.length && !next; j++) {
+      next = bodyRef.current?.querySelector<HTMLInputElement>(`[data-r="${j}"][data-c="${c}"]:not(:disabled)`);
+    }
     if (next) next.focus();
     else if (!tableMode && r === rows.length - 1) addRow(c);
   };
@@ -127,10 +139,12 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
     if (dirty && !window.confirm('فيها أرقام لم تُحفظ. إغلاق النافذة يمحوها. إغلاق؟')) return;
     onClose();
   };
+  closeRef.current = requestClose;
 
   const save = () => {
     const entered = rows.map((row, i) => ({ row, i })).filter(({ row, i }) => isEntered(row, i));
     if (entered.length === 0) { alert('لم تُكتب أي فقرة.'); return; }
+    if (kind === 'new_bidder' && !newName.trim()) { alert('اكتب اسم المجهز الجديد.'); nameRef.current?.focus(); return; }
     if (!tableMode) {
       const bad = entered.find(({ row }) => !(parseArabicNumber(row.qty) > 0));
       if (bad) { alert(`الفقرة (${bad.row.itemNo || bad.i + 1}): اكتب الكمية.`); return; }
@@ -192,19 +206,21 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
   ];
   const unitLabel = isEstimate ? 'المفرد التخميني' : 'سعر المفرد';
   const amountLabel = isEstimate ? 'المبلغ التخميني' : 'المبلغ كما في الورقة';
+  const colCount = 6 + (isEstimate ? 0 : 2) + (tableMode ? 0 : 1);
+  const colNames = ['ت', 'الوصف', 'الوحدة', 'الكمية', unitLabel, amountLabel, 'التفقيط'];
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="manual-entry-title" className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden">
         <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-md"><Keyboard className="w-6 h-6" /></div>
             <div>
-              <h2 className="text-lg font-black">إدخال يدوي من الورقة</h2>
+              <h2 id="manual-entry-title" className="text-lg font-black">إدخال يدوي من الورقة</h2>
               <p className="text-xs text-slate-300 mt-0.5">للعطاءات ذات الفقرات القليلة. Tab بين الخانات، وEnter ينقلك إلى الخانة نفسها في الفقرة التالية. الأرقام العربية-الهندية والفواصل تُقبل.</p>
             </div>
           </div>
-          <button onClick={requestClose} className="p-2 text-slate-400 hover:text-white rounded-xl cursor-pointer" aria-label="إغلاق"><X className="w-5 h-5" /></button>
+          <button type="button" onClick={requestClose} className="p-2 text-slate-400 hover:text-white rounded-xl cursor-pointer" aria-label="إغلاق"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="p-4 border-b border-slate-200 flex flex-wrap items-center gap-2">
@@ -215,23 +231,23 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
             </button>
           ))}
           {kind === 'new_bidder' && (
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="اسم المجهز الجديد" className={`${inputCls} max-w-xs`} />
+            <input ref={nameRef} aria-label="اسم المجهز الجديد" value={newName} onChange={e => setNewName(e.target.value)} placeholder="اسم المجهز الجديد" className={`${inputCls} max-w-xs`} />
           )}
         </div>
 
         <div ref={bodyRef} className="flex-1 overflow-auto p-4">
-          <table className="w-full text-xs border-separate border-spacing-y-1">
+          <table className="w-full min-w-[860px] text-xs border-separate border-spacing-y-1">
             <thead className="sticky top-0 bg-white z-10">
               <tr className="text-slate-500 font-black text-right">
-                <th className="px-1 w-14">ت</th>
-                <th className="px-1">الوصف</th>
-                <th className="px-1 w-20">الوحدة</th>
-                <th className="px-1 w-24">الكمية</th>
-                <th className="px-1 w-32">{unitLabel}</th>
-                <th className="px-1 w-40">{amountLabel}</th>
-                {!isEstimate && <th className="px-1 w-48">التفقيط (اختياري)</th>}
-                {!isEstimate && <th className="px-1 w-20">غير مسعّرة</th>}
-                {!tableMode && <th className="w-8" />}
+                <th className="bg-white px-1 w-14">ت</th>
+                <th className="bg-white px-1">الوصف</th>
+                <th className="bg-white px-1 w-20">الوحدة</th>
+                <th className="bg-white px-1 w-24">الكمية</th>
+                <th className="bg-white px-1 w-32">{unitLabel}</th>
+                <th className="bg-white px-1 w-40">{amountLabel}</th>
+                {!isEstimate && <th className="bg-white px-1 w-48">التفقيط (اختياري)</th>}
+                {!isEstimate && <th className="bg-white px-1 w-20">غير مسعّرة</th>}
+                {!tableMode && <th className="bg-white w-8" />}
               </tr>
             </thead>
             <tbody>
@@ -245,6 +261,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
                 const cell = (c: number, value: string, key: keyof Row, extra?: { disabled?: boolean; ltr?: boolean; numeric?: boolean }) => (
                   <input
                     data-r={i} data-c={c}
+                    aria-label={`${colNames[c]} للفقرة ${row.itemNo || i + 1}`}
                     value={value}
                     disabled={extra?.disabled}
                     inputMode={extra?.numeric ? 'decimal' : undefined}
@@ -287,7 +304,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({ isOpen, onCl
                     {(mathMismatch || flags.hasTextDiscrepancy) && (
                       <tr>
                         <td />
-                        <td colSpan={8} className="px-1 pb-1 text-[11px] font-bold text-amber-700">
+                        <td colSpan={colCount - 1} className="px-1 pb-1 text-[11px] font-bold text-amber-700">
                           {mathMismatch && <span className="ml-4">يختلف عن حاصل الضرب: {isEstimate ? 'تأكد من الورقة' : 'سيُعلَّم للجنة'}</span>}
                           {flags.hasTextDiscrepancy && <span>التفقيط لا يطابق المفرد ولا المبلغ: سيُعلَّم للجنة</span>}
                         </td>
