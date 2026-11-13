@@ -66,7 +66,7 @@ export function normalizeArabicNumbers(str: string): string {
  * والأحدث إصداراً أولاً. تُستبعد نماذج الصوت وتوليد الصور والبث المباشر وغيرها مما لا يقرأ المستندات
  */
 export function rankGeminiModels(names: string[]): string[] {
-  const notForDocuments = /(embedding|aqa|tts|image|live|transcribe|translate|robotics|veo|lyria|imagen|deep-research|antigravity|omni|computer-use|gemma|learnlm|audio)/i;
+  const notForDocuments = /(embedding|aqa|tts|image|live|transcribe|translate|robotics|veo|lyria|imagen|deep-research|antigravity|omni|computer-use|gemma|learnlm|audio|nano-banana)/i;
   const version = (n: string) => parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/i)?.[1] || '0');
   const family = (n: string) => /flash-lite/i.test(n) ? 2 : /flash/i.test(n) ? 0 : /pro/i.test(n) ? 1 : 3;
   const unstable = (n: string) => /(preview|exp|latest)/i.test(n) ? 1 : 0;
