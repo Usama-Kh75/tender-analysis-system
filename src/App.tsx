@@ -279,8 +279,6 @@ export function App() {
       {/* Top Navbar */}
       <Navbar
         projectsCount={projects.length}
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
         onNewProject={() => setIsNewProjectOpen(true)}
         onOpenProjectsBrowser={() => setIsProjectsOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
@@ -289,7 +287,6 @@ export function App() {
         onBackupAll={handleBackupAll}
         committeeName={committeeName}
         onEditCommitteeName={() => setIsCommitteeEditOpen(true)}
-        pendingAudit={tenderPath(currentProject).audit.pending}
       />
 
       {/* Main Content Area */}
@@ -301,6 +298,9 @@ export function App() {
           onChangeProjectField={(field, value) =>
             setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, [field]: value, updatedAt: new Date().toISOString() } : p))}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          pendingAudit={tenderPath(currentProject).audit.pending}
           showNextStep={activeTab !== 'status'}
           onGo={handleGo}
         />

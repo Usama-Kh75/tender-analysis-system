@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pencil, Settings } from 'lucide-react';
+import { Pencil, Settings, Table2, Award, MapPin } from 'lucide-react';
+import type { MainTab } from '../resume';
 import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
@@ -9,7 +10,18 @@ import { statusLine } from '../utils/orderStatus';
 import type { NextStepAction } from '../utils/tenderPath';
 import { NextStepBar } from './NextStepBar';
 
+// ثلاثة تبويبات لمراحل المناقصة الواحدة: لكل واحد سؤال واحد يظهر تحت اسمه
+const TABS: { id: MainTab; label: string; question: string; Icon: React.ElementType }[] = [
+  { id: 'bids', label: 'العطاءات والتدقيق', question: 'ماذا قدّم كل مجهز؟', Icon: Table2 },
+  { id: 'analysis', label: 'التحليل والتوصية', question: 'من الأفضل ولماذا؟', Icon: Award },
+  { id: 'status', label: 'الموقف', question: 'أين وصلت الطلبية؟', Icon: MapPin }
+];
+
 interface ProjectHeaderProps {
+  activeTab: MainTab;
+  onSelectTab: (t: MainTab) => void;
+  /** فقرات بانتظار قرار اللجنة: شارة على تبويب العطاءات والتدقيق تختفي عند الصفر */
+  pendingAudit: number;
   project: TenderProject;
   onChangeProjectField: (field: 'title' | 'referenceNumber', value: string) => void;
   onOpenSettings: () => void;
@@ -20,7 +32,8 @@ interface ProjectHeaderProps {
 
 // بطاقة رأس المناقصة: رقم الطلبية والعنوان القابلان للتعديل، والخطوة التالية
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  project: currentProject, onChangeProjectField, onOpenSettings, showNextStep, onGo
+  project: currentProject, onChangeProjectField, onOpenSettings, showNextStep, onGo,
+  activeTab, onSelectTab, pendingAudit
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [isEditingRefNumber, setIsEditingRefNumber] = useState<boolean>(false);
@@ -168,6 +181,37 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* تبويبات المراحل: تحت العنوان مباشرة، والمفتوح بخط سفلي */}
+      <div role="tablist" aria-label="مراحل المناقصة" className="mt-4 flex items-stretch gap-1 overflow-x-auto border-b border-slate-200">
+        {TABS.map(({ id, label, question, Icon }) => {
+          const on = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => onSelectTab(id)}
+              aria-label={id === 'bids' && pendingAudit > 0 ? `${label}، ${pendingAudit} فقرة بانتظار قرار` : label}
+              className={`flex items-center gap-2 px-4 py-2 whitespace-nowrap border-b-4 -mb-px transition cursor-pointer ${
+                on ? 'border-blue-600 text-blue-800' : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="flex flex-col items-start leading-tight">
+                <span className="text-sm font-black">{label}</span>
+                <span className="text-[11px] font-medium text-slate-500">{question}</span>
+              </span>
+              {id === 'bids' && pendingAudit > 0 && (
+                <span aria-hidden="true" title={`${pendingAudit} فقرة بانتظار قرار اللجنة`} className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[1.25rem] px-1.5 py-0.5 text-center">
+                  {pendingAudit}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {showNextStep && <NextStepBar project={currentProject} onGo={onGo} />}

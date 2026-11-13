@@ -7,20 +7,14 @@ import {
   UserCheck,
   DownloadCloud,
   ShieldCheck,
-  Table2,
-  Award,
-  MapPin,
   Pencil
 } from 'lucide-react';
 import { canInstallApp, installApp, subscribeInstall } from '../pwa';
 import { MoreMenu } from './MoreMenu';
-import type { MainTab } from '../resume';
 
 interface NavbarProps {
   // عدد المناقصات المحفوظة على زر «المناقصات» (قائمة الاختيار المنسدلة حُذفت، فلا حاجة للمصفوفة نفسها)
   projectsCount: number;
-  activeTab: MainTab;
-  onSelectTab: (t: MainTab) => void;
   onNewProject: () => void;
   onOpenProjectsBrowser: () => void;
   onOpenAuditTrail: () => void;
@@ -29,22 +23,10 @@ interface NavbarProps {
   onBackupAll: () => void;
   committeeName: string | null;
   onEditCommitteeName: () => void;
-  /** فقرات بانتظار قرار اللجنة: شارة على «العطاءات» تختفي عند الصفر */
-  pendingAudit: number;
 }
-
-// ثلاثة تبويبات: لكل واحد سؤال واحد (مجهز واحد، المجهزون معاً، مسار الطلبية)
-// وتحت اسم كل تبويب سؤاله
-const TABS: { id: MainTab; label: string; question: string; Icon: React.ElementType }[] = [
-  { id: 'bids', label: 'العطاءات', question: 'ماذا قدّم كل مجهز؟', Icon: Table2 },
-  { id: 'analysis', label: 'التحليل والتوصية', question: 'من الأفضل ولماذا؟', Icon: Award },
-  { id: 'status', label: 'الموقف', question: 'أين وصلت الطلبية؟', Icon: MapPin }
-];
 
 export const Navbar: React.FC<NavbarProps> = ({
   projectsCount,
-  activeTab,
-  onSelectTab,
   onNewProject,
   onOpenProjectsBrowser,
   onOpenAuditTrail,
@@ -52,8 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   lastBackupAt,
   onBackupAll,
   committeeName,
-  onEditCommitteeName,
-  pendingAudit
+  onEditCommitteeName
 }) => {
   const canInstall = useSyncExternalStore(subscribeInstall, canInstallApp);
   const lastBackupText = lastBackupAt
@@ -100,38 +81,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-          </div>
-
-          {/* التبويبات الثلاثة: المفتوح بخط سفلي أزرق وخلفية أفتح */}
-          <div role="tablist" aria-label="أقسام العمل" className="flex items-stretch h-full mx-1 sm:mx-3 min-w-0 overflow-x-auto">
-            {TABS.map(({ id, label, question, Icon }) => {
-              const on = activeTab === id;
-              return (
-                <button
-                  key={id}
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => onSelectTab(id)}
-                  title={`${label}: ${question}`}
-                  aria-label={id === 'bids' && pendingAudit > 0 ? `${label}، ${pendingAudit} فقرة بانتظار قرار` : label}
-                  className={`flex items-center gap-1.5 px-2.5 lg:px-4 text-xs sm:text-sm font-black whitespace-nowrap border-b-4 transition cursor-pointer ${
-                    on ? 'border-blue-400 bg-slate-800/80 text-white' : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-blue-300' : ''}`} />
-                  {/* تحت lg أيقونة وحدها (مع aria-label وtitle)، وبعدها الاسم الكامل وتحته سؤاله */}
-                  <span className="hidden lg:flex flex-col items-start leading-tight">
-                    <span>{label}</span>
-                    <span className="text-[10px] font-medium text-slate-400">{question}</span>
-                  </span>
-                  {id === 'bids' && pendingAudit > 0 && (
-                    <span aria-hidden="true" title={`${pendingAudit} فقرة بانتظار قرار اللجنة`} className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[1.25rem] px-1.5 py-0.5 text-center">
-                      {pendingAudit}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
           </div>
 
           {/* Left Side: Clean Action Tools */}

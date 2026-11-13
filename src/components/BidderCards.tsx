@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
+import { hasBidAmounts } from '../utils/recommendation';
+import { formatNumber } from '../utils/calculations';
 
 interface BidderCardsProps {
   project: TenderProject;
@@ -11,7 +13,7 @@ interface BidderCardsProps {
   onAdd: () => void;
 }
 
-// الشركات بطاقات، وعلى كل بطاقة حالة تدقيقها: ✓ مدقَّق (أخضر) أو N بانتظار قرار (كهرماني) أو لم تُدخل أسعاره
+// الشركات قائمة بعرض الصفحة: الاسم، المبلغ بعد التدقيق، حالة التدقيق (أخضر مدقّق، كهرماني معلّقة، رمادي لم يُدخل)، وشارة الترسية
 export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd }) => {
   // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,19 +40,18 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     >
       {counterText}
     </p>
-    <div className="flex flex-wrap items-stretch gap-3 mb-4">
+    <div role="list" aria-label="الشركات المتقدمة" className="mb-4 bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
       {project.bidders.map(b => {
         const active = b.id === activeBidderId;
         const state = bidderAuditState(b);
         return (
           <div
             key={b.id}
-            className={`rounded-2xl border bg-white px-4 py-2.5 min-w-[170px] transition ${
-              active ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200 hover:border-slate-400'
-            }`}
+            role="listitem"
+            className={`flex items-center gap-2 px-3 py-1 transition ${active ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
           >
             {active && editingId === b.id ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 py-1.5">
                 <input
                   type="text"
                   value={tempName}
@@ -59,7 +60,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                     if (e.key === 'Enter') commitRename(b.name);
                     if (e.key === 'Escape') setEditingId(null);
                   }}
-                  className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-44"
+                  className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
                   aria-label="اسم الشركة"
                   autoFocus
                 />
@@ -68,26 +69,34 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <>
                 <button
                   onClick={() => onSelect(b.id)}
                   aria-pressed={active}
-                  className="text-right flex-1 cursor-pointer"
+                  aria-current={active ? 'true' : undefined}
+                  className={`grid flex-1 min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] items-center gap-3 py-2 text-right cursor-pointer border-r-4 pr-2 ${active ? 'border-blue-600' : 'border-transparent'}`}
                 >
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-black text-slate-900">{b.name}</span>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm font-black text-slate-900 truncate">{b.name}</span>
+                    {b.status === 'disqualified' && (
+                      <span className="text-[10px] font-black text-rose-800 bg-rose-50 border border-rose-300 rounded-full px-1.5 shrink-0">مستبعد</span>
+                    )}
+                  </span>
+                  <span className="text-sm font-bold text-slate-800">
+                    {hasBidAmounts(b)
+                      ? <><bdi className="font-mono">{formatNumber(b.totals.totalBidderAmount)}</bdi> <span className="text-slate-500 text-xs">{project.currency}</span></>
+                      : <span className="text-slate-500 text-xs">لم تُدخل أسعاره بعد</span>}
+                  </span>
+                  <span className={`text-xs font-bold ${
+                    state.kind === 'done' ? 'text-emerald-700' : state.kind === 'pending' ? 'text-amber-700' : 'text-slate-500'
+                  }`}>
+                    {state.kind === 'done' ? '✓ مدقّق' : state.kind === 'pending' ? `${state.count} معلّقة` : 'لم يُدخل'}
+                  </span>
+                  <span className="min-w-[7rem]">
                     {b.status === 'recommended' && (
                       <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full px-1.5">★ موصى بالترسية</span>
                     )}
-                    {b.status === 'disqualified' && (
-                      <span className="text-[10px] font-black text-rose-800 bg-rose-50 border border-rose-300 rounded-full px-1.5">مستبعد</span>
-                    )}
-                  </div>
-                  <div className={`text-xs font-bold mt-0.5 ${
-                    state.kind === 'done' ? 'text-emerald-700' : state.kind === 'pending' ? 'text-amber-700' : 'text-slate-500'
-                  }`}>
-                    {state.kind === 'done' ? '✓ مدقَّق' : state.kind === 'pending' ? `${state.count} بانتظار قرار` : 'لم تُدخل أسعاره'}
-                  </div>
+                  </span>
                 </button>
                 {active && (
                   <button
@@ -99,7 +108,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                 )}
-              </div>
+              </>
             )}
           </div>
         );
@@ -107,10 +116,10 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
 
       <button
         onClick={onAdd}
-        className="rounded-2xl border-2 border-dashed border-slate-300 hover:border-slate-500 text-slate-600 hover:text-slate-900 text-sm font-bold px-4 py-2.5 cursor-pointer transition"
+        className="w-full text-right px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer transition"
         title="إضافة شركة / مقاول جديد للمناقصة"
       >
-        ＋ شركة
+        + مجهز
       </button>
     </div>
     </>

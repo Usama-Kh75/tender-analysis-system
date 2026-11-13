@@ -26,7 +26,7 @@ interface ExecutiveSummaryViewProps {
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
   onOpenExclusionReasons: (id: string) => void;
   onOpenPrint: () => void;
-  /** يفتح عرض التدقيق في تبويب العطاءات عند أول مجهز فيه فقرات معلّقة */
+  /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات معلّقة */
   onOpenAudit: () => void;
   onExportExcel: () => void;
   // مقارنة المجهزين والرسوم: زرّان بجانب الطباعة (كانا في الشريط العلوي وتبويب مستقل)
@@ -573,7 +573,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
                 </li>
               ))}
             </ul>
-            <div className="text-xs font-semibold mt-1.5">تجدها في بطاقة «موثوقية القراءة» فوق جدول المجهز في تبويب «العطاءات». المبلغ حدّ أعلى متحفظ: يعدّ كل مبلغ الفقرة معرَّضاً للخطأ.</div>
+            <div className="text-xs font-semibold mt-1.5">تجدها في بطاقة «موثوقية القراءة» فوق جدول المجهز في تبويب «العطاءات والتدقيق». المبلغ حدّ أعلى متحفظ: يعدّ كل مبلغ الفقرة معرَّضاً للخطأ.</div>
           </div>
         );
       })()}
