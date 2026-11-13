@@ -1,5 +1,5 @@
 import type { InvitationType, TenderProject } from '../types/tender';
-import { hasBidAmounts } from './recommendation';
+import { hasBidAmounts, eligibilityCounts } from './recommendation';
 
 /**
  * بيانات المناقصة الاختيارية (منذ الإصدار 1.19.0): للعرض في رأس المحضر وبطاقة المناقصة وملفات Excel فقط،
@@ -53,4 +53,22 @@ export function tenderDetailParts(project: TenderProject, { withCounts = true, w
   const analyzed = analyzedBidsCount(project);
   if (received && received >= analyzed) parts.push(`عدد العطاءات المستلمة: (${received})، المحلَّلة تجارياً منها: (${analyzed})`);
   return parts;
+}
+
+/** ملصق أعداد العطاءات في الرأس: «العطاءات: 5 مستلمة · 4 محلَّلة تجارياً · 3 مؤهلة · 1 غير مؤهلة»؛ null إن لم يوجد شيء. غير المؤهلة تظهر إن زادت على صفر */
+export function bidCountsLabel(project: TenderProject): string | null {
+  const analyzed = analyzedBidsCount(project);
+  const received = receivedBidsCountOf(project);
+  const parts: string[] = [];
+  if (received && received >= analyzed) parts.push(`${received} مستلمة`);
+  if (analyzed > 0) {
+    parts.push(`${analyzed} محلَّلة تجارياً`);
+    const counts = eligibilityCounts(project);
+    if (!counts) parts.push('المؤهلة: بانتظار الكلفة التخمينية');
+    else {
+      parts.push(`${counts.eligible} مؤهلة`);
+      if (counts.excluded > 0) parts.push(`${counts.excluded} غير مؤهلة`);
+    }
+  }
+  return parts.length ? `العطاءات: ${parts.join(' · ')}` : null;
 }

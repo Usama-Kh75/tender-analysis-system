@@ -77,6 +77,18 @@ export const hasNoEstimate = (project: TenderProject): boolean =>
 
 const isRejectedByCommittee = (bidder: Bidder): boolean => bidder.status === 'disqualified';
 
+/**
+ * أعداد العطاءات المحلَّلة: غير المؤهلة = مستبعدة اللجنة أو المتجاوزة حد الاستبعاد، والمؤهلة = الباقي.
+ * مصدر واحد لبطاقتي «العطاءات المؤهلة» و«المستبعدة» في الملخص ولملصق الرأس؛ null قبل الكلفة التخمينية
+ */
+export function eligibilityCounts(project: TenderProject): { analyzed: number; eligible: number; excluded: number } | null {
+  if (hasNoEstimate(project)) return null;
+  const threshold = exclusionThresholdOf(project);
+  const analyzed = project.bidders.filter(hasBidAmounts);
+  const excluded = analyzed.filter(b => isRejectedByCommittee(b) || isCommerciallyExcluded(b, threshold)).length;
+  return { analyzed: analyzed.length, eligible: analyzed.length - excluded, excluded };
+}
+
 const byAmount = (a: Bidder, b: Bidder) => a.totals.totalBidderAmount - b.totals.totalBidderAmount;
 
 export function buildRecommendation(project: TenderProject): Recommendation {

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
-import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
+import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, eligibilityCounts, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
@@ -51,6 +51,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
   const exclusionThreshold = exclusionThresholdOf(project);
+  const counts = eligibilityCounts(project);
   // شركات بلا مبالغ بعد لا تُعد عروضاً (انظر hasBidAmounts)
   const emptyBidders = project.bidders.filter(b => !hasBidAmounts(b));
 
@@ -201,14 +202,14 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
             <div className="text-slate-400 font-semibold mb-1">العطاءات المؤهلة</div>
             <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-emerald-400'}`}>
-              {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus !== 'excluded').length} عروض`}
+              {noEstimate ? 'بانتظار التخميني' : `${counts?.eligible ?? 0} عروض`}
             </div>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
             <div className="text-slate-400 font-semibold mb-1">المستبعدة</div>
             <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-rose-400'}`}>
-              {noEstimate ? 'بانتظار التخميني' : `${evaluatedBidders.filter(b => b.commercialStatus === 'excluded').length} عروض`}
+              {noEstimate ? 'بانتظار التخميني' : `${counts?.excluded ?? 0} عروض`}
             </div>
           </div>
         </div>

@@ -4,7 +4,7 @@ import type { MainTab } from '../resume';
 import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
-import { announcementLabel, tenderDetailParts } from '../utils/tenderDetails';
+import { announcementLabel, bidCountsLabel, tenderDetailParts } from '../utils/tenderDetails';
 import { statusLine } from '../utils/orderStatus';
 import type { NextStepAction } from '../utils/tenderPath';
 import { itemsWithErrorsText } from '../utils/arabicCount';
@@ -88,6 +88,9 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           {tenderDetailParts(currentProject, { withCounts: false, withAnnouncement: false }).map(part => (
             <span key={part} className="bg-slate-50 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">{part}</span>
           ))}
+          {bidCountsLabel(currentProject) && (
+            <span className="bg-slate-50 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">{bidCountsLabel(currentProject)}</span>
+          )}
           {/* شارة الموقف: آخر مدخل في statusLog (الأخير في المصفوفة لا الأحدث تاريخاً)، وتختفي إن لم يوجد */}
           {lastStatus && (
             <span className="bg-blue-50 text-blue-900 text-xs font-bold px-3.5 py-1 rounded-full border border-blue-200">
