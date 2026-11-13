@@ -1,5 +1,5 @@
 import type { InvitationType, TenderProject } from '../types/tender';
-import { hasBidAmounts, eligibilityCounts } from './recommendation';
+import { hasBidAmounts } from './recommendation';
 
 /**
  * بيانات المناقصة الاختيارية (منذ الإصدار 1.19.0): للعرض في رأس المحضر وبطاقة المناقصة وملفات Excel فقط،
@@ -55,20 +55,17 @@ export function tenderDetailParts(project: TenderProject, { withCounts = true, w
   return parts;
 }
 
-/** ملصق أعداد العطاءات في الرأس: «العطاءات: 5 مستلمة · 4 محلَّلة تجارياً · 3 مؤهلة · 1 غير مؤهلة»؛ null إن لم يوجد شيء. غير المؤهلة تظهر إن زادت على صفر */
+/**
+ * ملصق أعداد العطاءات في الرأس: «العطاءات: 5 مستلمة · 4 محلَّلة تجارياً · 1 لم تُحلَّل لنقص جوهري»؛ null إن لم يوجد شيء.
+ * كل عطاء في جدول التحليل يُحلَّل تجارياً والترسية على أفضلها، فلا «مؤهلة/غير مؤهلة» هنا (أسامة 2026-11-13). العطاء الذي
+ * فيه نقص جوهري (كالتأمينات الأولية) تستلمه اللجنة فيُعدّ مستلماً، ولا يدخل جدول التحليل التجاري.
+ */
 export function bidCountsLabel(project: TenderProject): string | null {
   const analyzed = analyzedBidsCount(project);
   const received = receivedBidsCountOf(project);
   const parts: string[] = [];
   if (received && received >= analyzed) parts.push(`${received} مستلمة`);
-  if (analyzed > 0) {
-    parts.push(`${analyzed} محلَّلة تجارياً`);
-    const counts = eligibilityCounts(project);
-    if (!counts) parts.push('المؤهلة: بانتظار الكلفة التخمينية');
-    else {
-      parts.push(`${counts.eligible} مؤهلة`);
-      if (counts.excluded > 0) parts.push(`${counts.excluded} غير مؤهلة`);
-    }
-  }
+  if (analyzed > 0) parts.push(`${analyzed} محلَّلة تجارياً`);
+  if (received && received > analyzed) parts.push(`${received - analyzed} لم تُحلَّل لنقص جوهري`);
   return parts.length ? `العطاءات: ${parts.join(' · ')}` : null;
 }

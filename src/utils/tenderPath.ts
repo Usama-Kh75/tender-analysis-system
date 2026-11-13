@@ -84,7 +84,7 @@ export function nextStep(p: TenderProject): NextStep | null {
       kind: 'award',
       text: `اكتمل إدخال العطاءات (${path.bids.entered} من ${path.bids.expected}) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة`
         + (path.bids.expected > path.bids.registered
-          ? `. استُلمت (${path.bids.expected}) عطاءات، وأُدخل منها (${path.bids.entered}) للتحليل التجاري. العطاء غير المستوفي لمعايير التأهيل لا يُحلَّل تجارياً، وإن كان مستوفياً فأضفه من «إضافة مجهز».`
+          ? `. استُلمت (${path.bids.expected}) عطاءات، وأُدخل منها (${path.bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
           : ''),
       actions: [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]
     };

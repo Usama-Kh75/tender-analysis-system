@@ -214,7 +214,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               <p id="new-project-received-note" role="alert" className="text-[11px] mt-1 text-rose-700 font-bold">{receivedError}</p>
             ) : (
               <p id="new-project-received-note" className="text-[11px] mt-1 text-slate-500">
-                اختياري: به يعرف النظام متى اكتمل إدخال العطاءات وينتقل بك إلى التحليل. يتبع عدد الأسماء ما لم تكتب فيه. العطاء غير المستوفي لمعايير التأهيل يُحسب مستلماً ولا يُدخل.
+                اختياري: به يعرف النظام متى اكتمل إدخال العطاءات وينتقل بك إلى التحليل. يتبع عدد الأسماء ما لم تكتب فيه. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُحسب مستلماً ولا يُدخل للتحليل التجاري.
               </p>
             )}
           </div>

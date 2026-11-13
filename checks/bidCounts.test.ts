@@ -9,19 +9,24 @@ const bidder = (amount: number, dev: number, status = 'submitted') =>
 const proj = (bidders: unknown[], extra: object = {}) =>
   ({ deviationThreshold: 20, bidders, ...extra }) as unknown as TenderProject;
 
-test('أعداد المؤهلة وغير المؤهلة تشمل مستبعد اللجنة والمتجاوز للحد، وتُهمل الشركة بلا مبالغ', () => {
+test('أعداد المؤهلة وغير المؤهلة (بطاقتا الملخص) تشمل مستبعد اللجنة والمتجاوز للحد، وتُهمل الشركة بلا مبالغ', () => {
   const p = proj([bidder(100, 5), bidder(110, 8), bidder(150, 50), bidder(90, 1, 'disqualified'), bidder(0, 0)], { receivedBidsCount: 6 });
   assert.deepEqual(eligibilityCounts(p), { analyzed: 4, eligible: 2, excluded: 2 });
-  assert.equal(bidCountsLabel(p), 'العطاءات: 6 مستلمة · 4 محلَّلة تجارياً · 2 مؤهلة · 2 غير مؤهلة');
 });
 
-test('غير المؤهلة تُحذف عند الصفر، والمستلمة تُحذف إن لم تُدخل', () => {
-  assert.equal(bidCountsLabel(proj([bidder(100, 5), bidder(110, 8)])), 'العطاءات: 2 محلَّلة تجارياً · 2 مؤهلة');
+test('ملصق الرأس: المستلمة والمحلَّلة تجارياً وما لم يُحلَّل لنقص جوهري، بلا مؤهلة/غير مؤهلة', () => {
+  const p = proj([bidder(100, 5), bidder(110, 8), bidder(150, 50), bidder(90, 1, 'disqualified'), bidder(0, 0)], { receivedBidsCount: 6 });
+  assert.equal(bidCountsLabel(p), 'العطاءات: 6 مستلمة · 4 محلَّلة تجارياً · 2 لم تُحلَّل لنقص جوهري');
 });
 
-test('قبل الكلفة التخمينية لا أرقام للأهلية', () => {
+test('المستلمة تُحذف إن لم تُدخل، وما لم يُحلَّل يُحذف عند التساوي', () => {
+  assert.equal(bidCountsLabel(proj([bidder(100, 5), bidder(110, 8)])), 'العطاءات: 2 محلَّلة تجارياً');
+  assert.equal(bidCountsLabel(proj([bidder(100, 5), bidder(110, 8)], { receivedBidsCount: 2 })), 'العطاءات: 2 مستلمة · 2 محلَّلة تجارياً');
+});
+
+test('قبل الكلفة التخمينية: الأهلية غير معروفة، والملصق يعدّ المحلَّلة وحدها', () => {
   const b = { ...bidder(100, 0), totals: { totalBidderAmount: 100, totalEstimatedAmount: 0, totalDeviationPercent: 0 } };
   const p = proj([b]);
   assert.equal(eligibilityCounts(p), null);
-  assert.equal(bidCountsLabel(p), 'العطاءات: 1 محلَّلة تجارياً · المؤهلة: بانتظار الكلفة التخمينية');
+  assert.equal(bidCountsLabel(p), 'العطاءات: 1 محلَّلة تجارياً');
 });
