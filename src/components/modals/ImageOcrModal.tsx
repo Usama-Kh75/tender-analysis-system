@@ -63,9 +63,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [writing, setWriting] = useState<Writing | null>(null);
   const writingTriedKey = useRef<string | null>(null);
   const writingGen = useRef(0);
+  // اختيار المستخدم اليدوي للقراءة الثانية في هذا الملف يغلب الضبط التلقائي؛ يُصفَّر مع تنبيه القراءة
+  const [doubleReadTouched, setDoubleReadTouched] = useState(false);
   const resetReadAdvice = () => {
     setScanEdges({});
     setWriting(null);
+    setDoubleReadTouched(false);
     writingTriedKey.current = null;
     writingGen.current += 1;
   };
@@ -84,6 +87,11 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [creditNotice, setCreditNotice] = useState(false);
   // قراءة مزدوجة تعلّم الفقرات المختلفة وتضاعف كلفة القراءة؛ الاختيار يُحفظ في المتصفح
   const [doubleRead, setDoubleRead] = useState<boolean>(() => localStorage.getItem('gemini_double_read') !== '0');
+  // الضبط التلقائي تبعاً لفحص الكتابة: لا يُكتب في localStorage، وتعذّر الفحص يُبقي التفضيل المحفوظ (لا يُطفأ الفحص بصمت)
+  useEffect(() => {
+    if (doubleReadTouched) return;
+    setDoubleRead(writing === 'handwritten' || writing === 'mixed' ? true : writing === 'printed' ? false : localStorage.getItem('gemini_double_read') !== '0');
+  }, [writing, doubleReadTouched]);
   // الصفحات التي تُقرأ الآن: تنتقل إليها المعاينة وتُعلَّم في شريط الصفحات، وما قبلها مقروء
   const [readingRange, setReadingRange] = useState<ReadingPages | null>(null);
   const lastReading = useRef('');
@@ -944,10 +952,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       type="checkbox"
                       checked={doubleRead}
                       disabled={isLoading}
-                      onChange={(e) => { setDoubleRead(e.target.checked); localStorage.setItem('gemini_double_read', e.target.checked ? '1' : '0'); }}
+                      onChange={(e) => { setDoubleReadTouched(true); setDoubleRead(e.target.checked); localStorage.setItem('gemini_double_read', e.target.checked ? '1' : '0'); }}
                       className="mt-0.5"
                     />
-                    <span><strong>قراءة ثانية للتحقق</strong>: بعد القراءة الكاملة يعيد النموذج قراءة عمود المبلغ وحده (بلا كمية ولا مفرد، فلا يحسب المبلغ بل ينقل المكتوب) ويعلّم الفقرات التي يختلف مبلغها عن القراءة الأولى لتراجعها مع الأصل. تزيد الكلفة والوقت.</span>
+                    <span><strong>قراءة ثانية للتحقق</strong>: بعد القراءة الكاملة يعيد النموذج قراءة عمود المبلغ وحده (بلا كمية ولا مفرد، فلا يحسب المبلغ بل ينقل المكتوب) ويعلّم الفقرات التي يختلف مبلغها عن القراءة الأولى لتراجعها مع الأصل. تزيد الكلفة والوقت.
+                      {writing === 'printed' && !doubleReadTouched && !doubleRead && <span className="block text-slate-500">عُطّلت لأن الصفحة المفحوصة مطبوعة؛ فعّلها بيدك إن كانت أرقام بعض الصفحات بخط اليد.</span>}
+                    </span>
                   </label>
                 )}
 
