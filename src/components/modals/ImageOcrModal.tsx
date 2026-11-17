@@ -180,7 +180,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setKeyTestStatus({ isTesting: true });
     try {
       const res = await testGeminiApiKey(apiKey, true);
-      if (res.message === GEMINI_CREDIT_MESSAGE) setAccountNotice('credit');
+      if (res.success) setAccountNotice(null);
+      else if (res.message === GEMINI_CREDIT_MESSAGE) setAccountNotice('credit');
       else if (res.message === GEMINI_SPEND_CAP_MESSAGE) setAccountNotice('spendCap');
       setKeyTestStatus({ isTesting: false, success: res.success, message: res.message });
     } catch (e: any) {
@@ -355,6 +356,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         followReading(reading);
       }, undefined, doubleRead);
       setExtractedItems(result.items);
+      setAccountNotice(null);
       setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed, doubleRead: result.doubleRead });
       if (result.doubleRead?.secondReadError) {
         alert(`القراءة الثانية (للتحقق) لم تكتمل: ${explainGeminiError(result.doubleRead.secondReadError)}\nالجدول من القراءة الأولى وحدها، بلا تعليم للفقرات المختلفة.`);
