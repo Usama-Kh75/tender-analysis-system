@@ -56,9 +56,9 @@ const BOX = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 const AMOUNT_FMT = '#,##0;\\(#,##0\\);\\-';
 const AMOUNT_FMT_DEC = '#,##0.00;\\(#,##0.00\\);\\-';
 
-type Cell = string | number | XLSX.CellObject | null | undefined;
+export type Cell = string | number | XLSX.CellObject | null | undefined;
 
-const amount = (v: number, color = TEXT): XLSX.CellObject => {
+export const amount = (v: number, color = TEXT): XLSX.CellObject => {
   const numFmt = Number.isInteger(v) ? AMOUNT_FMT : AMOUNT_FMT_DEC;
   return { t: 'n', v, z: numFmt, s: { font: { name: FONT, sz: 10, color: { rgb: color } }, numFmt } };
 };
@@ -69,13 +69,20 @@ const pct = (v: number, decimals = 2): XLSX.CellObject => {
   return { t: 'n', v: v / 100, z: fmt, s: { numFmt: fmt } };
 };
 const ratio = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0.0000', s: { numFmt: '0.0000' } });
-const count = (v: number): XLSX.CellObject => ({ t: 'n', v });
+const count = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0' });
 
 // رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»)
 const itemNoCell = (itemNo: number | string): Cell => {
   const n = Number(itemNo);
-  return Number.isFinite(n) && String(n) === String(itemNo).trim() ? { t: 'n', v: n } : String(itemNo);
+  return Number.isFinite(n) && String(n) === String(itemNo).trim() ? { t: 'n', v: n, z: '0' } : String(itemNo);
 };
+
+// اتجاه كل أوراق المصنف من اليمين إلى اليسار: المكتبة تكتب rightToLeft="1" في sheetView كل ورقة من Workbook.Views[0].RTL
+// (فُحص بفك ملف xlsx الناتج في checks/excelTenderFormat.test.ts)
+export function markRtl(wb: XLSX.WorkBook): XLSX.WorkBook {
+  wb.Workbook = { ...(wb.Workbook || {}), Views: [{ RTL: true }] };
+  return wb;
+}
 
 interface SheetLayout {
   widths: number[];
@@ -85,10 +92,11 @@ interface SheetLayout {
   center?: number[];                       // أعمدة تُوسَّط
   wrap?: number[];                         // أعمدة نص طويل يلتف
   filter?: boolean;
+  vertical?: 'top' | 'center';             // محاذاة البيانات رأسياً (الافتراضي: وسط)
 }
 
 // العنوان (الصف 1) وسطرا التعريف والشرح (2 و3) مدمجة بعرض الجدول، ثم الرؤوس، ثم البيانات بحدود، ثم أسطر المجاميع
-function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
+export function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
   const { widths, dataFrom, dataTo } = layout;
   const lastCol = widths.length - 1;
   const header = dataFrom - 1;
@@ -121,7 +129,7 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
           ...own, font, border: BOX,
           ...(fill ? { fill: { patternType: 'solid', fgColor: { rgb: fill } } } : {}),
           alignment: {
-            horizontal: layout.center?.includes(c) ? 'center' : 'right', vertical: 'center',
+            horizontal: layout.center?.includes(c) ? 'center' : 'right', vertical: layout.vertical ?? 'center',
             wrapText: !!layout.wrap?.includes(c)
           }
         };
@@ -466,7 +474,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
 // مفرد العرض بلا تقريب لمنزلتين (العرض المنطلق من التصحيح مفرده مبلغ ÷ كمية)، فيُعرض بأربع منازل على الأكثر
 // كي لا يخالف الكمية × المفرد المبلغَ الذي يوقّع عليه المجهز
 const UNIT_FMT_DEC = '#,##0.00##;\\(#,##0.00##\\);\\-';
-const unitCell = (v: number): XLSX.CellObject => {
+export const unitCell = (v: number): XLSX.CellObject => {
   const x = Math.round(v * 1e4) / 1e4;
   if (Number.isInteger(x)) return amount(x);
   const c = amount(x);
@@ -560,8 +568,7 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
   if (approvalSheet) XLSX.utils.book_append_sheet(wb, approvalSheet, 'اعتماد العرض الموزون');
   const pagesSheet = buildPagesSheet(project, bidder);
   if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
-  wb.Workbook = { Views: [{ RTL: true }] };
-  return wb;
+  return markRtl(wb);
 }
 
 export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder) {
