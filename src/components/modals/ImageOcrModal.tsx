@@ -14,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, detectWriting, ReadingPages, ReadItem, Writing } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_SPEND_CAP_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, detectWriting, ReadingPages, ReadItem, Writing } from '../../utils/ocrService';
 import { lowResolutionPages, LOW_RESOLUTION_EDGE } from '../../utils/readAdvice';
 import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
@@ -84,7 +84,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // نتيجة قراءة Gemini الأخيرة: الإجمالي المكتوب في العطاء (للمقارنة بمجموع الفقرات) والنموذج المستخدم
   const [geminiCheck, setGeminiCheck] = useState<{ statedTotal: number | null; statedText?: string; modelUsed: string; doubleRead?: { onlyInSecond: number; secondReadError?: string } } | null>(null);
   // نفد رصيد Google: لافتة دائمة برابط الدفع (التنبيه المنبثق لا يحمل رابطاً)
-  const [creditNotice, setCreditNotice] = useState(false);
+  const [accountNotice, setAccountNotice] = useState<null | 'credit' | 'spendCap'>(null);
   // قراءة مزدوجة تعلّم الفقرات المختلفة وتضاعف كلفة القراءة؛ الاختيار يُحفظ في المتصفح
   const [doubleRead, setDoubleRead] = useState<boolean>(() => localStorage.getItem('gemini_double_read') !== '0');
   // الضبط التلقائي تبعاً لفحص الكتابة: لا يُكتب في localStorage، وتعذّر الفحص يُبقي التفضيل المحفوظ (لا يُطفأ الفحص بصمت)
@@ -180,7 +180,8 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setKeyTestStatus({ isTesting: true });
     try {
       const res = await testGeminiApiKey(apiKey, true);
-      if (res.message === GEMINI_CREDIT_MESSAGE) setCreditNotice(true);
+      if (res.message === GEMINI_CREDIT_MESSAGE) setAccountNotice('credit');
+      else if (res.message === GEMINI_SPEND_CAP_MESSAGE) setAccountNotice('spendCap');
       setKeyTestStatus({ isTesting: false, success: res.success, message: res.message });
     } catch (e: any) {
       setKeyTestStatus({ isTesting: false, success: false, message: e.message });
@@ -335,8 +336,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       return 'مفتاح Gemini غير صالح.';
     }
     if (kind === 'credit') {
-      setCreditNotice(true);
+      setAccountNotice('credit');
       return GEMINI_CREDIT_MESSAGE;
+    }
+    if (kind === 'spendCap') {
+      setAccountNotice('spendCap');
+      return GEMINI_SPEND_CAP_MESSAGE;
     }
     return kind === 'quota' ? GEMINI_QUOTA_MESSAGE : message;
   };
@@ -669,18 +674,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
         </div>
 
-        {creditNotice && (
+        {accountNotice && (
           <div role="alert" className="bg-rose-50 border-b border-rose-300 px-4 sm:px-6 py-2.5 text-xs text-rose-950 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-black">⚠️ نفد رصيد حسابك في Google، فلا تتم القراءة بالذكاء الاصطناعي حتى تُضيف رصيداً.</span>
+            <span className="font-black">{accountNotice === 'credit'
+              ? '⚠️ نفد رصيد حسابك في Google، فلا تتم القراءة بالذكاء الاصطناعي حتى تُضيف رصيداً.'
+              : '⚠️ بلغ مشروعك في Google سقف الإنفاق الشهري، فلا تتم القراءة بالذكاء الاصطناعي حتى ترفع السقف أو يتجدد الشهر.'}</span>
             <a
-              href="https://aistudio.google.com/billing"
+              href={accountNotice === 'credit' ? 'https://aistudio.google.com/billing' : 'https://ai.studio/spend'}
               target="_blank"
               rel="noopener noreferrer"
               className="font-black text-indigo-700 underline hover:text-indigo-900"
             >
-              إضافة رصيد (aistudio.google.com/billing)
+              {accountNotice === 'credit' ? 'إضافة رصيد (aistudio.google.com/billing)' : 'رفع السقف (ai.studio/spend)'}
             </a>
-            <button onClick={() => setCreditNotice(false)} className="ms-auto text-rose-700 hover:text-rose-900 font-bold cursor-pointer">إخفاء</button>
+            <button onClick={() => setAccountNotice(null)} className="ms-auto text-rose-700 hover:text-rose-900 font-bold cursor-pointer">إخفاء</button>
           </div>
         )}
 
