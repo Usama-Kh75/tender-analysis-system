@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { attachPages, mapGeminiRow, mergeContinuationRows, geminiFailureKind, compareAmountColumn, parseAmountColumn, extractBOQWithGeminiVision } from '../src/utils/ocrService';
+import { attachPages, mapGeminiRow, mergeContinuationRows, geminiFailureKind, GEMINI_SPEND_CAP_MESSAGE, GEMINI_QUOTA_MESSAGE, compareAmountColumn, parseAmountColumn, extractBOQWithGeminiVision } from '../src/utils/ocrService';
 
 test('رقم الصفحة داخل الدفعة يُحوَّل إلى رقمها في الملف', () => {
   const rows = attachPages([{ page: 1 }, { page: 3 }], 8, 3);
@@ -26,6 +26,8 @@ test('أخطاء Gemini تُصنَّف: الرصيد قبل المفتاح قب�
   assert.equal(geminiFailureKind('نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه'), 'credit');
   assert.equal(geminiFailureKind('gemini-3.8-flash: (402) {"error":{"status":"PAYMENT_REQUIRED"'), 'credit');
   assert.equal(geminiFailureKind('API key not valid'), 'key');
+  assert.equal(geminiFailureKind('gemini-x: (429) You exceeded your current quota, spending cap reached'), 'spendCap');
+  assert.equal(geminiFailureKind(GEMINI_SPEND_CAP_MESSAGE), 'spendCap');
   assert.equal(geminiFailureKind('نفدت حصة الطلبات (429)'), 'quota');
   assert.equal(geminiFailureKind('تعذر الاتصال بالنماذج: رد فارغ'), null);
 });
@@ -111,6 +113,38 @@ test('Gemini 402: يتوقف عند أول طلب برسالة الرصيد ول
   try {
     await assert.rejects(extractBOQWithGeminiVision(['data:image/jpeg;base64,AA'], 'k', undefined, ['m1', 'm2'], true), /\(402\)/);
     assert.equal(m.calls.length, 1);
+  } finally { m.restore(); }
+});
+
+function mockStatusBody(status: number, body: string) {
+  const calls: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string) => {
+    calls.push(String(url));
+    return new Response(body, { status });
+  }) as typeof fetch;
+  return { calls, restore: () => { globalThis.fetch = original; } };
+}
+
+test('Gemini 429 بنص سقف الإنفاق: يتوقف عند أول طلب برسالة السقف', async () => {
+  const m = mockStatusBody(429, '{"error":{"message":"Your project has exceeded its monthly spending cap"}}');
+  try {
+    await assert.rejects(
+      extractBOQWithGeminiVision(['data:image/jpeg;base64,AA'], 'k', undefined, ['m1', 'm2'], true),
+      (e: Error) => e.message === GEMINI_SPEND_CAP_MESSAGE,
+    );
+    assert.equal(m.calls.length, 1);
+  } finally { m.restore(); }
+});
+
+test('Gemini 429 عادي: يعيد المحاولة ثم ينتهي برسالة الحصة', async () => {
+  const m = mockStatusBody(429, '{"error":{}}');
+  try {
+    await assert.rejects(
+      extractBOQWithGeminiVision(['data:image/jpeg;base64,AA'], 'k', undefined, ['m1'], false),
+      (e: Error) => e.message.includes(GEMINI_QUOTA_MESSAGE) || e.message === GEMINI_QUOTA_MESSAGE,
+    );
+    assert.ok(m.calls.length > 1);
   } finally { m.restore(); }
 });
 

@@ -75,3 +75,34 @@ test('لا ورقة موزونة في الإحالة ولا إعادة الطر�
   assert.equal(offerSheetTarget(chosen).bidder?.id, 'b');
   assert.equal(buildTenderWorkbook(chosen, chosen.bidders[0]).SheetNames[0], WEIGHTED_SHEET);
 });
+
+// عطاء يلزمه التوزين: فقرتان من ثلاث منحرفتان للأعلى فوق 20% (أكثر من 10% من الفقرات) والانحراف الكلي دون حد الاستبعاد
+const weightingRaw = [
+  { itemNo: 1, description: 'أ', quantity: 1, estimatedTotal: 1000, bidderTotal: 1300, enteredUnitPrice: 1300, enteredBidderTotal: 1300 },
+  { itemNo: 2, description: 'ب', quantity: 1, estimatedTotal: 1000, bidderTotal: 1300, enteredUnitPrice: 1300, enteredBidderTotal: 1300 },
+  { itemNo: 3, description: 'ج', quantity: 1, estimatedTotal: 1000, bidderTotal: 800, enteredUnitPrice: 800, enteredBidderTotal: 800 }
+];
+const mkWeighting = (extra: Partial<Bidder> = {}): Bidder => {
+  const { items, totals } = calculateBOQMetrics(weightingRaw, 20);
+  return { id: 'w', name: 'نبض', submissionDate: '2026-10-10', items, totals, status: 'pending', ...extra };
+};
+
+test('بلا عرض موزون: الجدول الموزون بالمعادلة يُكتب حين يلزم التوزين كما في المحضر، وبقبول العطاء كما هو لا', () => {
+  const w = mkWeighting();
+  const p = proj([w]);
+  const t = offerSheetTarget(p);
+  assert.equal(t.bidder?.id, 'w');
+  assert.equal(t.source, 'formula');
+  const wb = buildTenderWorkbook(p, w);
+  assert.equal(wb.SheetNames[0], WEIGHTED_SHEET);
+  const ws = wb.Sheets[WEIGHTED_SHEET];
+  const cells = Object.values(ws).map((c: any) => c && c.v).filter(Boolean);
+  for (const h of ['ت', 'وصف الفقرة', 'المفرد الموزون', 'المبلغ الموزون']) assert.ok(cells.includes(h), h);
+  const sum = Object.values(ws).find((c: any) => c && typeof c.f === 'string' && c.f.startsWith('SUM(')) as any;
+  assert.equal(sum.v, w.items.reduce((s, i) => s + i.newPrice, 0));
+  // قبول العطاء كما هو (حالة mk): لا ورقة
+  assert.equal(offerSheetTarget(proj([mk('a', 'أ')])).source, undefined);
+  // عرض موقوف يعود إلى المعادلة، وعرض فعّال يغلب المعادلة
+  assert.equal(offerSheetTarget(proj([mkWeighting({ weightedOffer: offer('paused') })])).source, 'formula');
+  assert.equal(offerSheetTarget(proj([mkWeighting({ weightedOffer: offer('active') })])).source, 'offer');
+});

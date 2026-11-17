@@ -111,8 +111,8 @@ export function buildTenderWorkbook(project: TenderProject, activeBidder: Bidder
   const wb = XLSX.utils.book_new();
   const usedSheetNames = new Set<string>();
 
-  const target = offerSheetTarget(project).bidder;
-  const weightedSheet = target ? buildOfferApprovalSheet(project, target) : null;
+  const { bidder: target, source } = offerSheetTarget(project);
+  const weightedSheet = target ? buildOfferApprovalSheet(project, target, source) : null;
   if (weightedSheet) {
     usedSheetNames.add(WEIGHTED_SHEET);
     XLSX.utils.book_append_sheet(wb, weightedSheet, WEIGHTED_SHEET);

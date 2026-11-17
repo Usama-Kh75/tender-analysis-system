@@ -82,10 +82,16 @@ export function rankGeminiModels(names: string[]): string[] {
 /** رد Google 402: رصيد الحساب المدفوع مسبقاً صفر، أو لم يُفعَّل الدفع. ينطبق على كل النماذج */
 export const GEMINI_CREDIT_MESSAGE = 'نفد رصيد حسابك في Google (402) أو لم يُفعَّل الدفع فيه. أضف رصيداً من aistudio.google.com/billing ثم أعد المحاولة.';
 export const GEMINI_QUOTA_MESSAGE = 'نفدت حصة الطلبات في Gemini مؤقتاً (429). انتظر دقيقة أو دقيقتين ثم أعد القراءة.';
+/** رد Google 429 بنص «spending cap»: سقف الإنفاق الشهري للمشروع كله، فالانتظار دقيقة لا يفيد وكل النماذج ترفض */
+export const GEMINI_SPEND_CAP_MESSAGE = 'بلغ مشروعك في Google سقف الإنفاق الشهري (429). ارفع السقف من ai.studio/spend أو انتظر تجدّد الشهر، ثم أعد القراءة.';
 
-/** يصنّف رسالة خطأ Gemini: مفتاح غير صالح، أو رصيد منتهٍ، أو حصة طلبات، وإلا null */
-export function geminiFailureKind(message: string): 'key' | 'credit' | 'quota' | null {
+/** نص رد 429 يخص سقف الإنفاق الشهري لا حصة الدقيقة */
+export const isSpendCapBody = (body: string): boolean => /spending cap/i.test(body);
+
+/** يصنّف رسالة خطأ Gemini: مفتاح غير صالح، أو رصيد منتهٍ، أو سقف إنفاق، أو حصة طلبات، وإلا null */
+export function geminiFailureKind(message: string): 'key' | 'credit' | 'spendCap' | 'quota' | null {
   if (/\(402\)|PAYMENT_REQUIRED/i.test(message)) return 'credit';
+  if (isSpendCapBody(message) || message.includes(GEMINI_SPEND_CAP_MESSAGE)) return 'spendCap';
   if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED|\(40[13]\)/i.test(message)) return 'key';
   if (/\(429\)|RESOURCE_EXHAUSTED|quota/i.test(message)) return 'quota';
   return null;
@@ -138,7 +144,10 @@ export async function testGeminiApiKey(apiKey: string, probe = false): Promise<{
         body: JSON.stringify({ contents: [{ parts: [{ text: 'ok' }] }], generationConfig: { maxOutputTokens: 8 } })
       });
       if (test.status === 402) return { success: false, message: GEMINI_CREDIT_MESSAGE, models: modelsList };
-      if (test.status === 429) return { success: false, message: GEMINI_QUOTA_MESSAGE, models: modelsList };
+      if (test.status === 429) {
+        const body = await test.text().catch(() => '');
+        return { success: false, message: isSpendCapBody(body) ? GEMINI_SPEND_CAP_MESSAGE : GEMINI_QUOTA_MESSAGE, models: modelsList };
+      }
     }
 
     return {
@@ -457,6 +466,7 @@ const toInlinePart = (dataUrl: string) => {
 };
 
 class CreditExhaustedError extends Error {}
+class SpendCapError extends Error {}
 
 // نماذج رفضت صيغة الرد الإلزامية في هذه الجلسة: تُطلب بلا مخطط مباشرة بدل طلب مرفوض لكل دفعة
 const modelsWithoutSchema = new Set<string>();
@@ -518,6 +528,8 @@ async function requestGeminiRows(
           continue;
         }
         if (response.status === 429) {
+          // سقف الإنفاق الشهري للمشروع كله: لا إعادة محاولة ولا نموذج آخر، يتوقف عند أول طلب
+          if (isSpendCapBody(await response.text().catch(() => ''))) throw new SpendCapError();
           hadRateLimitError = true;
           errorReports.push(`${model}: تجاوزت الحد المسموح من الطلبات في الدقيقة (429)`);
           if (!rateRetried) {
@@ -538,6 +550,7 @@ async function requestGeminiRows(
         break;
       } catch (err: any) {
         if (err instanceof CreditExhaustedError) throw new Error(GEMINI_CREDIT_MESSAGE);
+        if (err instanceof SpendCapError) throw new Error(GEMINI_SPEND_CAP_MESSAGE);
         errorReports.push(`${model}: تعذر الاتصال بالإنترنت - ${err.message}`);
         break;
       }
