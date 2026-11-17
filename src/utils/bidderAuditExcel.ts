@@ -8,6 +8,7 @@ import { exclusionThresholdOf, buildRecommendation, hasBidAmounts } from './reco
 import { summarizePages } from './pageSummary';
 import { assessBalance, correctedBalanceRows, isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
+import { downloadXlsx } from './xlsxPrint';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -96,6 +97,7 @@ interface SheetLayout {
   wrap?: number[];                         // أعمدة نص طويل يلتف
   filter?: boolean;
   vertical?: 'top' | 'center';             // محاذاة البيانات رأسياً (الافتراضي: وسط)
+  orientation?: 'portrait' | 'landscape';  // اتجاه الطباعة (الافتراضي: أفقي)
 }
 
 // العنوان (الصف 1) وسطرا التعريف والشرح (2 و3) مدمجة بعرض الجدول، ثم الرؤوس، ثم البيانات بحدود، ثم أسطر المجاميع
@@ -117,7 +119,7 @@ export function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet 
       const own = cell.s || {};
       const font = { name: FONT, sz: 10, color: { rgb: TEXT }, ...(own.font || {}) };
       if (r === 0) {
-        cell.s = { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } };
+        cell.s = { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
       } else if (r < header) {
         cell.s = { font: { name: FONT, sz: 9, color: { rgb: NOTE_COLOR } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
       } else if (r === header) {
@@ -147,8 +149,21 @@ export function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet 
   ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: lastCol } });
   ws['!cols'] = widths.map(wch => ({ wch }));
   ws['!merges'] = [0, 1, 2].filter(r => r < header).map(r => ({ s: { r, c: 0 }, e: { r, c: lastCol } }));
+  // الصفوف المدمجة لا يضبط Excel ارتفاعها تلقائياً: يُحسب من طول النص وعرض الجدول كي لا يُقصّ
+  const totalWidth = widths.reduce((s, w) => s + w, 0);
+  const fitHeight = (text: unknown, sz: number, width: number, min: number) => {
+    const perLine = Math.max(1, width * (10 / sz) * 0.95);
+    const lines = Math.max(1, Math.ceil((typeof text === 'string' ? text.length : 0) / perLine));
+    return Math.max(min, Math.ceil(lines * sz * 1.35 + 4));
+  };
   ws['!rows'] = [{ hpt: 22 }, { hpt: 18 }, { hpt: 30 }];
-  ws['!rows'][header] = { hpt: 32 };
+  [[0, 14], [1, 9], [2, 9]].forEach(([r, sz]) => {
+    if (r < header) ws['!rows']![r] = { hpt: fitHeight(rows[r]?.[0], sz, totalWidth, ws['!rows']![r].hpt!) };
+  });
+  const headerH = (rows[header] || []).reduce<number>((m, v, c) => Math.max(m, fitHeight(v, 10, widths[c] ?? 10, 32)), 32);
+  ws['!rows'][header] = { hpt: headerH };
+  ws['!margins'] = { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 };
+  ws['!print'] = { orientation: layout.orientation ?? 'landscape', repeatRow: header };
   if (layout.filter && dataTo >= dataFrom) {
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: header, c: 0 }, e: { r: dataTo, c: lastCol } }) };
   }
@@ -534,7 +549,7 @@ export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder, 
   ], {
     widths: [6, 52, 10, 12, 20, 22],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + items.length,
-    center: [0, 2], wrap: [1], filter: false
+    center: [0, 2], wrap: [1], filter: false, orientation: 'portrait'
   });
 }
 
@@ -587,7 +602,7 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
 export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder) {
   const wb = buildBidderAuditWorkbook(project, bidder);
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
-  XLSX.writeFile(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
+  downloadXlsx(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }
 
 // المجهز الذي تُكتب له ورقة «الجدول الموزون» في تصدير الخلاصة: الموصى بترسيته فقط (اختيار اللجنة أو الأدنى المؤهل).

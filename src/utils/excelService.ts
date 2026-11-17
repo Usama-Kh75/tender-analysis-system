@@ -3,6 +3,7 @@ import { BOQItem, TenderProject, Bidder } from '../types/tender';
 import { hasBidAmounts, exclusionThresholdOf } from './recommendation';
 import { percentDecimals } from './calculations';
 import { tenderDetailParts } from './tenderDetails';
+import { downloadXlsx } from './xlsxPrint';
 import { buildOfferApprovalSheet, offerSheetTarget, buildSheet, amount, unitCell, markRtl, type Cell } from './bidderAuditExcel';
 
 // أسماء أوراق Excel محدودة بـ 31 محرفاً ولا تقبل الرموز \ / ? * [ ]
@@ -196,7 +197,7 @@ export function buildTenderWorkbook(project: TenderProject, activeBidder: Bidder
 }
 
 export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder) {
-  XLSX.writeFile(buildTenderWorkbook(project, activeBidder), `${project.title || 'تحليل_العطاءات'}.xlsx`);
+  downloadXlsx(buildTenderWorkbook(project, activeBidder), `${project.title || 'تحليل_العطاءات'}.xlsx`);
 }
 
 export async function importBOQFromExcel(file: File, _threshold: number = 20): Promise<Partial<BOQItem>[]> {
