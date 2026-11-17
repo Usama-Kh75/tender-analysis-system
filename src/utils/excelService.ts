@@ -37,8 +37,8 @@ function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive
     'ملاحظات'
   ];
 
-  // القيم كما كانت تماماً (النسب نص)، والتنسيق وحده جديد: الأرقام بفواصل آلاف بلا E+، والمفردات بحتى أربع منازل
-  const num = (v: number | undefined, unit = false): Cell => (v === undefined || !Number.isFinite(v)) ? v : unit ? unitCell(v) : amount(v);
+  // القيم كما كانت تماماً (النسب نص)، والتنسيق وحده جديد: الأرقام بفواصل آلاف بلا E+، والمفردات والكميات بحتى أربع منازل عرضاً فقط، والقيمة المخزّنة كما هي بلا تقريب (مراجعة Codex)
+  const num = (v: number | undefined, unit = false): Cell => (v === undefined || !Number.isFinite(v)) ? v : unit ? { ...unitCell(v), v } : amount(v);
   const rows: Cell[][] = bidder.items.map(item => [
     typeof item.itemNo === 'number' ? { t: 'n' as const, v: item.itemNo, z: Number.isInteger(item.itemNo) ? '0' : 'General' } : item.itemNo,
     item.description,

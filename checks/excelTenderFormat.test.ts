@@ -122,3 +122,13 @@ test('رقم الفقرة العشري (1.1) يُكتب بتنسيق لا يقر
     for (const c of cells) assert.equal(c.z, 'General', `${name}: ${c.v} بتنسيق ${c.z}`);
   }
 });
+
+test('ورقة المجهز: الكمية والمفرد بقيمتهما الكاملة بلا تقريب إلى أربع منازل (مراجعة Codex)', () => {
+  const { items, totals } = calculateBOQMetrics([
+    { itemNo: 1, description: 'أ', quantity: 1.234567, estimatedTotal: 100, bidderTotal: 100, enteredUnitPrice: 81.0001234, enteredBidderTotal: 100 }
+  ], 20);
+  const a: Bidder = { id: 'a', name: 'أ', submissionDate: '2026-10-10', items, totals, status: 'pending' };
+  const sheet = buildTenderWorkbook(proj([a]), a).Sheets['أ'] as any;
+  const vals = Object.values(sheet).filter((c: any) => c && c.t === 'n').map((c: any) => c.v);
+  assert.ok(vals.includes(1.234567), 'الكمية قُرّبت');
+});
