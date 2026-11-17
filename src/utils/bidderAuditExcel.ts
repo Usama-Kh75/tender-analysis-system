@@ -592,6 +592,6 @@ export function buildOfferApprovalWorkbook(project: TenderProject, bidder: Bidde
 export function exportOfferApprovalToExcel(project: TenderProject, bidder: Bidder) {
   const wb = buildOfferApprovalWorkbook(project, bidder);
   if (!wb) return;
-  const safe = (s: string) => s.replace(/[\/:*?"<>|]/g, ' ').trim();
+  const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
   XLSX.writeFile(wb, `${safe(`العرض الموزون ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }
