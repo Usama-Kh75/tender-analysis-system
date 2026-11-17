@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx-js-style';
 import { calculateBOQMetrics } from '../src/utils/calculations';
 import { buildTenderWorkbook, WEIGHTED_SHEET } from '../src/utils/excelService';
 import { xlsxBytes } from '../src/utils/xlsxPrint';
+import { buildStatusSheetWorkbook } from '../src/utils/statusSheetExcel';
 import type { Bidder, TenderProject } from '../src/types/tender';
 
 const raw = [
@@ -75,6 +76,25 @@ test('إعداد الطباعة: استدعاء xlsxBytes مرتين لا يكر
       if (k.startsWith('!') || !c || c.v === '' || c.v === undefined) continue;
       assert.equal(got[k]?.v, c.v, `${name}!${k}`);
     }
+  }
+});
+
+test('كشف الموقف: A4 أفقي وملاءمة العرض وتكرار صف الرؤوس (يتبع اسم اللجنة) والترقيم', () => {
+  const rows = [
+    { kind: 'tender', id: 'a', no: 1, referenceNumber: '1 / 26 / 100', title: 'طلبية', announcement: '', receivedAt: '', action: 'قيد التحليل', memoNo: '', date: '', note: '' },
+    { kind: 'tender', id: 'b', no: 2, referenceNumber: '2 / 26 / 100', title: 'طلبية ثانية', announcement: '', receivedAt: '', action: 'تدقيق', memoNo: '', date: '', note: '' }
+  ] as unknown as Parameters<typeof buildStatusSheetWorkbook>[0];
+  for (const [committee, headerRow] of [[null, 2], ['لجنة التحليل', 3]] as const) {
+    const wb = buildStatusSheetWorkbook(rows, '2026-11-17', undefined, committee);
+    const { text } = read(wb);
+    const xml = text('xl/worksheets/sheet1.xml');
+    assert.match(xml, /<sheetPr><pageSetUpPr fitToPage="1"\/><\/sheetPr>/);
+    assert.match(xml, /<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"\/>/);
+    assert.match(xml, /<oddFooter>[^<]*صفحة &amp;P من &amp;N<\/oddFooter>/);
+    assert.match(xml, /<sheetView [^>]*rightToLeft="1"/);
+    const ref = text('xl/workbook.xml').match(/<definedName name="_xlnm.Print_Titles" localSheetId="0">([^<]*)<\/definedName>/);
+    assert.ok(ref, 'لا Print_Titles');
+    assert.match(ref![1], new RegExp(`\\$${headerRow}:\\$${headerRow}$`), `صف الرؤوس ${headerRow} عند ${committee ?? 'بلا اسم'}`);
   }
 });
 
