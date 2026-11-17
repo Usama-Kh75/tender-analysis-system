@@ -475,7 +475,7 @@ const unitCell = (v: number): XLSX.CellObject => {
 
 // ورقة اعتماد المجهز للعرض الموزون: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه فقط، ليضع المجهز أسعار
 // عطائه عليها ويوقّع ويختم. تظهر مع عرض فعّال أو معتمد (الموقوف لا يُعرض). المجموع بصيغة Excel
-function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
+export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
   if (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused') return null;
   const items = bidder.items;
   const last = FIRST + items.length - 1;
@@ -496,7 +496,7 @@ function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.W
   const tail = (label: string, value: Cell): Cell[] => [label, '', '', '', '', value];
 
   return buildSheet([
-    [`اعتماد العرض الموزون: ${bidder.name}`],
+    [`الجدول الموزون: ${bidder.name}${project.title ? ` — ${project.title}` : ''}${project.referenceNumber ? ` — رقم الطلبية: ${project.referenceNumber}` : ''}`],
     [projectLine(project)],
     [note],
     [],
@@ -507,7 +507,9 @@ function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.W
     ...(Math.abs(gap) >= 0.005 ? [tail('الفرق عن مبلغ العطاء بعد التصحيح الحسابي', amount(gap))] : []),
     [],
     ['اسم المجهز: ' + bidder.name],
-    ['اسم المفوض بالتوقيع: ………………………………   التوقيع: ………………………   الختم: ………………………   التاريخ: ……… / ……… / ………']
+    ['اسم المفوض بالتوقيع: ………………………………………………'],
+    ['التوقيع: ………………………………   الختم: ………………………………'],
+    ['التاريخ: ……… / ……… / ………']
   ], {
     widths: [6, 52, 10, 12, 20, 22],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + items.length,
@@ -568,34 +570,12 @@ export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder)
   XLSX.writeFile(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }
 
-// المجهز الذي تُصدَّر له ورقة العرض الموزون من الخلاصة: الموصى به (الأدنى المؤهل أو اختيار اللجنة).
-// يُحسب هنا مرة واحدة: الواجهة تقرأ منه سبب التعطيل، والتصدير يقرأ منه المجهز
-export function offerSheetTarget(project: TenderProject): { bidder?: Bidder; reason?: string } {
+// المجهز الذي تُكتب له ورقة «الجدول الموزون» في تصدير الخلاصة: الموصى بترسيته فقط (اختيار اللجنة أو الأدنى المؤهل).
+// primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل قبل اختيار اللجنة،
+// فلا يصحّ مجهزاً «موصى به» (مراجعة Codex 2026-11-17). بلا مجهز لا تُكتب الورقة
+export function offerSheetTarget(project: TenderProject): { bidder?: Bidder } {
   const rec = buildRecommendation(project);
-  // primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل (قبل اختيار اللجنة)
-  // فلا يصحّ مجهزاً «موصى به»؛ الورقة لمن أُوصي بترسيته فقط (مراجعة Codex 2026-11-17)
-  if (rec.kind === 'tie') return { reason: 'تعادل في العطاءات المتقاربة: اختر العطاء للترسية أولاً' };
   const primary = rec.kind === 'award' ? rec.primary : undefined;
-  if (!primary) return { reason: 'لا عطاء موصى به بعد' };
-  if (!primary.weightedOffer) return { reason: `لا عرض موزون للمجهز الموصى به (${primary.name})` };
-  if (primary.weightedOffer.status === 'paused') return { reason: 'العرض الموزون موقوف' };
-  if (!hasBidAmounts(primary)) return { reason: `لا مبالغ للمجهز الموصى به (${primary.name})` };
+  if (!primary || !primary.weightedOffer || primary.weightedOffer.status === 'paused' || !hasBidAmounts(primary)) return {};
   return { bidder: primary };
-}
-
-// مصنف بورقة واحدة: «اعتماد العرض الموزون» نفسها التي في تصدير الجدول
-export function buildOfferApprovalWorkbook(project: TenderProject, bidder: Bidder): XLSX.WorkBook | null {
-  const sheet = buildOfferApprovalSheet(project, bidder);
-  if (!sheet) return null;
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheet, 'اعتماد العرض الموزون');
-  wb.Workbook = { Views: [{ RTL: true }] };
-  return wb;
-}
-
-export function exportOfferApprovalToExcel(project: TenderProject, bidder: Bidder) {
-  const wb = buildOfferApprovalWorkbook(project, bidder);
-  if (!wb) return;
-  const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
-  XLSX.writeFile(wb, `${safe(`العرض الموزون ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }

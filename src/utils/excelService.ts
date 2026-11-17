@@ -3,6 +3,7 @@ import { BOQItem, TenderProject, Bidder } from '../types/tender';
 import { hasBidAmounts, exclusionThresholdOf } from './recommendation';
 import { percentDecimals } from './calculations';
 import { tenderDetailParts } from './tenderDetails';
+import { buildOfferApprovalSheet, offerSheetTarget } from './bidderAuditExcel';
 
 // أسماء أوراق Excel محدودة بـ 31 محرفاً ولا تقبل الرموز \ / ? * [ ]
 function sanitizeSheetName(name: string, usedNames: Set<string>): string {
@@ -91,9 +92,20 @@ function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive
   ]);
 }
 
-export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder) {
+export const WEIGHTED_SHEET = 'الجدول الموزون';
+
+// مصنف «تصدير Excel» من الخلاصة. «الجدول الموزون» أولى الأوراق، للمجهز الموصى بترسيته بعرض موزون غير موقوف؛
+// وإن لم يوجد بقي المصنف كما كان
+export function buildTenderWorkbook(project: TenderProject, activeBidder: Bidder): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
   const usedSheetNames = new Set<string>();
+
+  const target = offerSheetTarget(project).bidder;
+  const weightedSheet = target ? buildOfferApprovalSheet(project, target) : null;
+  if (weightedSheet) {
+    usedSheetNames.add(WEIGHTED_SHEET);
+    XLSX.utils.book_append_sheet(wb, weightedSheet, WEIGHTED_SHEET);
+  }
 
   // ورقة تفصيلية كاملة لكل مجهز على حدة (المجهز النشط أولاً)
   const orderedBidders = [activeBidder, ...project.bidders.filter(b => b.id !== activeBidder.id)];
@@ -159,7 +171,12 @@ export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder
     XLSX.utils.book_append_sheet(wb, auditWs, 'سجل التتبع');
   }
 
-  XLSX.writeFile(wb, `${project.title || 'تحليل_العطاءات'}.xlsx`);
+  if (weightedSheet) wb.Workbook = { Views: [{ RTL: true }] };
+  return wb;
+}
+
+export function exportTenderToExcel(project: TenderProject, activeBidder: Bidder) {
+  XLSX.writeFile(buildTenderWorkbook(project, activeBidder), `${project.title || 'تحليل_العطاءات'}.xlsx`);
 }
 
 export async function importBOQFromExcel(file: File, _threshold: number = 20): Promise<Partial<BOQItem>[]> {
