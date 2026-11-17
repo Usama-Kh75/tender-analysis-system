@@ -71,10 +71,13 @@ const pct = (v: number, decimals = 2): XLSX.CellObject => {
 const ratio = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0.0000', s: { numFmt: '0.0000' } });
 const count = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0' });
 
-// رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»)
+// رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»).
+// التنسيق «0» للصحيح وحده: الفقرة 1.1 بالتنسيق «0» تظهر «1» (وجدته فحص الملف في Excel 2026-11-17)
 const itemNoCell = (itemNo: number | string): Cell => {
   const n = Number(itemNo);
-  return Number.isFinite(n) && String(n) === String(itemNo).trim() ? { t: 'n', v: n, z: '0' } : String(itemNo);
+  return Number.isFinite(n) && String(n) === String(itemNo).trim()
+    ? { t: 'n', v: n, z: Number.isInteger(n) ? '0' : 'General' }
+    : String(itemNo);
 };
 
 // اتجاه كل أوراق المصنف من اليمين إلى اليسار: المكتبة تكتب rightToLeft="1" في sheetView كل ورقة من Workbook.Views[0].RTL

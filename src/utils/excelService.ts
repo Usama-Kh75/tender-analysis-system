@@ -40,7 +40,7 @@ function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive
   // القيم كما كانت تماماً (النسب نص)، والتنسيق وحده جديد: الأرقام بفواصل آلاف بلا E+، والمفردات بحتى أربع منازل
   const num = (v: number | undefined, unit = false): Cell => (v === undefined || !Number.isFinite(v)) ? v : unit ? unitCell(v) : amount(v);
   const rows: Cell[][] = bidder.items.map(item => [
-    typeof item.itemNo === 'number' ? { t: 'n' as const, v: item.itemNo, z: '0' } : item.itemNo,
+    typeof item.itemNo === 'number' ? { t: 'n' as const, v: item.itemNo, z: Number.isInteger(item.itemNo) ? '0' : 'General' } : item.itemNo,
     item.description,
     item.unit,
     num(item.quantity, true),
@@ -53,7 +53,7 @@ function buildBidderDetailSheet(project: TenderProject, bidder: Bidder, isActive
     num(item.deviatedAmount),
     item.priceRatio.toFixed(4),
     num(item.newPrice),
-    item.weightedUnitPrice.toFixed(2),
+    num(Number(item.weightedUnitPrice.toFixed(2))),
     item.notes || ''
   ]);
   const dataTo = 3 + rows.length;

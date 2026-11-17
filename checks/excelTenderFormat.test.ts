@@ -106,3 +106,19 @@ test('مصنف تصدير الجدول: كل ورقة من اليمين إلى �
   assert.ok(sheets.length >= 4);
   for (const f of sheets) assert.match(files[f], /<sheetView [^>]*rightToLeft="1"/, f);
 });
+
+// وجدها فحص الملف في Excel: تنسيق «0» لرقم الفقرة كان يُظهر 1.1 «1» و1.5 «2»
+test('رقم الفقرة العشري (1.1) يُكتب بتنسيق لا يقرّبه في كل أوراق الخلاصة', () => {
+  const { items, totals } = calculateBOQMetrics([
+    { itemNo: 1, description: 'أ', quantity: 1, estimatedTotal: 100, bidderTotal: 100, enteredUnitPrice: 100, enteredBidderTotal: 100 },
+    { itemNo: 1.1, description: 'ب', quantity: 1, estimatedTotal: 100, bidderTotal: 100, enteredUnitPrice: 100, enteredBidderTotal: 100 },
+    { itemNo: 1.5, description: 'ج', quantity: 1, estimatedTotal: 100, bidderTotal: 100, enteredUnitPrice: 100, enteredBidderTotal: 100 }
+  ], 20);
+  const a: Bidder = { id: 'a', name: 'أ', submissionDate: '2026-10-10', items, totals, status: 'pending', weightedOffer: offer('active') };
+  const wb = buildTenderWorkbook(proj([a]), a);
+  for (const name of [WEIGHTED_SHEET, 'أ']) {
+    const cells = Object.values(wb.Sheets[name]).filter((c: any) => c && c.t === 'n' && (c.v === 1.1 || c.v === 1.5)) as any[];
+    assert.ok(cells.length >= 2, `${name}: لم أجد خليتي 1.1 و1.5`);
+    for (const c of cells) assert.equal(c.z, 'General', `${name}: ${c.v} بتنسيق ${c.z}`);
+  }
+});
