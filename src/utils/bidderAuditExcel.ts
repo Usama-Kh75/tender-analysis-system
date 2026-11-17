@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { toLatinDigits, percentDecimals } from './calculations';
-import { exclusionThresholdOf } from './recommendation';
+import { exclusionThresholdOf, buildRecommendation, hasBidAmounts } from './recommendation';
 import { summarizePages } from './pageSummary';
 import { isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
@@ -566,4 +566,36 @@ export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder)
   const wb = buildBidderAuditWorkbook(project, bidder);
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
   XLSX.writeFile(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
+}
+
+// المجهز الذي تُصدَّر له ورقة العرض الموزون من الخلاصة: الموصى به (الأدنى المؤهل أو اختيار اللجنة).
+// يُحسب هنا مرة واحدة: الواجهة تقرأ منه سبب التعطيل، والتصدير يقرأ منه المجهز
+export function offerSheetTarget(project: TenderProject): { bidder?: Bidder; reason?: string } {
+  const rec = buildRecommendation(project);
+  // primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل (قبل اختيار اللجنة)
+  // فلا يصحّ مجهزاً «موصى به»؛ الورقة لمن أُوصي بترسيته فقط (مراجعة Codex 2026-11-17)
+  if (rec.kind === 'tie') return { reason: 'تعادل في العطاءات المتقاربة: اختر العطاء للترسية أولاً' };
+  const primary = rec.kind === 'award' ? rec.primary : undefined;
+  if (!primary) return { reason: 'لا عطاء موصى به بعد' };
+  if (!primary.weightedOffer) return { reason: `لا عرض موزون للمجهز الموصى به (${primary.name})` };
+  if (primary.weightedOffer.status === 'paused') return { reason: 'العرض الموزون موقوف' };
+  if (!hasBidAmounts(primary)) return { reason: `لا مبالغ للمجهز الموصى به (${primary.name})` };
+  return { bidder: primary };
+}
+
+// مصنف بورقة واحدة: «اعتماد العرض الموزون» نفسها التي في تصدير الجدول
+export function buildOfferApprovalWorkbook(project: TenderProject, bidder: Bidder): XLSX.WorkBook | null {
+  const sheet = buildOfferApprovalSheet(project, bidder);
+  if (!sheet) return null;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, 'اعتماد العرض الموزون');
+  wb.Workbook = { Views: [{ RTL: true }] };
+  return wb;
+}
+
+export function exportOfferApprovalToExcel(project: TenderProject, bidder: Bidder) {
+  const wb = buildOfferApprovalWorkbook(project, bidder);
+  if (!wb) return;
+  const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
+  XLSX.writeFile(wb, `${safe(`العرض الموزون ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }
