@@ -6,7 +6,7 @@ import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicT
 import { toLatinDigits, percentDecimals } from './calculations';
 import { exclusionThresholdOf, buildRecommendation, hasBidAmounts } from './recommendation';
 import { summarizePages } from './pageSummary';
-import { isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
+import { assessBalance, correctedBalanceRows, isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
 
 /**
@@ -486,35 +486,45 @@ export const unitCell = (v: number): XLSX.CellObject => {
 
 // ورقة اعتماد المجهز للعرض الموزون: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه فقط، ليضع المجهز أسعار
 // عطائه عليها ويوقّع ويختم. تظهر مع عرض فعّال أو معتمد (الموقوف لا يُعرض). المجموع بصيغة Excel
-export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
-  if (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused') return null;
+// source 'formula': لا عرض موزون بدأ، فالأسعار الموزونة بالمعادلة (التخميني × النسبة السعرية، المسوّاة) كما يطبعها المحضر
+// حين يلزم التوزين؛ والفقرة بلا كلفة تخمينية شرطة كما في المحضر
+export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder, source: 'offer' | 'formula' = 'offer'): XLSX.WorkSheet | null {
+  const byFormula = source === 'formula';
+  if (!byFormula && (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused')) return null;
   const items = bidder.items;
   const last = FIRST + items.length - 1;
-  const final = isOfferFinal(bidder);
+  const final = !byFormula && isOfferFinal(bidder);
+  const rowUnit = (item: BOQItem) => byFormula ? item.weightedUnitPrice
+    : item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
+  const rowTotal = (item: BOQItem) => byFormula ? item.newPrice : item.offerTotal ?? item.bidderTotal;
   const data: Cell[][] = items.map(item => {
     // غير مسعّرة بلا سعر في العرض: شرطة. أما العرض المنطلق من المعادلة فقد يسعّر الفقرة، فيُعرض سعره ليطابق المجموع
-    if (item.unpriced && !((item.offerTotal ?? 0) > 0)) return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
-    const unit = item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
+    if (byFormula ? !(item.estimatedTotal > 0) : item.unpriced && !((item.offerTotal ?? 0) > 0)) {
+      return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
+    }
     return [
       itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity),
-      unitCell(unit), amount(item.offerTotal ?? item.bidderTotal)
+      unitCell(rowUnit(item)), amount(rowTotal(item))
     ];
   });
-  const offerSum = round2(items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0));
+  const offerSum = round2(items.reduce((s, i) => s + (byFormula && !(i.estimatedTotal > 0) ? 0 : rowTotal(i)), 0));
   const gap = round2(offerSum - bidder.totals.totalBidderAmount);
-  const note = 'للمجهز: يُعتمد هذا الجدول بأسعار العرض الموزون الجديدة، وتُوضع بها أسعار عطائك. الوصف والوحدة والكمية كما في جدول العطاء.'
-    + (final ? '' : ' تنبيه: العرض الموزون لم يُعتمد نهائياً من اللجنة بعد، فالأسعار غير نهائية.');
+  const note = byFormula
+    ? 'للمجهز: الأسعار الموزونة بالمعادلة (الكلفة التخمينية × النسبة السعرية) كما في جدول المحضر، لأن عطاءك يحتاج توزيناً (ضوابط رقم (4) سادساً/5). لم يُبدأ عرض موزون رسمي بعد، فالأسعار غير نهائية. الوصف والوحدة والكمية كما في جدول العطاء.'
+    : 'للمجهز: يُعتمد هذا الجدول بأسعار العرض الموزون الجديدة، وتُوضع بها أسعار عطائك. الوصف والوحدة والكمية كما في جدول العطاء.'
+      + (final ? '' : ' تنبيه: العرض الموزون لم يُعتمد نهائياً من اللجنة بعد، فالأسعار غير نهائية.');
   const tail = (label: string, value: Cell): Cell[] => [label, '', '', '', '', value];
+  const noun = byFormula ? 'الموزون' : 'العرض الموزون';
 
   return buildSheet([
     [`الجدول الموزون: ${bidder.name}${project.title ? ` — ${project.title}` : ''}${project.referenceNumber ? ` — رقم الطلبية: ${project.referenceNumber}` : ''}`],
     [projectLine(project)],
     [note],
     [],
-    ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', 'مفرد العرض الموزون', 'مبلغ العرض الموزون'],
+    ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', byFormula ? 'المفرد الموزون' : 'مفرد العرض الموزون', byFormula ? 'المبلغ الموزون' : 'مبلغ العرض الموزون'],
     ...data,
     [],
-    tail('مجموع العرض الموزون', formula(`SUM(F${FIRST}:F${last})`, offerSum)),
+    tail(`مجموع ${noun}`, formula(`SUM(F${FIRST}:F${last})`, offerSum)),
     ...(Math.abs(gap) >= 0.005 ? [tail('الفرق عن مبلغ العطاء بعد التصحيح الحسابي', amount(gap))] : []),
     [],
     ['اسم المجهز: ' + bidder.name],
@@ -582,10 +592,14 @@ export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder)
 
 // المجهز الذي تُكتب له ورقة «الجدول الموزون» في تصدير الخلاصة: الموصى بترسيته فقط (اختيار اللجنة أو الأدنى المؤهل).
 // primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل قبل اختيار اللجنة،
-// فلا يصحّ مجهزاً «موصى به» (مراجعة Codex 2026-11-17). بلا مجهز لا تُكتب الورقة
-export function offerSheetTarget(project: TenderProject): { bidder?: Bidder } {
+// فلا يصحّ مجهزاً «موصى به» (مراجعة Codex 2026-11-17). بلا مجهز لا تُكتب الورقة.
+// المصدر: عرضه الموزون (فعّال أو معتمد)، وإلا الأسعار الموزونة بالمعادلة حين يلزم توزين عطائه (سادساً/5)، وهو
+// شرط طباعة جدولها في المحضر (recommendationPieces.weightingNeeded)؛ فقبول العطاء كما هو لا جدول له
+export function offerSheetTarget(project: TenderProject): { bidder?: Bidder; source?: 'offer' | 'formula' } {
   const rec = buildRecommendation(project);
   const primary = rec.kind === 'award' ? rec.primary : undefined;
-  if (!primary || !primary.weightedOffer || primary.weightedOffer.status === 'paused' || !hasBidAmounts(primary)) return {};
-  return { bidder: primary };
+  if (!primary || !hasBidAmounts(primary)) return {};
+  if (primary.weightedOffer && primary.weightedOffer.status !== 'paused') return { bidder: primary, source: 'offer' };
+  const balance = assessBalance(correctedBalanceRows(primary.items), project.deviationThreshold, exclusionThresholdOf(project));
+  return balance.verdict === 'weighting-required' ? { bidder: primary, source: 'formula' } : {};
 }
