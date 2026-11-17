@@ -38,3 +38,26 @@ test('هدف الورقة: أسباب التعطيل والمجهز عند ال�
   assert.equal(ok.bidder?.id, 'a');
   assert.equal(ok.reason, undefined);
 });
+
+// مجهز بمبلغ الفقرة الواحدة المعطى (الكلفة التخمينية 1000): 1300 = +30% (إحالة)، 500 = -50% (إعادة طرح)
+const mkAmount = (id: string, name: string, amount: number, extra: Partial<Bidder> = {}): Bidder => {
+  const { items, totals } = calculateBOQMetrics(
+    [{ itemNo: 1, description: 'أ', quantity: 1, estimatedTotal: 1000, bidderTotal: amount, enteredUnitPrice: amount, enteredBidderTotal: amount }], 20);
+  return { id, name, submissionDate: '2026-10-10', items, totals, status: 'pending', ...extra };
+};
+
+test('هدف الورقة: لا مجهز في الإحالة ولا إعادة الطرح ولا التعادل ولا غير المؤهل', () => {
+  const withOffer = { weightedOffer: offer('active') };
+  const referral = offerSheetTarget(proj([mkAmount('a', 'أ', 1300, withOffer)]));
+  assert.equal(referral.bidder, undefined);
+  assert.match(referral.reason!, /لا عطاء موصى به/);
+  const retender = offerSheetTarget(proj([mkAmount('a', 'أ', 500, withOffer)]));
+  assert.equal(retender.bidder, undefined);
+  assert.match(retender.reason!, /لا عطاء موصى به/);
+  const tie = offerSheetTarget(proj([mkAmount('a', 'أ', 1000, withOffer), mkAmount('b', 'ب', 1000, withOffer)]));
+  assert.equal(tie.bidder, undefined);
+  assert.match(tie.reason!, /تعادل/);
+  // بعد اختيار اللجنة يصير المختار هو الهدف حتى مع التعادل
+  const chosen = offerSheetTarget(proj([mkAmount('a', 'أ', 1000, withOffer), mkAmount('b', 'ب', 1000, { ...withOffer, status: 'recommended' })]));
+  assert.equal(chosen.bidder?.id, 'b');
+});

@@ -571,7 +571,11 @@ export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder)
 // المجهز الذي تُصدَّر له ورقة العرض الموزون من الخلاصة: الموصى به (الأدنى المؤهل أو اختيار اللجنة).
 // يُحسب هنا مرة واحدة: الواجهة تقرأ منه سبب التعطيل، والتصدير يقرأ منه المجهز
 export function offerSheetTarget(project: TenderProject): { bidder?: Bidder; reason?: string } {
-  const primary = buildRecommendation(project).primary;
+  const rec = buildRecommendation(project);
+  // primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل (قبل اختيار اللجنة)
+  // فلا يصحّ مجهزاً «موصى به»؛ الورقة لمن أُوصي بترسيته فقط (مراجعة Codex 2026-11-17)
+  if (rec.kind === 'tie') return { reason: 'تعادل في العطاءات المتقاربة: اختر العطاء للترسية أولاً' };
+  const primary = rec.kind === 'award' ? rec.primary : undefined;
   if (!primary) return { reason: 'لا عطاء موصى به بعد' };
   if (!primary.weightedOffer) return { reason: `لا عرض موزون للمجهز الموصى به (${primary.name})` };
   if (primary.weightedOffer.status === 'paused') return { reason: 'العرض الموزون موقوف' };
