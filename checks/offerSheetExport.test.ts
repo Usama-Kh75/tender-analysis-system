@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { buildOfferApprovalWorkbook, offerSheetTarget } from '../src/utils/bidderAuditExcel';
-import type { Bidder, BOQItem, TenderProject, WeightedOfferState } from '../src/types/tender';
+import { offerSheetTarget } from '../src/utils/bidderAuditExcel';
+import { buildTenderWorkbook, WEIGHTED_SHEET } from '../src/utils/excelService';
+import type { Bidder, TenderProject, WeightedOfferState } from '../src/types/tender';
 
-const raw: Partial<BOQItem>[] = [
+const raw = [
   { itemNo: 1, description: 'أ', quantity: 2, estimatedTotal: 1000, bidderTotal: 1100, enteredUnitPrice: 550, enteredBidderTotal: 1100 },
   { itemNo: 2, description: 'ب', quantity: 1, estimatedTotal: 500, bidderTotal: 480, enteredUnitPrice: 480, enteredBidderTotal: 480 }
 ];
@@ -15,29 +16,8 @@ const mk = (id: string, name: string, extra: Partial<Bidder> = {}): Bidder => {
   return { id, name, submissionDate: '2026-10-10', items, totals, status: 'pending', ...extra };
 };
 const proj = (bidders: Bidder[]): TenderProject => ({
-  id: 'p', title: 'مناقصة', deviationThreshold: 20, currency: 'IQD', bidders, auditLogs: []
+  id: 'p', title: 'مناقصة', referenceNumber: '5 / 26 / 100', deviationThreshold: 20, currency: 'IQD', bidders, auditLogs: []
 } as unknown as TenderProject);
-
-test('المصنف: null بلا عرض أو مع عرض موقوف، وورقة واحدة مع عرض فعّال', () => {
-  assert.equal(buildOfferApprovalWorkbook(proj([mk('a', 'أ')]), mk('a', 'أ')), null);
-  const paused = mk('a', 'أ', { weightedOffer: offer('paused') });
-  assert.equal(buildOfferApprovalWorkbook(proj([paused]), paused), null);
-  const b = mk('a', 'أ', { weightedOffer: offer('active') });
-  const wb = buildOfferApprovalWorkbook(proj([b]), b)!;
-  assert.deepEqual(wb.SheetNames, ['اعتماد العرض الموزون']);
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const cells = Object.values(ws).map((c: any) => c && c.v).filter(Boolean);
-  for (const h of ['ت', 'وصف الفقرة', 'مبلغ العرض الموزون']) assert.ok(cells.includes(h), h);
-});
-
-test('هدف الورقة: أسباب التعطيل والمجهز عند الصلاحية', () => {
-  assert.match(offerSheetTarget(proj([])).reason!, /لا عطاء موصى به/);
-  assert.match(offerSheetTarget(proj([mk('a', 'شركة أ')])).reason!, /لا عرض موزون.*شركة أ/);
-  assert.match(offerSheetTarget(proj([mk('a', 'أ', { weightedOffer: offer('paused') })])).reason!, /موقوف/);
-  const ok = offerSheetTarget(proj([mk('a', 'أ', { weightedOffer: offer('active') })]));
-  assert.equal(ok.bidder?.id, 'a');
-  assert.equal(ok.reason, undefined);
-});
 
 // مجهز بمبلغ الفقرة الواحدة المعطى (الكلفة التخمينية 1000): 1300 = +30% (إحالة)، 500 = -50% (إعادة طرح)
 const mkAmount = (id: string, name: string, amount: number, extra: Partial<Bidder> = {}): Bidder => {
@@ -46,18 +26,52 @@ const mkAmount = (id: string, name: string, amount: number, extra: Partial<Bidde
   return { id, name, submissionDate: '2026-10-10', items, totals, status: 'pending', ...extra };
 };
 
-test('هدف الورقة: لا مجهز في الإحالة ولا إعادة الطرح ولا التعادل ولا غير المؤهل', () => {
+test('مصنف الخلاصة: «الجدول الموزون» أولى الأوراق مع عرض فعّال وتبقى بقية الأوراق', () => {
+  const a = mkAmount('a', 'أ', 900, { weightedOffer: offer('active') });
+  const b = mkAmount('b', 'ب', 1000);
+  const p = proj([a, b]);
+  const wb = buildTenderWorkbook(p, a);
+  assert.deepEqual(wb.SheetNames, [WEIGHTED_SHEET, 'أ', 'ب', 'مقارنة المجهزين']);
+  assert.equal(WEIGHTED_SHEET, 'الجدول الموزون');
+  const ws = wb.Sheets[WEIGHTED_SHEET];
+  const cells = Object.values(ws).map((c: any) => c && c.v).filter(Boolean);
+  for (const h of ['ت', 'وصف الفقرة', 'مفرد العرض الموزون', 'مبلغ العرض الموزون']) assert.ok(cells.includes(h), h);
+  assert.ok(cells.some(v => typeof v === 'string' && v.includes('أ') && v.includes('مناقصة') && v.includes('5 / 26 / 100')), 'العنوان');
+  // لا تنسيق علمي E+ في أي خلية، والمجموع بصيغة SUM
+  for (const [k, c] of Object.entries(ws) as [string, any][]) {
+    if (k.startsWith('!') || !c) continue;
+    if (c.z) assert.ok(!/E\+/i.test(c.z), `${k}: ${c.z}`);
+  }
+  assert.ok(Object.values(ws).some((c: any) => c && typeof c.f === 'string' && c.f.startsWith('SUM(')));
+  assert.equal((wb.Workbook as any).Views[0].RTL, true);
+});
+
+test('مصنف الخلاصة: لا ورقة موزونة بلا عرض أو مع عرض موقوف، والمصنف كما كان', () => {
+  const none = mk('a', 'أ');
+  assert.deepEqual(buildTenderWorkbook(proj([none]), none).SheetNames, ['أ']);
+  const paused = mk('a', 'أ', { weightedOffer: offer('paused') });
+  assert.deepEqual(buildTenderWorkbook(proj([paused]), paused).SheetNames, ['أ']);
+});
+
+test('هدف الورقة: المجهز عند الصلاحية، وغيابه بلا عرض أو موقوف', () => {
+  assert.equal(offerSheetTarget(proj([])).bidder, undefined);
+  assert.equal(offerSheetTarget(proj([mk('a', 'شركة أ')])).bidder, undefined);
+  assert.equal(offerSheetTarget(proj([mk('a', 'أ', { weightedOffer: offer('paused') })])).bidder, undefined);
+  assert.equal(offerSheetTarget(proj([mk('a', 'أ', { weightedOffer: offer('active') })])).bidder?.id, 'a');
+});
+
+test('لا ورقة موزونة في الإحالة ولا إعادة الطرح ولا التعادل، وتُكتب بعد اختيار اللجنة', () => {
   const withOffer = { weightedOffer: offer('active') };
-  const referral = offerSheetTarget(proj([mkAmount('a', 'أ', 1300, withOffer)]));
-  assert.equal(referral.bidder, undefined);
-  assert.match(referral.reason!, /لا عطاء موصى به/);
-  const retender = offerSheetTarget(proj([mkAmount('a', 'أ', 500, withOffer)]));
-  assert.equal(retender.bidder, undefined);
-  assert.match(retender.reason!, /لا عطاء موصى به/);
-  const tie = offerSheetTarget(proj([mkAmount('a', 'أ', 1000, withOffer), mkAmount('b', 'ب', 1000, withOffer)]));
-  assert.equal(tie.bidder, undefined);
-  assert.match(tie.reason!, /تعادل/);
-  // بعد اختيار اللجنة يصير المختار هو الهدف حتى مع التعادل
-  const chosen = offerSheetTarget(proj([mkAmount('a', 'أ', 1000, withOffer), mkAmount('b', 'ب', 1000, { ...withOffer, status: 'recommended' })]));
-  assert.equal(chosen.bidder?.id, 'b');
+  const referral = proj([mkAmount('a', 'أ', 1300, withOffer)]);
+  assert.equal(offerSheetTarget(referral).bidder, undefined);
+  assert.ok(!buildTenderWorkbook(referral, referral.bidders[0]).SheetNames.includes(WEIGHTED_SHEET));
+  const retender = proj([mkAmount('a', 'أ', 500, withOffer)]);
+  assert.equal(offerSheetTarget(retender).bidder, undefined);
+  assert.ok(!buildTenderWorkbook(retender, retender.bidders[0]).SheetNames.includes(WEIGHTED_SHEET));
+  const tie = proj([mkAmount('a', 'أ', 1000, withOffer), mkAmount('b', 'ب', 1000, withOffer)]);
+  assert.equal(offerSheetTarget(tie).bidder, undefined);
+  assert.ok(!buildTenderWorkbook(tie, tie.bidders[0]).SheetNames.includes(WEIGHTED_SHEET));
+  const chosen = proj([mkAmount('a', 'أ', 1000, withOffer), mkAmount('b', 'ب', 1000, { ...withOffer, status: 'recommended' })]);
+  assert.equal(offerSheetTarget(chosen).bidder?.id, 'b');
+  assert.equal(buildTenderWorkbook(chosen, chosen.bidders[0]).SheetNames[0], WEIGHTED_SHEET);
 });

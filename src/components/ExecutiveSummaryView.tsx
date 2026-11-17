@@ -14,7 +14,6 @@ import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, excl
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
-import { offerSheetTarget } from '../utils/bidderAuditExcel';
 import { decisionSensitivity } from '../utils/decisionSensitivity';
 import { exclusionLabels } from '../utils/exclusionReasons';
 import { isOfferFinal, assessBalance, correctedBalanceRows, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../utils/weightedOffer';
@@ -26,7 +25,6 @@ interface ExecutiveSummaryViewProps {
   onOpenExclusionReasons: (id: string) => void;
   onOpenPrint: () => void;
   onExportExcel: () => void;
-  onExportOfferSheet: () => void;
 }
 
 export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
@@ -35,8 +33,7 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
   onUpdateBidderStatus,
   onOpenExclusionReasons,
   onOpenPrint,
-  onExportExcel,
-  onExportOfferSheet
+  onExportExcel
 }) => {
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
@@ -100,7 +97,6 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
 
   // التوصية من المحرك المشترك مع المحضر المطبوع (utils/recommendation.ts)
   const rec = buildRecommendation(project);
-  const offerSheet = offerSheetTarget(project);
   const approval = rec.kind === 'award' && rec.primary
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
   // صياغة اللجنة للتوصية: هنا تُذكر وحدها مع تغيّر أساسها. تغيّر صياغة النظام يُفحص في المعاينة، لأن خيار جدول
@@ -151,15 +147,6 @@ export const ExecutiveSummaryView: React.FC<ExecutiveSummaryViewProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>تصدير Excel</span>
-            </button>
-            <button
-              onClick={onExportOfferSheet}
-              disabled={!offerSheet.bidder}
-              title={offerSheet.reason}
-              className={`flex items-center gap-2 bg-slate-800 text-emerald-300 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition ${offerSheet.bidder ? 'hover:bg-slate-700 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>جدول العرض الموزون (للمجهز)</span>
             </button>
           </div>
 

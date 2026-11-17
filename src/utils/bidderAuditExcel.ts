@@ -56,9 +56,9 @@ const BOX = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 const AMOUNT_FMT = '#,##0;\\(#,##0\\);\\-';
 const AMOUNT_FMT_DEC = '#,##0.00;\\(#,##0.00\\);\\-';
 
-type Cell = string | number | XLSX.CellObject | null | undefined;
+export type Cell = string | number | XLSX.CellObject | null | undefined;
 
-const amount = (v: number, color = TEXT): XLSX.CellObject => {
+export const amount = (v: number, color = TEXT): XLSX.CellObject => {
   const numFmt = Number.isInteger(v) ? AMOUNT_FMT : AMOUNT_FMT_DEC;
   return { t: 'n', v, z: numFmt, s: { font: { name: FONT, sz: 10, color: { rgb: color } }, numFmt } };
 };
@@ -69,13 +69,23 @@ const pct = (v: number, decimals = 2): XLSX.CellObject => {
   return { t: 'n', v: v / 100, z: fmt, s: { numFmt: fmt } };
 };
 const ratio = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0.0000', s: { numFmt: '0.0000' } });
-const count = (v: number): XLSX.CellObject => ({ t: 'n', v });
+const count = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0' });
 
-// رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»)
+// رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»).
+// التنسيق «0» للصحيح وحده: الفقرة 1.1 بالتنسيق «0» تظهر «1» (وجدته فحص الملف في Excel 2026-11-17)
 const itemNoCell = (itemNo: number | string): Cell => {
   const n = Number(itemNo);
-  return Number.isFinite(n) && String(n) === String(itemNo).trim() ? { t: 'n', v: n } : String(itemNo);
+  return Number.isFinite(n) && String(n) === String(itemNo).trim()
+    ? { t: 'n', v: n, z: Number.isInteger(n) ? '0' : 'General' }
+    : String(itemNo);
 };
+
+// اتجاه كل أوراق المصنف من اليمين إلى اليسار: المكتبة تكتب rightToLeft="1" في sheetView كل ورقة من Workbook.Views[0].RTL
+// (فُحص بفك ملف xlsx الناتج في checks/excelTenderFormat.test.ts)
+export function markRtl(wb: XLSX.WorkBook): XLSX.WorkBook {
+  wb.Workbook = { ...(wb.Workbook || {}), Views: [{ RTL: true }] };
+  return wb;
+}
 
 interface SheetLayout {
   widths: number[];
@@ -85,10 +95,11 @@ interface SheetLayout {
   center?: number[];                       // أعمدة تُوسَّط
   wrap?: number[];                         // أعمدة نص طويل يلتف
   filter?: boolean;
+  vertical?: 'top' | 'center';             // محاذاة البيانات رأسياً (الافتراضي: وسط)
 }
 
 // العنوان (الصف 1) وسطرا التعريف والشرح (2 و3) مدمجة بعرض الجدول، ثم الرؤوس، ثم البيانات بحدود، ثم أسطر المجاميع
-function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
+export function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
   const { widths, dataFrom, dataTo } = layout;
   const lastCol = widths.length - 1;
   const header = dataFrom - 1;
@@ -121,7 +132,7 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
           ...own, font, border: BOX,
           ...(fill ? { fill: { patternType: 'solid', fgColor: { rgb: fill } } } : {}),
           alignment: {
-            horizontal: layout.center?.includes(c) ? 'center' : 'right', vertical: 'center',
+            horizontal: layout.center?.includes(c) ? 'center' : 'right', vertical: layout.vertical ?? 'center',
             wrapText: !!layout.wrap?.includes(c)
           }
         };
@@ -466,7 +477,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
 // مفرد العرض بلا تقريب لمنزلتين (العرض المنطلق من التصحيح مفرده مبلغ ÷ كمية)، فيُعرض بأربع منازل على الأكثر
 // كي لا يخالف الكمية × المفرد المبلغَ الذي يوقّع عليه المجهز
 const UNIT_FMT_DEC = '#,##0.00##;\\(#,##0.00##\\);\\-';
-const unitCell = (v: number): XLSX.CellObject => {
+export const unitCell = (v: number): XLSX.CellObject => {
   const x = Math.round(v * 1e4) / 1e4;
   if (Number.isInteger(x)) return amount(x);
   const c = amount(x);
@@ -475,7 +486,7 @@ const unitCell = (v: number): XLSX.CellObject => {
 
 // ورقة اعتماد المجهز للعرض الموزون: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه فقط، ليضع المجهز أسعار
 // عطائه عليها ويوقّع ويختم. تظهر مع عرض فعّال أو معتمد (الموقوف لا يُعرض). المجموع بصيغة Excel
-function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
+export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
   if (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused') return null;
   const items = bidder.items;
   const last = FIRST + items.length - 1;
@@ -496,7 +507,7 @@ function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.W
   const tail = (label: string, value: Cell): Cell[] => [label, '', '', '', '', value];
 
   return buildSheet([
-    [`اعتماد العرض الموزون: ${bidder.name}`],
+    [`الجدول الموزون: ${bidder.name}${project.title ? ` — ${project.title}` : ''}${project.referenceNumber ? ` — رقم الطلبية: ${project.referenceNumber}` : ''}`],
     [projectLine(project)],
     [note],
     [],
@@ -507,7 +518,9 @@ function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.W
     ...(Math.abs(gap) >= 0.005 ? [tail('الفرق عن مبلغ العطاء بعد التصحيح الحسابي', amount(gap))] : []),
     [],
     ['اسم المجهز: ' + bidder.name],
-    ['اسم المفوض بالتوقيع: ………………………………   التوقيع: ………………………   الختم: ………………………   التاريخ: ……… / ……… / ………']
+    ['اسم المفوض بالتوقيع: ………………………………………………'],
+    ['التوقيع: ………………………………   الختم: ………………………………'],
+    ['التاريخ: ……… / ……… / ………']
   ], {
     widths: [6, 52, 10, 12, 20, 22],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + items.length,
@@ -558,8 +571,7 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
   if (approvalSheet) XLSX.utils.book_append_sheet(wb, approvalSheet, 'اعتماد العرض الموزون');
   const pagesSheet = buildPagesSheet(project, bidder);
   if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
-  wb.Workbook = { Views: [{ RTL: true }] };
-  return wb;
+  return markRtl(wb);
 }
 
 export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder) {
@@ -568,34 +580,12 @@ export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder)
   XLSX.writeFile(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }
 
-// المجهز الذي تُصدَّر له ورقة العرض الموزون من الخلاصة: الموصى به (الأدنى المؤهل أو اختيار اللجنة).
-// يُحسب هنا مرة واحدة: الواجهة تقرأ منه سبب التعطيل، والتصدير يقرأ منه المجهز
-export function offerSheetTarget(project: TenderProject): { bidder?: Bidder; reason?: string } {
+// المجهز الذي تُكتب له ورقة «الجدول الموزون» في تصدير الخلاصة: الموصى بترسيته فقط (اختيار اللجنة أو الأدنى المؤهل).
+// primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل قبل اختيار اللجنة،
+// فلا يصحّ مجهزاً «موصى به» (مراجعة Codex 2026-11-17). بلا مجهز لا تُكتب الورقة
+export function offerSheetTarget(project: TenderProject): { bidder?: Bidder } {
   const rec = buildRecommendation(project);
-  // primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل (قبل اختيار اللجنة)
-  // فلا يصحّ مجهزاً «موصى به»؛ الورقة لمن أُوصي بترسيته فقط (مراجعة Codex 2026-11-17)
-  if (rec.kind === 'tie') return { reason: 'تعادل في العطاءات المتقاربة: اختر العطاء للترسية أولاً' };
   const primary = rec.kind === 'award' ? rec.primary : undefined;
-  if (!primary) return { reason: 'لا عطاء موصى به بعد' };
-  if (!primary.weightedOffer) return { reason: `لا عرض موزون للمجهز الموصى به (${primary.name})` };
-  if (primary.weightedOffer.status === 'paused') return { reason: 'العرض الموزون موقوف' };
-  if (!hasBidAmounts(primary)) return { reason: `لا مبالغ للمجهز الموصى به (${primary.name})` };
+  if (!primary || !primary.weightedOffer || primary.weightedOffer.status === 'paused' || !hasBidAmounts(primary)) return {};
   return { bidder: primary };
-}
-
-// مصنف بورقة واحدة: «اعتماد العرض الموزون» نفسها التي في تصدير الجدول
-export function buildOfferApprovalWorkbook(project: TenderProject, bidder: Bidder): XLSX.WorkBook | null {
-  const sheet = buildOfferApprovalSheet(project, bidder);
-  if (!sheet) return null;
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheet, 'اعتماد العرض الموزون');
-  wb.Workbook = { Views: [{ RTL: true }] };
-  return wb;
-}
-
-export function exportOfferApprovalToExcel(project: TenderProject, bidder: Bidder) {
-  const wb = buildOfferApprovalWorkbook(project, bidder);
-  if (!wb) return;
-  const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
-  XLSX.writeFile(wb, `${safe(`العرض الموزون ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
 }

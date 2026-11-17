@@ -4,7 +4,6 @@ import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
 import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
 import { exportTenderToExcel } from './utils/excelService';
-import { exportOfferApprovalToExcel, offerSheetTarget } from './utils/bidderAuditExcel';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
 
 import { Navbar } from './components/Navbar';
@@ -327,7 +326,6 @@ export function App() {
               onOpenExclusionReasons={setExclusionBidderId}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
-              onExportOfferSheet={() => { const t = offerSheetTarget(currentProject); if (t.bidder) exportOfferApprovalToExcel(currentProject, t.bidder); }}
             />
           ) : (
             <ChartsView
