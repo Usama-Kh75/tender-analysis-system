@@ -18,9 +18,9 @@ const build = (bidTotal: number) => {
 };
 const pagesNote = (wb: ReturnType<typeof build>) => String((wb.Sheets['ملخص الصفحات'] as any).A3.v);
 
-test('ورقة الصفحات: عرض معتمد غير متقادم نهائي، والمتقادم «غير نهائي»', () => {
-  assert.ok(!pagesNote(build(1580)).includes('غير نهائي'));
-  assert.ok(pagesNote(build(1000)).includes('غير نهائي'));
+test('ورقة الصفحات: بلا ذكر للعرض الموزون ولو وُجد عرض', () => {
+  assert.ok(!pagesNote(build(1580)).includes('موزون'));
+  assert.ok(!pagesNote(build(1000)).includes('نهائي'));
 });
 
 test('فواصل الصفحات: رقم الفقرة ورقم الصفحة بالأرقام الهندية', () => {

@@ -400,6 +400,17 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               <span>🧮 التدقيق والتصحيح الحسابي ({pendingItems.length})</span>
             </button>
           )}
+          {onExportAudit && hasAmounts && (
+            <button
+              type="button"
+              onClick={onExportAudit}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-slate-600"
+              title="ملف Excel: عطاء المجهز كما قدّمه بعيوبه مؤشرة ومشروحة، وأخطاء المجهز، والجدول المعدل بعد تصحيحات اللجنة"
+            >
+              <Download className="w-4 h-4 text-slate-300" />
+              <span>تصدير الجدول <bdi dir="ltr">(Excel)</bdi></span>
+            </button>
+          )}
           <MoreMenu
             dark
             ariaLabel="المزيد من أدوات الجدول"
@@ -428,7 +439,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
           auditMode ? 'bg-amber-50 border-amber-200' : 'xl:sticky bg-slate-50 border-slate-200'
         }`}>
 
-          {/* عرض التدقيق: إغلاقه، ومصدر الأرقام، ومرشحاته، وكشف Excel، والقاعدة وسندها */}
+          {/* عرض التدقيق: إغلاقه، ومصدر الأرقام، ومرشحاته، والقاعدة وسندها */}
           {auditMode && (
             <div className="w-full flex flex-wrap items-center gap-2 pb-3 border-b border-amber-200">
               <button
@@ -469,22 +480,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
                   {label}
                 </button>
               ))}
-              {onExportAudit && (
-                <button
-                  type="button"
-                  onClick={onExportAudit}
-                  className="mr-auto flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-black px-3.5 py-1.5 rounded-xl cursor-pointer border border-slate-300"
-                  title="ملف Excel: عطاء المجهز كما قدّمه بعيوبه مؤشرة ومشروحة، وأخطاء المجهز، والجدول المعدل بعد تصحيحات اللجنة"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>كشف التدقيق <bdi dir="ltr">(Excel)</bdi></span>
-                </button>
-              )}
               {onOpenCorrectionNotice && correctedCount > 0 && (
                 <button
                   type="button"
                   onClick={onOpenCorrectionNotice}
-                  className={`${onExportAudit ? '' : 'mr-auto '}flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-black px-3.5 py-1.5 rounded-xl cursor-pointer border border-slate-300`}
+                  className="mr-auto flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-black px-3.5 py-1.5 rounded-xl cursor-pointer border border-slate-300"
                   title="ورقة مطبوعة باسم المجهز بالفقرات التي صحّحتها اللجنة، ليحضر ويوقّع ويختم إزاءها"
                 >
                   <Printer className="w-4 h-4" />
