@@ -197,14 +197,21 @@ test('stageStep: خطوة التبويب المفتوح وحده', () => {
   // العطاءات والتدقيق: خطوات مرحلتها فقط، ولا فائز ولا زر غريب
   const p0 = setup();
   assert.deepEqual(stageStep(p0, 'bids'), nextStep(p0));
-  assert.equal(stageStep(allIn(), 'bids'), null);
-  assert.equal(stageStep(chosen(allIn()), 'bids'), null);
+  // بعد اكتمالها: سطر ختام وزر إلى الدراسة، بلا اسم الفائز ولو اختير؛ والانتقال يدوي
+  const done = stageStep(allIn(), 'bids')!;
+  assert.equal(done.kind, 'stageDone');
+  assert.equal(done.text, 'اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (2 من 2) ودُقّقت. المرحلة التالية: الدراسة والتحليل');
+  assert.deepEqual(done.actions, [{ label: 'الانتقال إلى الدراسة والتحليل', target: 'study' }]);
+  assert.deepEqual(stageStep(chosen(allIn()), 'bids'), done);
+  // العطاءات المستلمة أكثر من المسجّلة: ملاحظتها في سطر الختام لا في الدراسة
+  assert.match(stageStep({ ...allIn(), receivedBidsCount: 4 }, 'bids')!.text, /\(2 من 4\).*استُلمت \(4\) عطاءات، وأُدخل منها \(2\)/);
   // الدراسة: خطوة الترسية وحدها
   assert.equal(stageStep(setup(), 'study'), null);
   const study = stageStep(allIn(), 'study')!;
   assert.equal(study.kind, 'award');
   assert.deepEqual(study.actions, go);
-  assert.ok(study.text.startsWith('اكتمل إدخال العطاءات (2 من 2) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات، ثم التوصية بالإحالة'));
+  assert.equal(study.text, 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم التوصية بالإحالة');
+  assert.equal(stageStep({ ...allIn(), receivedBidsCount: 4 }, 'study')!.text, study.text);
   assert.equal(stageStep(chosen(allIn()), 'study'), null);
   // التوصية والمحضر
   const early = stageStep(setup(), 'recommendation')!;
@@ -215,10 +222,11 @@ test('stageStep: خطوة التبويب المفتوح وحده', () => {
   assert.equal(pick.text, 'الخطوة التالية: اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»');
   const p1 = chosen(allIn());
   assert.deepEqual(stageStep(p1, 'recommendation'), nextStep(p1));
-  // ترسية وموقف مسجّل: لا شيء في أي تبويب
+  // ترسية وموقف مسجّل: لا شيء في الدراسة والتوصية، ويبقى سطر ختام المرحلة الأولى في تبويبها
   const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
-  const done = { ...chosen(allIn()), statusLog: [e] };
-  for (const tab of ['bids', 'study', 'recommendation']) assert.equal(stageStep(done, tab), null);
+  const closed = { ...chosen(allIn()), statusLog: [e] };
+  for (const tab of ['study', 'recommendation']) assert.equal(stageStep(closed, tab), null);
+  assert.equal(stageStep(closed, 'bids')!.kind, 'stageDone');
 });
 
 test('حال المراحل: كل مرحلة بشرطها، فالترسية المختارة تبقى مكتملة إن عادت فقرة معلّقة', () => {

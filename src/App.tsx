@@ -275,6 +275,8 @@ export function App() {
       setAuditInitialFilter(initialAuditFilter(target.items));
       setAuditProjectId(currentProject.id);
       scrollToTable();
+    } else if (action.target === 'study') {
+      setActiveTab('study');
     } else if (action.target === 'recommendation') {
       setActiveTab('recommendation');
     } else if (action.target === 'print') {

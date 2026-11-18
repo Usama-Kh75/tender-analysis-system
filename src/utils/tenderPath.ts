@@ -67,22 +67,35 @@ export function stageStates(p: TenderProject): Record<StageId, StageState> {
   return out;
 }
 
-export type NextStepTarget ='bids' | 'importEstimate' | 'audit' | 'recommendation' | 'print' | 'status';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'recommendation' | 'print' | 'status';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
-  kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report';
+  /** stageDone: سطر ختام مرحلة العطاءات والتدقيق في تبويبها (stageStep وحده) */
+  kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report' | 'stageDone';
   text: string;
   actions: NextStepAction[];
 }
 
 /** خطوة التبويب المفتوح وحده (قرار أسامة 2026-11-18: التلميحات والأزرار خاصة بالتبويب الذي يحتويها).
- *  العطاءات والتدقيق: خطوات الكلفة والتدقيق والإدخال، ولا شيء بعد اكتمالها، فلا يُعلَن فيها فائز.
+ *  العطاءات والتدقيق: خطوات الكلفة والتدقيق والإدخال، فإذا اكتملت سطر ختام وزر إلى الدراسة، بلا اسم فائز.
+ *  والانتقال يدوي: اللجنة قد تراجع الفقرة الأخيرة بعد إدخالها، فلا يُقفز بها وحده.
  *  الدراسة والتحليل: بعد اكتمال الإدخال وقبل الترسية فقط، وزرها الانتقال إلى التوصية لأنه خاتمة الدراسة.
  *  التوصية والمحضر: اختيار الفائز بلا زر، ثم المحضر والموقف؛ وما لم تكتمل الأولى سطر بلا زر */
 export function stageStep(p: TenderProject, tab?: string): NextStep | null {
   const step = nextStep(p);
+  const firstStage = !!step && (step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids');
+  if (tab !== 'study' && tab !== 'recommendation' && !firstStage) {
+    const { bids } = tenderPath(p);
+    return {
+      kind: 'stageDone',
+      text: `اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (${bids.entered} من ${bids.expected}) ودُقّقت. المرحلة التالية: الدراسة والتحليل`
+        + (bids.expected > bids.registered
+          ? `. استُلمت (${bids.expected}) عطاءات، وأُدخل منها (${bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
+          : ''),
+      actions: [{ label: 'الانتقال إلى الدراسة والتحليل', target: 'study' }]
+    };
+  }
   if (!step) return null;
-  const firstStage = step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids';
   if (tab === 'recommendation') {
     if (firstStage) {
       return { ...step, text: `لم تكتمل مرحلة العطاءات والتدقيق (${step.text.replace(/^الخطوة التالية: /, '')})، فالتوصية قبل إكمالها غير نهائية`, actions: [] };
@@ -94,7 +107,8 @@ export function stageStep(p: TenderProject, tab?: string): NextStep | null {
   }
   if (tab === 'study') {
     return step.kind === 'award'
-      ? { ...step, text: step.text.replace('الخطوة التالية: دراسة العطاءات والتوصية بالإحالة', 'الخطوة التالية: دراسة العطاءات، ثم التوصية بالإحالة') }
+      // ملاحظة العطاءات المستلمة تخص الإدخال، فمكانها سطر ختام المرحلة الأولى
+      ? { ...step, text: 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم التوصية بالإحالة' }
       : null;
   }
   return firstStage ? step : null;
