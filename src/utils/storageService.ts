@@ -97,6 +97,7 @@ export function createNewTenderProject(opts: {
   budgetType: TenderProject['budgetType'];
   announcementNo?: number;
   receivedAt?: string;
+  receivedBidsCount?: number;
   bidderNames: string[];
 }): TenderProject {
   const now = Date.now();
@@ -126,6 +127,7 @@ export function createNewTenderProject(opts: {
     budgetType: opts.budgetType,
     referenceNumber: opts.referenceNumber,
     announcementNo: opts.announcementNo,
+    ...(opts.receivedBidsCount ? { receivedBidsCount: opts.receivedBidsCount } : {}),
     ...(receivedAt ? {
       receivedAt,
       statusLog: [{ id: `status-${now}`, stage: 'analysis' as const, memoDate: receivedAt, recordedAt: new Date().toISOString() }]
@@ -644,7 +646,7 @@ export function addAuditLog(
   project: TenderProject,
   action: string,
   details: string,
-  extra?: { itemNo?: string | number; bidderId?: string; oldValue?: any; newValue?: any; userName?: string }
+  extra?: { itemNo?: string | number; bidderId?: string; fieldName?: string; oldValue?: any; newValue?: any; userName?: string }
 ): TenderProject {
   const newLog: AuditLogEntry = {
     id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -654,6 +656,7 @@ export function addAuditLog(
     details,
     itemNo: extra?.itemNo,
     bidderId: extra?.bidderId,
+    fieldName: extra?.fieldName,
     oldValue: extra?.oldValue,
     newValue: extra?.newValue
   };

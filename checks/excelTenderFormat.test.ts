@@ -103,7 +103,7 @@ test('مصنف تصدير الجدول: كل ورقة من اليمين إلى �
   const wb = buildBidderAuditWorkbook(proj([a]), a);
   const files = unzip(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
   const sheets = Object.keys(files).filter(f => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
-  assert.ok(sheets.length >= 4);
+  assert.ok(sheets.length >= 3);
   for (const f of sheets) assert.match(files[f], /<sheetView [^>]*rightToLeft="1"/, f);
 });
 

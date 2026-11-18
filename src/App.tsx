@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { unitPriceOutliers } from './utils/unitOutliers';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
-import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
+import { hasBidAmounts, exclusionThresholdOf, offerWinner } from './utils/recommendation';
+import { tenderPath, type NextStepAction } from './utils/tenderPath';
 import { exportTenderToExcel } from './utils/excelService';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
 
@@ -14,21 +15,26 @@ import { ReadingReliabilityCard } from './components/ReadingReliabilityCard';
 import { readingReliability } from './utils/readingReliability';
 import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
-import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
+import { StatusWindow } from './components/modals/StatusWindow';
+import { StudyView } from './components/StudyView';
+import { ReportView } from './components/ReportView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
+import { BidderCards } from './components/BidderCards';
+import { initialAuditFilter, type AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
 
 import { SmartTableImportModal } from './components/modals/SmartTableImportModal';
+import { ManualEntryModal } from './components/modals/ManualEntryModal';
 import { ImageOcrModal, OcrHandoff } from './components/modals/ImageOcrModal';
 import { MultiBidderMatrix } from './components/modals/MultiBidderMatrix';
 import { AuditTrailModal } from './components/modals/AuditTrailModal';
+import { CorrectionNoticeModal } from './components/modals/CorrectionNoticeModal';
 import { CommitteeNameModal } from './components/modals/CommitteeNameModal';
 import { ExclusionReasonsModal } from './components/modals/ExclusionReasonsModal';
 import { createExclusionHandlers } from './app/exclusionHandlers';
 import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
-import { OrderStatusModal } from './components/modals/OrderStatusModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PageBreaksModal } from './components/modals/PageBreaksModal';
 import { PageSummaryTable } from './components/PageSummaryTable';
@@ -38,7 +44,7 @@ import { ProjectsBrowserModal } from './components/modals/ProjectsBrowserModal';
 import { UpdateNotice } from './components/UpdateNotice';
 import { RecoveryNotice } from './components/RecoveryNotice';
 import { ForeignDomNotice } from './components/ForeignDomNotice';
-import { RESUMED_STATE } from './resume';
+import { RESUMED_STATE, type MainTab } from './resume';
 
 import { useProjectStore } from './app/useProjectStore';
 import { createEditContext } from './app/editContext';
@@ -60,7 +66,7 @@ export function App() {
   } = useProjectStore();
   const [isCommitteeEditOpen, setIsCommitteeEditOpen] = useState(false);
   // بعد «حفظ والتحديث» يُستأنف التبويب الذي كان مفتوحاً (src/resume.ts)
-  const [activeTab, setActiveTab] = useState<'table' | 'summary' | 'charts'>(RESUMED_STATE?.tab ?? 'table');
+  const [activeTab, setActiveTab] = useState<MainTab>(RESUMED_STATE?.tab ?? 'bids');
 
   // Modals
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
@@ -71,14 +77,28 @@ export function App() {
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // نافذة الموقف (تفتح من زر الموقف في رأس المناقصة)
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  // نموذج نافذة الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
+  const [isStatusDirty, setIsStatusDirty] = useState(false);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const [isPageBreaksOpen, setIsPageBreaksOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
+  // أرقام مكتوبة في «إدخال يدوي» لم تُحفظ بعد (يمنع التحديث)
+  const [isManualDirty, setIsManualDirty] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
+  const [chartsOpen, setChartsOpen] = useState(false);
+  // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
+  const [auditProjectId, setAuditProjectId] = useState<string | null>(null);
+  // إشعار تصحيح المجهز: مفتاحه مناقصة ومجهز فيُغلق وحده إذا تغيّر أحدهما (نافذة عرض بلا إدخال: خارج blockingWork)
+  const [noticeKey, setNoticeKey] = useState<string | null>(null);
+  const [auditInitialFilter, setAuditInitialFilter] = useState<AuditFilter>('pending');
+  const [revealRequest, setRevealRequest] = useState<{ itemId: string; seq: number } | undefined>(undefined);
+  const [auditFocusItemId, setAuditFocusItemId] = useState<string | undefined>(undefined);
   // العطاء الذي تُسجَّل أسباب استبعاده في نافذة «أسباب الاستبعاد»؛ null = مغلقة
   const [exclusionBidderId, setExclusionBidderId] = useState<string | null>(null);
 
@@ -86,8 +106,9 @@ export function App() {
   const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
     : isOcrOpen ? 'قراءة جدول من PDF / صورة'
     : isSmartImportOpen ? 'استيراد جدول'
+    : isManualOpen && isManualDirty ? 'إدخال يدوي'
     : isSettingsOpen ? 'إعدادات المناقصة'
-    : isStatusOpen ? 'موقف الطلبية'
+    : isStatusDirty ? 'موقف الطلبية'
     : isStatusSheetOpen ? 'كشف موقف الطلبيات'
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
@@ -96,10 +117,18 @@ export function App() {
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
+  // ضبط الحالة أثناء العرض: عرض التدقيق وفقرته المقصودة يخصان مناقصة بعينها، فلا يعودان وحدهما إذا رُجع إليها
+  const [prevProjectId, setPrevProjectId] = useState(currentProject?.id);
+  if (prevProjectId !== currentProject?.id) {
+    setPrevProjectId(currentProject?.id);
+    setAuditProjectId(null);
+    setAuditFocusItemId(undefined);
+  }
+  const auditMode = !!currentProject && auditProjectId === currentProject.id;
   const activeBidder = currentProject?.bidders.find(b => b.id === currentProject.activeBidderId) || currentProject?.bidders[0];
 
   const { handleBackupAll, handleBackupProject, handleCreateProject, handleImportBackup, handleDeleteProject,
-    handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup, selectProject } = createProjectHandlers({
+    handleFactoryReset, handleOpenFromBrowser, handleImportAllBackup } = createProjectHandlers({
     projects, setProjects, statusOrders, setStatusOrders, committeeName, setCommitteeName, setActiveId, recordBackup, currentProject,
     closeSettings: () => setIsSettingsOpen(false),
     closeProjects: () => setIsProjectsOpen(false)
@@ -181,10 +210,18 @@ export function App() {
   }
 
   const ctx = createEditContext(currentProject, activeBidder, setProjects);
-  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
+  const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleReadingFromPaper, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
-  const { handleStartOffer, handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
+  const { handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
+  // استئناف العرض الموزون الموقوف للعطاء الفائز من «المحضر» ثم فتح جدول فقراته (لا بدء جديد في الواجهة)؛ السياق مربوط بذلك المجهز لا بالنشط
+  const resumeOfferFor = (bidderId: string) => {
+    if (offerWinner(currentProject)?.id !== bidderId) { window.alert('العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)'); return; }
+    const bidder = currentProject.bidders.find(b => b.id === bidderId);
+    if (!bidder) return;
+    const started = createOfferHandlers(createEditContext(currentProject, bidder, setProjects)).handleStartOffer('resume');
+    if (started) handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId });
+  };
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
@@ -199,12 +236,50 @@ export function App() {
     setIsPageBreaksOpen(false);
   };
 
-  // Select Table Tab and Scroll
-  const handleSelectTableTab = () => {
-    setActiveTab('table');
-    setTimeout(() => {
+  // فتح عرض التدقيق وإغلاقه؛ من شارة فقرة يُفتح بالمرشح «الكل» عند الفقرة نفسها
+  const handleAuditModeChange = (open: boolean, focusItemId?: string) => {
+    setAuditProjectId(open ? currentProject.id : null);
+    setAuditFocusItemId(open ? focusItemId : undefined);
+    if (open) {
+      setAuditInitialFilter(focusItemId ? 'all' : initialAuditFilter(activeBidder.items));
+    }
+  };
+
+  // اختيار شركة من البطاقات أو الملخص: الفقرة المقصودة بالتدقيق تخص الشركة السابقة (معرّفات الفقرات قد تتكرر بين الشركات)
+  const handlePickBidder = (id: string) => {
+    if (id !== activeBidder.id) setAuditFocusItemId(undefined);
+    selectBidder(id);
+  };
+
+  // الانتقال من أزرار «الخطوة التالية» إلى أماكنها
+  const handleGo = (action: NextStepAction) => {
+    const scrollToTable = () => setTimeout(() => {
       document.getElementById('boq-table-container')?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
+    if (action.target === 'importEstimate') {
+      // استيراد الكلفة التخمينية يغيّر فقرات مشتركة بين المجهزين، فيُرفض قبل فتح النافذة كما في زر «استيراد جدول»
+      setActiveTab('bids');
+      if (ctx.blockedByOffer({ shared: true })) return;
+      setSmartImportDocType('estimated');
+      setIsSmartImportOpen(true);
+    } else if (action.target === 'bids') {
+      setActiveTab('bids');
+      if (action.bidderId) handlePickBidder(action.bidderId);
+      scrollToTable();
+    } else if (action.target === 'audit') {
+      const first = action.bidderId;
+      setActiveTab('bids');
+      if (first) handlePickBidder(first);
+      const target = currentProject.bidders.find(b => b.id === first) ?? activeBidder;
+      setAuditFocusItemId(undefined);
+      setAuditInitialFilter(initialAuditFilter(target.items));
+      setAuditProjectId(currentProject.id);
+      scrollToTable();
+    } else if (action.target === 'study') {
+      setActiveTab('study');
+    } else {
+      setActiveTab('report');
+    }
   };
 
   return (
@@ -214,15 +289,10 @@ export function App() {
 
       {/* Top Navbar */}
       <Navbar
-        project={currentProject}
-        projects={projects}
-        activeBidder={activeBidder}
-        onSelectProject={selectProject}
+        projectsCount={projects.length}
         onNewProject={() => setIsNewProjectOpen(true)}
         onOpenProjectsBrowser={() => setIsProjectsOpen(true)}
-        onOpenMultiBidder={() => setIsMultiBidderOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
         unsavedCount={unsaved.length}
         lastBackupAt={lastBackupTime(backupMarks)}
         onBackupAll={handleBackupAll}
@@ -236,17 +306,24 @@ export function App() {
         {/* Project Header Info Banner */}
         <ProjectHeader
           project={currentProject}
-          activeBidder={activeBidder}
-          activeTab={activeTab}
-          onSelectTableTab={handleSelectTableTab}
-          onSelectTab={setActiveTab}
-          onChangeProjectField={(field, value) =>
-            setProjects(prev => prev.map(p => p.id === currentProject.id ? { ...p, [field]: value, updatedAt: new Date().toISOString() } : p))}
-          onSelectBidder={selectBidder}
-          onRenameBidder={handleUpdateBidderName}
-          onAddBidder={handleAddNewBidder}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenStatus={() => setIsStatusOpen(true)}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          pendingAudit={tenderPath(currentProject).audit.pending}
+          onGo={handleGo}
+        />
+
+        {/* لوحة التبويب المفتوح (تُرسم لوحة واحدة فقط) مرتبطة بزرها في ProjectHeader */}
+        <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+        {activeTab === 'bids' && (
+          <>
+        <BidderCards
+          project={currentProject}
+          activeBidderId={activeBidder.id}
+          onSelect={handlePickBidder}
+          onRename={handleUpdateBidderName}
+          onAdd={handleAddNewBidder}
         />
 
         {/* Dynamic KPI Cards */}
@@ -263,22 +340,31 @@ export function App() {
             ...offerDeviationTotals(activeBidder.items, currentProject.deviationThreshold)
           } : undefined}
         />
+          </>
+        )}
 
         {/* Content based on Tab */}
         <div id="boq-table-container">
-          {activeTab === 'table' ? (
+          {activeTab === 'bids' ? (
             <>
-            {hasBidAmounts(activeBidder) && (
+            {hasBidAmounts(activeBidder) && isOfferLocked(activeBidder) && (
               <div className="mb-4">
                 <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)} />
               </div>
             )}
             {readingReliability(activeBidder) && (
               <div className="mb-4 no-print">
-                <ReadingReliabilityCard key={`${currentProject.id}:${activeBidder.id}`} bidder={activeBidder} onConfirm={handleConfirmReadCheck} />
+                <ReadingReliabilityCard key={`${currentProject.id}:${activeBidder.id}`} bidder={activeBidder} onConfirm={handleConfirmReadCheck} onReveal={(itemId) => setRevealRequest(r => ({ itemId, seq: (r?.seq ?? 0) + 1 }))} />
               </div>
             )}
             <BOQTable
+              auditMode={auditMode}
+              onAuditModeChange={handleAuditModeChange}
+              auditFocusItemId={auditFocusItemId}
+              revealRequest={revealRequest}
+              auditInitialFilter={auditInitialFilter}
+              bidderId={activeBidder.id}
+              auditLogs={currentProject.auditLogs}
               items={activeBidder.items}
               unitOutliers={unitPriceOutliers(currentProject).filter(row => row.bidderId === activeBidder.id)}
               totals={activeBidder.totals}
@@ -289,17 +375,25 @@ export function App() {
               onUpdateFields={handleUpdateItemFields}
               onCorrectReading={handleCorrectReading}
               onAcceptAsReading={handleAcceptAsReading}
+              onReadingFromPaper={handleReadingFromPaper}
+              onConfirmReadCheck={handleConfirmReadCheck}
               onAdoptTafqeetThousands={handleAdoptTafqeetThousands}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onDuplicateItem={handleDuplicateItem}
               onClearBidderPrices={handleClearBidderPrices}
               onExportAudit={handleExportBidderAudit}
+              onOpenCorrectionNotice={() => setNoticeKey(`${currentProject.id}:${activeBidder.id}`)}
               onOpenSmartImport={() => {
                 // يُرفض قبل قراءة الملف لا بعدها: الإدراج مشترك فيرفضه قفل عرض أي مجهز، وكانت القراءة تضيع
                 if (ctx.blockedByOffer({ shared: true })) return;
                 setSmartImportDocType('bidder');
                 setIsSmartImportOpen(true);
+              }}
+              onOpenManualEntry={() => {
+                // الإدخال مشترك (الكمية والهوية والكلفة) فيرفضه قفل عرض أي مجهز قبل فتح النافذة، كالاستيراد
+                if (ctx.blockedByOffer({ shared: true })) return;
+                setIsManualOpen(true);
               }}
               offerMode={activeBidder.weightedOffer?.status === 'active' ? 'active' : activeBidder.weightedOffer?.status === 'adopted' ? 'adopted' : 'none'}
               sharedLocked={currentProject.bidders.some(isOfferLocked)}
@@ -308,7 +402,7 @@ export function App() {
               onMarkBidderSigned={handleMarkBidderSigned}
               offerControl={hasBidAmounts(activeBidder) ? (
                 <WeightedOfferControl bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)}
-                  onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
+                  onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
               ) : undefined}
             />
             <div className="mt-4">
@@ -318,22 +412,37 @@ export function App() {
                 onOpenPageBreaks={() => setIsPageBreaksOpen(true)} />
             </div>
             </>
-          ) : activeTab === 'summary' ? (
-            <ExecutiveSummaryView
+          ) : activeTab === 'study' ? (
+            <>
+            <StudyView
               project={currentProject}
-              onSelectBidder={selectBidder}
-              onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenExclusionReasons={setExclusionBidderId}
+              onSelectBidder={handlePickBidder}
+              onUpdateBidderStatus={handleUpdateBidderStatus}
+              onOpenAudit={() => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: tenderPath(currentProject).audit.firstBidderId ?? undefined })}
+              onOpenMatrix={() => setIsMultiBidderOpen(true)}
+              chartsOpen={chartsOpen}
+              onToggleCharts={() => setChartsOpen(o => !o)}
+            />
+            {chartsOpen && (
+              <ChartsView
+                bidders={currentProject.bidders.filter(hasBidAmounts)}
+                currency={currentProject.currency}
+                exclusionThreshold={exclusionThresholdOf(currentProject)}
+              />
+            )}
+            </>
+          ) : (
+            <ReportView
+              project={currentProject}
+              onGoStudy={() => setActiveTab('study')}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
-            />
-          ) : (
-            <ChartsView
-              bidders={currentProject.bidders.filter(hasBidAmounts)}
-              currency={currentProject.currency}
-              exclusionThreshold={exclusionThresholdOf(currentProject)}
+              onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}
+              onResumeWeightedOffer={resumeOfferFor}
             />
           )}
+        </div>
         </div>
 
       </main>
@@ -342,6 +451,16 @@ export function App() {
       <AppFooter onOpenWhatsNew={() => setIsWhatsNewOpen(true)} />
 
       {/* Modals */}
+      <StatusWindow
+        isOpen={isStatusOpen}
+        onClose={() => setIsStatusOpen(false)}
+        project={currentProject}
+        onAdd={handleAddStatus}
+        onEdit={handleEditStatus}
+        onDelete={handleDeleteStatus}
+        onOpenSheet={() => setIsStatusSheetOpen(true)}
+        onDirtyChange={setIsStatusDirty}
+      />
       <SmartTableImportModal
         isOpen={isSmartImportOpen}
         onClose={() => setIsSmartImportOpen(false)}
@@ -356,6 +475,16 @@ export function App() {
         }}
       />
 
+      <ManualEntryModal
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
+        onApply={(items, mode, name) => handleApplyExtractedItems(items, mode, name, undefined, 'manual')}
+        currentBidderName={activeBidder.name}
+        tableRows={referenceRows}
+        tableUnits={activeBidder.items.map(i => i.unit)}
+        onDirtyChange={setIsManualDirty}
+      />
+
       <ImageOcrModal
         isOpen={isOcrOpen}
         onClose={() => setIsOcrOpen(false)}
@@ -368,7 +497,7 @@ export function App() {
         isOpen={isMultiBidderOpen}
         onClose={() => setIsMultiBidderOpen(false)}
         project={currentProject}
-        onSelectBidder={selectBidder}
+        onSelectBidder={handlePickBidder}
         onAddNewBidder={handleAddNewBidder}
         onUpdateBidderStatus={handleUpdateBidderStatus}
         onOpenExclusionReasons={setExclusionBidderId}
@@ -399,18 +528,6 @@ export function App() {
         items={activeBidder.items}
         bidderName={activeBidder.name}
         onApply={handleApplyPageBreaks}
-      />
-
-      <OrderStatusModal
-        // يُعاد إنشاؤه مع كل فتح ومع كل مناقصة فتبدأ حقوله من جديد
-        key={`${currentProject.id}-status-${isStatusOpen}`}
-        isOpen={isStatusOpen}
-        onClose={() => setIsStatusOpen(false)}
-        statusLog={currentProject.statusLog ?? []}
-        suggestions={currentProject.bidders.map(b => b.name).filter(Boolean)}
-        onAdd={handleAddStatus}
-        onEdit={handleEditStatus}
-        onDelete={handleDeleteStatus}
       />
 
       <ProjectSettingsModal
@@ -459,6 +576,13 @@ export function App() {
           setIsProjectsOpen(false);
           setIsNewProjectOpen(true);
         }}
+      />
+
+      <CorrectionNoticeModal
+        isOpen={noticeKey === `${currentProject.id}:${activeBidder.id}`}
+        onClose={() => setNoticeKey(null)}
+        project={currentProject}
+        bidder={activeBidder}
       />
 
       <StatusSheetModal

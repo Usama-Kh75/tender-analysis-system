@@ -54,3 +54,18 @@ export function tenderDetailParts(project: TenderProject, { withCounts = true, w
   if (received && received >= analyzed) parts.push(`عدد العطاءات المستلمة: (${received})، المحلَّلة تجارياً منها: (${analyzed})`);
   return parts;
 }
+
+/**
+ * ملصق أعداد العطاءات في الرأس: «العطاءات: 5 مستلمة · 4 محلَّلة تجارياً · 1 لم تُحلَّل لنقص جوهري»؛ null إن لم يوجد شيء.
+ * كل عطاء في جدول التحليل يُحلَّل تجارياً والترسية على أفضلها، فلا «مؤهلة/غير مؤهلة» هنا (أسامة 2026-11-13). العطاء الذي
+ * فيه نقص جوهري (كالتأمينات الأولية) تستلمه اللجنة فيُعدّ مستلماً، ولا يدخل جدول التحليل التجاري.
+ */
+export function bidCountsLabel(project: TenderProject): string | null {
+  const analyzed = analyzedBidsCount(project);
+  const received = receivedBidsCountOf(project);
+  const parts: string[] = [];
+  if (received && received >= analyzed) parts.push(`${received} مستلمة`);
+  if (analyzed > 0) parts.push(`${analyzed} محلَّلة تجارياً`);
+  if (received && received > analyzed) parts.push(`${received - analyzed} لم تُحلَّل لنقص جوهري`);
+  return parts.length ? `العطاءات: ${parts.join(' · ')}` : null;
+}

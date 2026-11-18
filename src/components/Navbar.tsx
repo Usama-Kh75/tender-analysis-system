@@ -1,29 +1,23 @@
 import React, { useSyncExternalStore } from 'react';
 import {
   MonitorDown,
-  Users2,
   History,
   Plus,
-  Settings,
   FolderOpen,
   UserCheck,
   DownloadCloud,
   ShieldCheck,
   Pencil
 } from 'lucide-react';
-import { TenderProject, Bidder } from '../types/tender';
 import { canInstallApp, installApp, subscribeInstall } from '../pwa';
+import { MoreMenu } from './MoreMenu';
 
 interface NavbarProps {
-  project: TenderProject;
-  projects: TenderProject[];
-  activeBidder: Bidder;
-  onSelectProject: (id: string) => void;
+  // عدد المناقصات المحفوظة على زر «المناقصات» (قائمة الاختيار المنسدلة حُذفت، فلا حاجة للمصفوفة نفسها)
+  projectsCount: number;
   onNewProject: () => void;
   onOpenProjectsBrowser: () => void;
-  onOpenMultiBidder: () => void;
   onOpenAuditTrail: () => void;
-  onOpenSettings: () => void;
   unsavedCount: number;
   lastBackupAt?: string;
   onBackupAll: () => void;
@@ -32,14 +26,10 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  project,
-  projects,
-  onSelectProject,
+  projectsCount,
   onNewProject,
   onOpenProjectsBrowser,
-  onOpenMultiBidder,
   onOpenAuditTrail,
-  onOpenSettings,
   unsavedCount,
   lastBackupAt,
   onBackupAll,
@@ -57,14 +47,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-20">
           
           {/* Right Side: Full Official Title with Author (Permanent & Sticky) */}
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3.5 shrink-0">
             {/* py-1.5 لا p-2: سطر اسم اللجنة يضيف ارتفاعاً، والصندوق يبقى داخل الشريط (h-20) */}
             <div className="flex items-center gap-3 bg-slate-900/90 border border-amber-500/30 py-1.5 pr-3 pl-4 rounded-2xl shadow-lg">
 
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="font-black text-sm sm:text-base tracking-wide text-amber-400">
-                    نظام تحليل العطاءات التجاري المتكامل
+                    <span className="hidden xl:inline">نظام تحليل العطاءات التجاري المتكامل</span>
+                    <span className="xl:hidden">نظام تحليل العطاءات</span>
                   </span>
                 </div>
 
@@ -90,34 +81,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Project Switcher */}
-            <div className="hidden 2xl:flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-              <FolderOpen className="w-4 h-4 text-amber-400" />
-              <select
-                value={project.id}
-                onChange={(e) => onSelectProject(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer max-w-[180px] truncate font-medium"
-              >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-slate-900 text-white">
-                    {p.title} ({p.referenceNumber})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              onClick={onNewProject}
-              className="hidden xl:flex items-center gap-1 text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 px-2.5 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="إنشاء مناقصة جديدة"
-            >
-              <Plus className="w-3.5 h-3.5 text-amber-400" />
-              <span>مناقصة جديدة</span>
-            </button>
           </div>
 
           {/* Left Side: Clean Action Tools */}
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
 
             {/* نسخة احتياطية شاملة: العدد = المناقصات التي تغيّرت منذ آخر نسخة تحويها */}
             <button
@@ -139,7 +106,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {unsavedCount > 0
                 ? <DownloadCloud className="w-4 h-4 text-amber-400" />
                 : <ShieldCheck className="w-4 h-4 text-emerald-400" />}
-              <span className="hidden md:inline">نسخة احتياطية</span>
+              <span className="hidden xl:inline">نسخة احتياطية</span>
               {unsavedCount > 0 && (
                 <span className="bg-amber-500 text-slate-950 text-xs px-1.5 py-0.5 rounded-full font-bold">{unsavedCount}</span>
               )}
@@ -150,59 +117,34 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onOpenProjectsBrowser}
               className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
               title="استعراض كل المناقصات وعروضها"
-              aria-label={`المناقصات (${projects.length})`}
+              aria-label={`المناقصات (${projectsCount})`}
             >
               <FolderOpen className="w-4 h-4 text-amber-400" />
-              <span className="hidden md:inline">المناقصات</span>
+              <span className="hidden xl:inline">المناقصات</span>
               <span className="bg-amber-500/20 text-amber-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
-                {projects.length}
+                {projectsCount}
               </span>
             </button>
 
-            {/* Multi-Bidder Comparison */}
+            {/* تُستعمل كثيراً فلا تُخبَّأ في «⋯» */}
             <button
-              onClick={onOpenMultiBidder}
+              onClick={onNewProject}
               className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="مقارنة كافة المجهزين"
+              title="إنشاء مناقصة جديدة"
+              aria-label="مناقصة جديدة"
             >
-              <Users2 className="w-4 h-4 text-indigo-400" />
-              <span className="hidden md:inline">مقارنة المجهزين</span>
-              <span className="bg-indigo-500/30 text-indigo-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
-                {project.bidders.length}
-              </span>
+              <Plus className="w-4 h-4 text-amber-400" />
+              <span className="hidden xl:inline">مناقصة جديدة</span>
             </button>
 
-            {/* Audit Trail */}
-            <button
-              onClick={onOpenAuditTrail}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="سجل التتبع والتعديلات"
-            >
-              <History className="w-4 h-4 text-amber-400" />
-              <span className="hidden lg:inline">سجل التتبع</span>
-            </button>
-
-            {/* Install as app — only when the browser reports it's installable */}
-            {canInstall && (
-              <button
-                onClick={installApp}
-                className="flex items-center gap-1.5 whitespace-nowrap bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-black px-2 sm:px-3 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-amber-300/50"
-                title="تثبيت النظام كتطبيق على الحاسوب — يعمل بنافذته الخاصة وبلا إنترنت"
-                aria-label="تثبيت كتطبيق"
-              >
-                <MonitorDown className="w-4 h-4" />
-                <span className="hidden md:inline">تثبيت</span>
-              </button>
-            )}
-
-            {/* Settings */}
-            <button
-              onClick={onOpenSettings}
-              className="p-2 sm:p-2.5 text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="إعدادات المناقصة والنسب"
-            >
-              <Settings className="w-4 h-4 text-amber-400" />
-            </button>
+            <MoreMenu
+              dark
+              ariaLabel="المزيد"
+              items={[
+                { label: 'سجل التتبع', icon: <History className="w-3.5 h-3.5" />, onClick: onOpenAuditTrail },
+                ...(canInstall ? [{ label: 'تثبيت النظام', icon: <MonitorDown className="w-3.5 h-3.5" />, onClick: () => { void installApp(); }, title: 'تثبيت النظام كتطبيق على الحاسوب — يعمل بنافذته الخاصة وبلا إنترنت' }] : [])
+              ]}
+            />
           </div>
 
         </div>

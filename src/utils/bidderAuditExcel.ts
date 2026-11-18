@@ -2,11 +2,11 @@
 // التصدير بمواصفات «عرض_المجهز_..._مطابق_للأصل.xlsx» التي اعتمدتها اللجنة. الاستيراد يبقى على xlsx
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
-import { auditRowAmounts, isCommitteeCorrected, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
-import { toLatinDigits, percentDecimals } from './calculations';
+import { ADOPTION_ACTIONS, asSubmitted, auditRowAmounts, findAdoption, isCommitteeCorrected, unitLostOf, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
+import { percentDecimals } from './calculations';
 import { exclusionThresholdOf, buildRecommendation, hasBidAmounts } from './recommendation';
 import { summarizePages } from './pageSummary';
-import { assessBalance, correctedBalanceRows, isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
+import { assessBalance, correctedBalanceRows, isOfferFinal } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
 import { downloadXlsx } from './xlsxPrint';
 
@@ -15,28 +15,26 @@ import { downloadXlsx } from './xlsxPrint';
  * - «واقع الحال»: العطاء كما قدّمه المجهز بعيوبه، وكل عيب مؤشَّر ومشروح في فقرته. العيوب تُشتق من الأرقام
  *   الأصلية (المبلغ المدون، والمفرد المدون قبل أن يحل محله التفقيط)، فتبقى الفقرة التي صحّحتها اللجنة مؤشرة هنا.
  * - «أخطاء المجهز»: فقرات خطأ الضرب وتعارض التفقيط وحدها، بأرقام المجهز كما دوّنها، وعمود «قرار اللجنة» للتعبئة.
- * - «الجدول المعدل»: العطاء بعد تصحيحات اللجنة في النظام، بالانحراف والأسعار الموزونة، والتصحيح المعتمد لكل
+ * - «العطاء بعد التصحيح»: العطاء بعد تصحيحات اللجنة في النظام، بالانحراف وحده، والتصحيح المعتمد لكل
  *   فقرة كما سُجّل في سجل التدقيق.
- * - «اعتماد العرض الموزون» (مع عرض فعّال أو معتمد فقط): الوصف والوحدة والكمية ومفرد العرض ومبلغه، ليعتمدها المجهز
- *   ويوقّع ويضع بها أسعار عطائه.
+ * بلا أسعار موزونة (قرار المستخدم 2026-11-19): الجدول الموزون في تصدير «المحضر» وحده.
  * التنسيق كملف «مطابق للأصل»: خط Arial، ورؤوس بيضاء على أزرق داكن، وأرقام المجهز كما دوّنها بالأزرق والمحسوبة
  * بالأسود، والصفوف المؤشرة ملوّنة. تثبيت الأعمدة لا تكتبه المكتبة المجانية.
  */
 
 // أزرار الاعتماد في BOQTable تسجّل هذه الإجراءات، وسند كل منها في ضوابط رقم (4) خامساً/ب
 const ADOPTIONS: Record<string, string> = {
-  'اعتماد تصحيح خطأ الضرب بقرار اللجنة':
+  [ADOPTION_ACTIONS.math]:
     'اعتماد حاصل ضرب سعر المفرد في الكمية (ضوابط رقم (4) خامساً/ب/2)',
-  'اعتماد سعر المفرد المكتوب كتابةً بقرار اللجنة':
+  [ADOPTION_ACTIONS.unit]:
     'اعتماد سعر المفرد المكتوب كتابةً (ضوابط رقم (4) خامساً/ب/1) والمبلغ حاصل ضربه في الكمية (خامساً/ب/2)',
-  'اعتماد المبلغ المكتوب كتابةً بقرار اللجنة':
+  [ADOPTION_ACTIONS.amount]:
     'اعتماد مبلغ الفقرة المكتوب كتابةً (ضوابط رقم (4) خامساً/ب/1)',
-  'اعتماد التفقيط بعد إضافة «آلاف» بقرار اللجنة':
+  [ADOPTION_ACTIONS.thousands]:
     'اعتماد التفقيط بعد إضافة كلمة «آلاف» الناقصة، فيوافق الأرقام المدونة (ضوابط رقم (4) خامساً/ب/3: تصحيح تبلّغه اللجنة للمجهز)',
-  'اعتماد المبلغ وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية':
+  [ADOPTION_ACTIONS.decimal]:
     'اعتماد مبلغ الفقرة كما دوّنه المجهز وتصحيح سعر المفرد لخطأ فادح في العلامة العشرية (ضوابط رقم (4) خامساً/ب/2، الاستثناء)'
 };
-const MATH_ADOPTION = 'اعتماد تصحيح خطأ الضرب بقرار اللجنة';
 // حضور المجهز وتوقيعه وختمه إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)، كما أشّرته اللجنة في الجدول
 const signatureText = (item: BOQItem) => isSignedCorrection(item)
   ? 'وقّع المجهز وختم إزاء التصحيح (ضوابط رقم (4) خامساً/ب/3)'
@@ -69,7 +67,6 @@ const pct = (v: number, decimals = 2): XLSX.CellObject => {
   const fmt = `0.${'0'.repeat(decimals)}%`;
   return { t: 'n', v: v / 100, z: fmt, s: { numFmt: fmt } };
 };
-const ratio = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0.0000', s: { numFmt: '0.0000' } });
 const count = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0' });
 
 // رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»).
@@ -170,12 +167,6 @@ export function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet 
   return ws;
 }
 
-// آخر اعتماد للجنة على الفقرة (السجل من الأحدث): يطابق المجهز ورقم الفقرة والمبلغ الذي انتهى إليه. سجلات ما
-// قبل 1.12.0 بلا مجهز تُطابق بالرقم والمبلغ وحدهما، وإلا التبس تصحيح مجهزين انتهيا إلى المبلغ نفسه
-const findAdoption = (item: BOQItem, bidderId: string, logs: AuditLogEntry[]) =>
-  logs.find(l => ADOPTIONS[l.action] && (!l.bidderId || l.bidderId === bidderId)
-    && toLatinDigits(String(l.itemNo)) === toLatinDigits(String(item.itemNo)) && Math.abs(Number(l.newValue) - item.bidderTotal) < 0.01);
-
 interface RowAnalysis {
   item: BOQItem;
   corrected: boolean;
@@ -191,14 +182,11 @@ interface RowAnalysis {
 function analyseRow(item: BOQItem, bidderId: string, logs: AuditLogEntry[]): RowAnalysis {
   const corrected = isCommitteeCorrected(item);
   const adoption = corrected ? findAdoption(item, bidderId, logs) : undefined;
-  // التفقيط كما كتبه المجهز: اعتماد اللجنة تفقيطاً بعد إضافة «آلاف» يحفظ الأصل في originalWrittenText
-  const asWritten = item.originalWrittenText ?? item.writtenText;
+  // أرقام المجهز كما دوّنها (asSubmitted): اعتماد اللجنة تفقيطاً بعد إضافة «آلاف» يحفظ الأصل في originalWrittenText
+  const { unit, total: stated, writtenText: asWritten } = asSubmitted(item);
   const written = asWritten ? parseArabicTextToNumber(asWritten) : null;
-  const stated = item.enteredBidderTotal || item.bidderTotal;
-  // اعتماد التفقيط سعراً للمفرد كان يكتب فوق المفرد المدون: إن لم يُحفظ الأصل فالمفرد الحالي هو التفقيط نفسه
-  const unitLost = corrected && item.originalUnitPrice === undefined && !!adoption
-    && adoption.action !== MATH_ADOPTION && written !== null && Math.abs((item.enteredUnitPrice || 0) - written) < 0.01;
-  const unit = item.originalUnitPrice ?? item.enteredUnitPrice ?? 0;
+  // اعتماد التفقيط سعراً للمفرد قبل أن يحفظ النظام الرقم الأصلي (المصدر المشترك مع الشاشة)
+  const unitLost = unitLostOf(item, adoption);
   const qty = item.quantity;
 
   const defects: string[] = [];
@@ -270,7 +258,7 @@ function buildAsIsSheet(project: TenderProject, bidder: Bidder, rows: RowAnalysi
       item.unit,
       input(item.quantity),
       unitLost ? 'غير محفوظ' : hasUnit ? input(unit) : '',
-      item.originalWrittenText ?? item.writtenText ?? '',
+      asSubmitted(item).writtenText ?? '',
       stated > 0 ? input(stated) : item.unpriced ? '-' : '',
       hasUnit && stated > 0 ? formula(`D${n}*E${n}`, product) : '',
       hasUnit && stated > 0 ? formula(`G${n}-H${n}`, stated - product) : '',
@@ -381,7 +369,7 @@ function buildErrorsSheet(project: TenderProject, bidder: Bidder, rows: RowAnaly
 
 const adoptionRule = (row: RowAnalysis) => row.adoption ? ADOPTIONS[row.adoption.action] : 'تصحيح حسابي بقرار اللجنة';
 
-// التصحيح المعتمد للفقرة كما يظهر في الجدول المعدل
+// التصحيح المعتمد للفقرة كما يظهر في ورقة «العطاء بعد التصحيح»
 function correctionText(row: RowAnalysis): string {
   const { item, corrected, stated } = row;
   const parts: string[] = [];
@@ -396,9 +384,7 @@ function correctionText(row: RowAnalysis): string {
   }
   if (row.pending.length) parts.push(`بانتظار قرار اللجنة: ${row.pending.join(' + ')}`);
   if (item.unpriced) parts.push('غير مسعّرة في العطاء');
-  if (item.weightedAdjustment) parts.push(`سُوّي تقريب المفرد الموزون (${item.weightedAdjustment > 0 ? '+' : ''}${item.weightedAdjustment})`);
   if (item.unreasonablePrice) parts.push(`سعر غير معقول: ${item.unreasonablePrice.note}`);
-  if (isOfferEdited(item)) parts.push(`معدّل بالعرض الموزون: المبلغ ${fmt(item.offerTotal ?? 0)}`);
   return parts.join('؛ ');
 }
 
@@ -406,10 +392,8 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
   const last = FIRST + rows.length - 1;
   const t = bidder.totals;
   const hasEstimate = t.totalEstimatedAmount > 0;
-  // عمودا العرض الموزون يظهران مع عرض فعّال أو معتمد (الموقوف لا يُعرض)
-  const hasOffer = !!bidder.weightedOffer && bidder.weightedOffer.status !== 'paused';
   const pendingCount = rows.filter(r => r.pending.length > 0).length;
-  // بلا كلفة تخمينية لا معنى للانحراف والأسعار الموزونة، فتبقى خاناتها فارغة
+  // بلا كلفة تخمينية لا معنى للانحراف، فتبقى خاناتها فارغة
   const est = (cell: Cell): Cell => hasEstimate ? cell : '';
 
   const data: Cell[][] = rows.map(row => {
@@ -428,11 +412,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
       est(amount(item.diffAmount)),
       est(item.estimatedTotal > 0 ? pct(item.deviationPercent) : ''),
       est(amount(item.deviatedAmount)),
-      est(ratio(item.priceRatio)),
-      est(amount(item.newPrice)),
-      est(amount(round2(item.weightedUnitPrice))),
-      correctionText(row),
-      ...(hasOffer ? [amount(item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal)), amount(item.offerTotal ?? item.bidderTotal)] : [])
+      correctionText(row)
     ];
   });
 
@@ -445,9 +425,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
   const footer: Cell[][] = [
     [],
     ['المجموع', '', '', '', '', est(sum('F', t.totalEstimatedAmount)), '', sum('H', t.totalBidderAmount),
-      est(sum('I', t.overallDiffAmount)), '', est(sum('K', t.deviatedItemsSum)), '',
-      est(sum('M', t.newPricesTotal)),
-      ...(hasOffer ? ['', '', '', sum('Q', round2(bidder.items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0)))] : [])],
+      est(sum('I', t.overallDiffAmount)), '', est(sum('K', t.deviatedItemsSum))],
     [],
     line('مبلغ العطاء بعد التصحيح الحسابي (أساس التسلسل — خامساً/ب/6)', formula(`H${sumRow}`, t.totalBidderAmount)),
     line('مجموع مبالغ الفقرات كما دوّنها المجهز', amount(sumEntered)),
@@ -456,36 +434,32 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
       line('الكلفة التخمينية', amount(t.totalEstimatedAmount)),
       line('الانحراف الكلي', pct(t.totalDeviationPercent, percentDecimals(t.totalDeviationPercent, exclusionThresholdOf(project)))),
       line('الانحراف الجزئي', pct(t.partialDeviationPercent)),
-      line('النسبة السعرية', ratio(t.overallPriceRatio)),
-      line(`عدد الفقرات المنحرفة (أكثر من ${project.deviationThreshold}%)`, count(t.deviatedItemsCount)),
-      ...(Math.abs(t.weightedRoundingResidual ?? 0) >= 0.005
-        ? [line('فرق تقريب متبقٍ في الأسعار الموزونة (تعذّرت تسويته بكميات الفقرات)', amount(t.weightedRoundingResidual ?? 0))] : [])
+      line(`عدد الفقرات المنحرفة (أكثر من ${project.deviationThreshold}%)`, count(t.deviatedItemsCount))
     ] : [])
   ];
 
-  const note = 'مبالغ المجهز بعد تصحيحات اللجنة (ضوابط رقم (4) خامساً/ب)، وعليها يُحسب الانحراف والأسعار الموزونة.'
+  const note = 'مبالغ المجهز بعد تصحيحات اللجنة (ضوابط رقم (4) خامساً/ب)، وعليها يُحسب الانحراف.'
     + (pendingCount > 0 ? ` تنبيه: (${pendingCount}) فقرة مؤشرة لم تحسمها اللجنة بعد، ومبالغها كما دوّنها المجهز.` : '')
-    + (hasEstimate ? '' : ' لا كلفة تخمينية بعد، فأعمدة الانحراف والأسعار الموزونة فارغة.')
+    + (hasEstimate ? '' : ' لا كلفة تخمينية بعد، فأعمدة الانحراف فارغة.')
     + ' الصفوف الخضراء: صحّحتها اللجنة، والكهرمانية: بانتظار قرار اللجنة.';
 
   return buildSheet([
-    [`الجدول المعدل بعد التصحيح الحسابي: ${bidder.name}`],
+    [`العطاء بعد التصحيح الحسابي: ${bidder.name}`],
     [projectLine(project)],
     [note],
     [],
     ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', 'المفرد التخميني', 'المبلغ التخميني', 'مفرد المجهز', 'مبلغ المجهز',
-      'فرق المبلغ', 'نسبة الانحراف', 'الفقرة المنحرفة', 'النسبة السعرية', 'السعر الجديد (للمجهز)', 'المفرد المجهز الموزون',
-      'التصحيح المعتمد', ...(hasOffer ? ['مفرد العرض الموزون', 'مبلغ العرض الموزون'] : [])],
+      'فرق المبلغ', 'نسبة الانحراف', 'الفقرة المنحرفة', 'التصحيح المعتمد'],
     ...data,
     ...footer
   ], {
-    widths: [6, 34, 9, 11, 13, 16, 13, 16, 15, 11, 15, 11, 17, 15, 60, ...(hasOffer ? [15, 17] : [])],
+    widths: [6, 34, 9, 11, 13, 16, 13, 16, 15, 11, 15, 60],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + rows.length,
     fillOf: r => {
       const row = rows[r - HEADER_ROWS - 1];
       return row.pending.length > 0 ? FILL.text : row.corrected ? FILL.done : undefined;
     },
-    center: [0, 2], wrap: [1, 14], filter: true
+    center: [0, 2], wrap: [1, 11], filter: true
   });
 }
 
@@ -553,32 +527,27 @@ export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder, 
   });
 }
 
-// ملخص صفحات العطاء: مبلغ كل صفحة كما دوّنه المجهز، وبعد التصحيح، وفي العرض الموزون؛ المجموع بصيغ Excel
+// ملخص صفحات العطاء: مبلغ كل صفحة كما دوّنه المجهز، وبعد التصحيح؛ المجموع بصيغ Excel
 function buildPagesSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
   const pages = summarizePages(bidder.items);
   if (!pages) return null;
-  const hasOffer = !!bidder.weightedOffer && bidder.weightedOffer.status !== 'paused';
-  // معتمد ولم يتغيّر مبلغ العطاء بعده، كما في المحضر (offerFinal): المتقادم غير نهائي
-  const final = bidder.weightedOffer?.status === 'adopted' && !offerStatus(bidder)?.stale;
   const last = FIRST + pages.rows.length - 1;
   const data: Cell[][] = pages.rows.map(r => [
-    r.page === null ? 'فقرات بلا صفحة' : count(r.page), count(r.itemCount), amount(r.stated), amount(r.corrected),
-    ...(hasOffer ? [amount(r.offer)] : [])
+    r.page === null ? 'فقرات بلا صفحة' : count(r.page), count(r.itemCount), amount(r.stated), amount(r.corrected)
   ]);
   const sum = (col: string, v: number) => formula(`SUM(${col}${FIRST}:${col}${last})`, v);
   return buildSheet([
     [`ملخص صفحات العطاء: ${bidder.name}`],
     [projectLine(project)],
     ['مبلغ كل صفحة من عطاء المجهز كما قدّمه: كما دوّنه، وبعد التصحيح الحسابي (ضوابط رقم (4) خامساً/ب)'
-      + (hasOffer ? `، وفي العرض الموزون (سادساً/5)${final ? '' : ' — غير نهائي'}` : '') + '. مجموع الصفحات مجموع العطاء.'],
+      + '. مجموع الصفحات مجموع العطاء.'],
     [],
-    ['الصفحة', 'عدد الفقرات', 'كما دوّنه المجهز', 'بعد التصحيح الحسابي', ...(hasOffer ? ['العرض الموزون'] : [])],
+    ['الصفحة', 'عدد الفقرات', 'كما دوّنه المجهز', 'بعد التصحيح الحسابي'],
     ...data,
     [],
-    ['المجموع', sum('B', bidder.items.length), sum('C', pages.totals.stated), sum('D', pages.totals.corrected),
-      ...(hasOffer ? [sum('E', pages.totals.offer)] : [])]
+    ['المجموع', sum('B', bidder.items.length), sum('C', pages.totals.stated), sum('D', pages.totals.corrected)]
   ], {
-    widths: [16, 12, 20, 20, ...(hasOffer ? [20] : [])],
+    widths: [16, 12, 20, 20],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + pages.rows.length,
     center: [0, 1]
   });
@@ -591,9 +560,7 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, buildAsIsSheet(project, bidder, rows), AS_IS_SHEET);
   XLSX.utils.book_append_sheet(wb, buildErrorsSheet(project, bidder, rows), 'أخطاء المجهز');
-  XLSX.utils.book_append_sheet(wb, buildAdjustedSheet(project, bidder, rows), 'الجدول المعدل');
-  const approvalSheet = buildOfferApprovalSheet(project, bidder);
-  if (approvalSheet) XLSX.utils.book_append_sheet(wb, approvalSheet, 'اعتماد العرض الموزون');
+  XLSX.utils.book_append_sheet(wb, buildAdjustedSheet(project, bidder, rows), 'العطاء بعد التصحيح');
   const pagesSheet = buildPagesSheet(project, bidder);
   if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
   return markRtl(wb);

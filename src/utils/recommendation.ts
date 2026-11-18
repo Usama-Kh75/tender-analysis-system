@@ -77,6 +77,18 @@ export const hasNoEstimate = (project: TenderProject): boolean =>
 
 const isRejectedByCommittee = (bidder: Bidder): boolean => bidder.status === 'disqualified';
 
+/**
+ * أعداد العطاءات المحلَّلة: غير المؤهلة = مستبعدة اللجنة أو المتجاوزة حد الاستبعاد، والمؤهلة = الباقي.
+ * مصدر واحد لبطاقتي «العطاءات المؤهلة» و«المستبعدة» في الملخص ولملصق الرأس؛ null قبل الكلفة التخمينية
+ */
+export function eligibilityCounts(project: TenderProject): { analyzed: number; eligible: number; excluded: number } | null {
+  if (hasNoEstimate(project)) return null;
+  const threshold = exclusionThresholdOf(project);
+  const analyzed = project.bidders.filter(hasBidAmounts);
+  const excluded = analyzed.filter(b => isRejectedByCommittee(b) || isCommerciallyExcluded(b, threshold)).length;
+  return { analyzed: analyzed.length, eligible: analyzed.length - excluded, excluded };
+}
+
 const byAmount = (a: Bidder, b: Bidder) => a.totals.totalBidderAmount - b.totals.totalBidderAmount;
 
 export function buildRecommendation(project: TenderProject): Recommendation {
@@ -138,4 +150,12 @@ export function buildRecommendation(project: TenderProject): Recommendation {
   }
 
   return { ...none, kind: 'award', eligible, primary: lowest };
+}
+
+/** العطاء الفائز الذي يجوز له العرض الموزون (ضوابط (4) سادساً/5: «العطاء المستجيب والأنسب سعراً»،
+ *  وتعديل الأسعار «بنفس نسبة مبلغ العطاء الفائز»): الموصى به في توصية ترسية وحدها، أي الأدنى المؤهل
+ *  أو مختار اللجنة. لا شيء في التساوي قبل اختيارها، ولا في الإحالة بالتفاوض أو إعادة الطرح */
+export function offerWinner(project: TenderProject): Bidder | undefined {
+  const rec = buildRecommendation(project);
+  return rec.kind === 'award' && rec.primary && hasBidAmounts(rec.primary) ? rec.primary : undefined;
 }

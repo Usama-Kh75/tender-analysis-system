@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject, sanitizeStatusFields } from '../src/utils/storageService';
 import {
-  statusText, statusLine, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows
+  statusText, statusLine, branchesOf, validateStatusEntry, sanitizeStatusLog, currentStatus, formatSheetDate, statusSheetRows, statusBadgeText
 } from '../src/utils/orderStatus';
 import { createStatusHandlers } from '../src/app/statusHandlers';
 import { compareOrderNumbers, orderNumberParts } from '../src/utils/orderNumber';
@@ -327,4 +327,14 @@ test('Excel: الإجراء والملاحظة متعددا الأسطر يبق�
   assert.equal(n.v, 'أولاً\nثانياً');
   assert.equal(a.s.alignment.wrapText, true);
   assert.equal(n.s.alignment.wrapText, true);
+});
+
+test('نص زر الموقف', () => {
+  assert.equal(statusBadgeText(undefined), 'الموقف: لم يُسجَّل');
+  assert.equal(statusBadgeText([]), 'الموقف: لم يُسجَّل');
+  const first = entry({ id: 'a', stage: 'analysis', branch: 'commercial' });
+  const last = entry({ id: 'b', stage: 'audit', memoDate: '2020-01-01' });
+  assert.equal(statusBadgeText([first, last]), 'الموقف: ' + statusLine(last));
+  // مدخل نصه فارغ (مرحلة «أخرى» بلا نص)
+  assert.equal(statusBadgeText([entry({ stage: 'other', customText: '' })]), 'الموقف: غير محدد');
 });

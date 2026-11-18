@@ -5,7 +5,16 @@
  */
 const KEY = 'tender_analysis_resume';
 
-export type ResumeTab = 'table' | 'summary' | 'charts';
+export type ResumeTab = 'bids' | 'study' | 'report';
+export type MainTab = ResumeTab;
+
+// القيم المحفوظة قبل v1.24.0 (table/summary/charts) ومن v1.24.0 (analysis/status) ومن التبويبات الثلاثة الأولى (recommendation) تُقرأ على مقابلها الجديد
+export function normalizeResumeTab(v: unknown): ResumeTab {
+  if (v === 'bids' || v === 'study' || v === 'report') return v;
+  if (v === 'analysis' || v === 'summary' || v === 'charts') return 'study';
+  if (v === 'recommendation' || v === 'status') return 'report';
+  return 'bids';
+}
 
 export interface ResumeState {
   tab: ResumeTab;
@@ -22,7 +31,7 @@ function consumeResumeState(): ResumeState | null {
     if (!raw) return null;
     sessionStorage.removeItem(KEY);
     const s = JSON.parse(raw) as Partial<ResumeState>;
-    const tab: ResumeTab = s.tab === 'summary' || s.tab === 'charts' ? s.tab : 'table';
+    const tab = normalizeResumeTab(s.tab);
     return { tab, scrollY: typeof s.scrollY === 'number' && s.scrollY > 0 ? s.scrollY : 0 };
   } catch { return null; }
 }

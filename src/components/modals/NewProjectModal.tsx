@@ -5,11 +5,12 @@ import { CONTRACT_TYPES, CONTRACT_TYPE_ORDER } from '../../utils/contractTypes';
 import { BUDGET_TYPES, BUDGET_TYPE_ORDER } from '../../utils/budgetTypes';
 import { ANNOUNCEMENT_ORDER, announcementLabel } from '../../utils/tenderDetails';
 import { localDate } from '../../utils/localDate';
+import { toLatinDigits } from '../../utils/calculations';
 
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { title: string; referenceNumber: string; announcementNo: number; receivedAt: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[] }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; announcementNo: number; receivedAt: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[]; receivedBidsCount?: number }) => void;
 }
 
 // نوع العقد يُختار قبل إدخال أي بيانات، لأن التوصية (معايير المفاضلة) تتبعه
@@ -21,8 +22,20 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const [contractType, setContractType] = useState<ContractType | null>(null);
   const [budgetType, setBudgetType] = useState<BudgetType | null>(null);
   const [bidderNamesText, setBidderNamesText] = useState('');
+  // عدد العطاءات المستلمة: يتبع عدد الأسماء المكتوبة ما لم يكتب المستخدم فيه بنفسه (null = لم يلمسه)
+  const [receivedTyped, setReceivedTyped] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const namesCount = bidderNamesText.split(/\r?\n/).filter(n => n.trim()).length;
+  const receivedShown = receivedTyped ?? (namesCount > 0 ? String(namesCount) : '');
+  const receivedText = toLatinDigits(receivedShown.trim());
+  const received = receivedText === '' ? undefined : Number(receivedText);
+  // القاعدة نفسها في إعدادات المناقصة: لا يقل عن المحلَّلة، وهنا المحلَّلة هي الشركات المسجَّلة
+  const receivedError = received === undefined ? null
+    : !Number.isInteger(received) || received < 1 ? 'أدخل عدداً صحيحاً موجباً، أو اتركه فارغاً.'
+    : received < namesCount ? `لا يقل عن عدد الشركات المكتوبة أسماؤها (${namesCount}).`
+    : null;
 
   const close = () => {
     setTitle('');
@@ -32,19 +45,20 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     setContractType(null);
     setBudgetType(null);
     setBidderNamesText('');
+    setReceivedTyped(null);
     onClose();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !contractType || !budgetType) return;
-    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), announcementNo, receivedAt, contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/) });
+    if (!title.trim() || !contractType || !budgetType || receivedError) return;
+    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), announcementNo, receivedAt, contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/), receivedBidsCount: received });
     close();
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="new-project-title-heading" className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
 
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -52,7 +66,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               <FolderPlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold">مناقصة / طلبية جديدة</h2>
+              <h2 id="new-project-title-heading" className="text-base sm:text-lg font-bold">مناقصة / طلبية جديدة</h2>
               <p className="text-xs text-slate-400">يُحدد نوع العقد ونوع الموازنة أولاً لتُصاغ التوصية وفق ضوابطهما</p>
             </div>
           </div>
@@ -133,7 +147,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label htmlFor="new-project-ref" className="block text-xs font-bold text-slate-700 mb-1">رقم الطلبية أو المناقصة</label>
               <input
@@ -184,6 +198,27 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             </p>
           </div>
 
+          <div>
+            <label htmlFor="new-project-received-count" className="block text-xs font-bold text-slate-700 mb-1">عدد العطاءات المستلمة</label>
+            <input
+              id="new-project-received-count"
+              type="text"
+              inputMode="numeric"
+              value={receivedShown}
+              onChange={(e) => setReceivedTyped(e.target.value)}
+              aria-invalid={receivedError ? true : undefined}
+              aria-describedby="new-project-received-note"
+              className={`w-32 bg-white border rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${receivedError ? 'border-rose-400' : 'border-slate-300'}`}
+            />
+            {receivedError ? (
+              <p id="new-project-received-note" role="alert" className="text-[11px] mt-1 text-rose-700 font-bold">{receivedError}</p>
+            ) : (
+              <p id="new-project-received-note" className="text-[11px] mt-1 text-slate-500">
+                اختياري: به يعرف النظام متى اكتمل إدخال العطاءات وينتقل بك إلى التحليل. يتبع عدد الأسماء ما لم تكتب فيه. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُحسب مستلماً ولا يُدخل للتحليل التجاري.
+              </p>
+            )}
+          </div>
+
           <div className="pt-2 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -194,7 +229,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             </button>
             <button
               type="submit"
-              disabled={!title.trim() || !contractType || !budgetType}
+              disabled={!title.trim() || !contractType || !budgetType || !!receivedError}
               className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               إنشاء المناقصة

@@ -65,10 +65,10 @@ test('Excel: «قرار اللجنة» في أخطاء المجهز و«التص
   assert.match(decision20, /اعتماد حاصل ضرب/);
   assert.match(decision20, /بانتظار توقيع المجهز/);
   assert.match(decision277, /وقّع المجهز وختم إزاء التصحيح/);
-  const adjusted = wb.Sheets['الجدول المعدل'];
-  // العمود O (14) «التصحيح المعتمد»
-  assert.match(cellText(adjusted, 7, 14), /وقّع المجهز وختم إزاء التصحيح/);
-  assert.match(cellText(adjusted, 6, 14), /بانتظار توقيع المجهز/);
+  const adjusted = wb.Sheets['العطاء بعد التصحيح'];
+  // العمود L (11) «التصحيح المعتمد»
+  assert.match(cellText(adjusted, 7, 11), /وقّع المجهز وختم إزاء التصحيح/);
+  assert.match(cellText(adjusted, 6, 11), /بانتظار توقيع المجهز/);
 });
 
 test('Excel: فقرة لم تحسمها اللجنة يبقى «قرار اللجنة» فارغاً للتعبئة', () => {

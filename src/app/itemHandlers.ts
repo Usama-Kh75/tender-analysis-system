@@ -7,6 +7,19 @@ import { Bidder, BOQItem, ReadingField, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
 import { READING_FIELD_LABELS, SHARED_ESTIMATE_FIELDS, withoutBidderPrices } from './itemFields';
 
+// الفقرة بعد إلغاء تصحيح اللجنة: تعود أرقامها وتفقيطها إلى ما دوّنه المجهز، ويسقط توقيعه إزاء التصحيح الملغى
+const withoutCommitteeCorrection = (item: BOQItem): BOQItem => {
+  const restoredUnit = item.originalUnitPrice ?? item.enteredUnitPrice;
+  return {
+    ...item, bidderTotal: item.enteredBidderTotal || 0, enteredUnitPrice: restoredUnit, bidderUnitPrice: restoredUnit || 0,
+    originalUnitPrice: undefined,
+    // التفقيط المعتمد بعد إضافة «آلاف» يعود إلى ما كتبه المجهز
+    writtenText: item.originalWrittenText ?? item.writtenText, originalWrittenText: undefined,
+    // توقيع المجهز كان إزاء التصحيح الملغى
+    bidderSignedAt: undefined
+  };
+};
+
 export function createItemHandlers(ctx: EditContext) {
   const { currentProject, activeBidder, saveProject, commitBidder, blockedByOffer } = ctx;
 
@@ -151,17 +164,7 @@ export function createItemHandlers(ctx: EditContext) {
     const updatedBidders = currentProject.bidders.map(b => {
       if (!affected.includes(b)) return b;
       const item = b.items[index];
-      const restoredUnit = item.originalUnitPrice ?? item.enteredUnitPrice;
-      const base: BOQItem = isCommitteeCorrected(item)
-        ? {
-          ...item, bidderTotal: item.enteredBidderTotal || 0, enteredUnitPrice: restoredUnit, bidderUnitPrice: restoredUnit || 0,
-          originalUnitPrice: undefined,
-          // التفقيط المعتمد بعد إضافة «آلاف» يعود إلى ما كتبه المجهز
-          writtenText: item.originalWrittenText ?? item.writtenText, originalWrittenText: undefined,
-          // توقيع المجهز كان إزاء التصحيح الملغى
-          bidderSignedAt: undefined
-        }
-        : item;
+      const base: BOQItem = isCommitteeCorrected(item) ? withoutCommitteeCorrection(item) : item;
       let patch: Partial<BOQItem>;
       if (field === 'quantity') {
         // المفرد التخميني يُصفَّر فيُشتق من المبلغ التخميني والكمية الجديدة، كما عند تعديل المبلغ التخميني:
@@ -211,9 +214,77 @@ export function createItemHandlers(ctx: EditContext) {
       updatedProj,
       'تصحيح قراءة',
       `تصحيح قراءة ${label} للفقرة رقم (${before.itemNo}) ${isQuantity ? '(مشتركة لكل المجهزين)' : `في عطاء (${activeBidder.name})`} من (${fmt(oldValue)}) إلى (${fmt(newValue)})، وأُعيد فحصها`,
-      { itemNo: before.itemNo, oldValue, newValue }
+      { itemNo: before.itemNo, ...(isQuantity ? {} : { bidderId: activeBidder.id }), fieldName: field, oldValue, newValue }
     );
 
+    saveProject(updatedProj);
+  };
+
+  // «الورقة تقول»: اللجنة طابقت الفقرة بالورقة فتبيّن أن الرقم المقروء هو الخطأ (خطأ قراءة لا خطأ مجهز، مثل «٣» بخط اليد
+  // قُرئت «٢»). الرقمان المعطيان يصيران المدوَّنين في استدعاء واحد (استدعاءان متتاليان يلغي الثاني الأول)، وتُمسح علامتا
+  // التدقيق ليعيد calculateBOQMetrics فحصهما، ولا يُعدّ ذلك تصحيح لجنة. التفقيط لا يُمس. فقرة عليها تصحيح لجنة يُلغى
+  // تصحيحها علناً بعد التأكيد كما في handleCorrectReading
+  const handleReadingFromPaper = (index: number, paper: { unitPrice?: number; total?: number }) => {
+    const before = activeBidder.items[index];
+    if (!before) return;
+    const hasUnit = typeof paper.unitPrice === 'number' && paper.unitPrice > 0;
+    const hasTotal = typeof paper.total === 'number' && paper.total > 0;
+    if (!hasUnit && !hasTotal) return;
+    if (blockedByOffer({ bidderId: activeBidder.id })) return;
+    const fmt = (v: unknown) => v === undefined || v === '' ? '—' : typeof v === 'number' ? v.toLocaleString('en-US') : String(v);
+    const corrected = isCommitteeCorrected(before);
+    if (corrected && !window.confirm(
+      `الفقرة رقم (${before.itemNo}) عليها تصحيح حسابي من اللجنة: المبلغ المعتمد (${fmt(before.bidderTotal)})، والذي دوّنه المجهز (${fmt(before.enteredBidderTotal)}).
+
+`
+      + `«الورقة تقول» تصحيح لقراءة العطاء، والتصحيح بُني على القراءة القديمة فيُلغى ثم تُعتمد أرقام الورقة، ويُسجَّل ذلك في سجل التدقيق.
+
+هل تريد المتابعة؟`
+    )) return;
+
+    const base = corrected ? withoutCommitteeCorrection(before) : before;
+    const oldUnit = (before.originalUnitPrice ?? before.enteredUnitPrice) || undefined;
+    const oldTotal = before.enteredBidderTotal || before.bidderTotal;
+    const unit = hasUnit ? paper.unitPrice! : undefined;
+    const bidderTotal = hasTotal ? paper.total! : (unit !== undefined ? (base.bidderTotal || unit * (base.quantity || 1)) : base.bidderTotal);
+    const next: BOQItem = {
+      ...base,
+      ...(unit !== undefined ? { enteredUnitPrice: unit, bidderUnitPrice: unit } : {}),
+      bidderTotal,
+      enteredBidderTotal: bidderTotal || undefined,
+      hasMathError: undefined,
+      hasTextDiscrepancy: undefined,
+      readCorrected: true,
+      readCheck: undefined,
+      unpriced: bidderTotal > 0 ? undefined : base.unpriced
+    };
+    const updatedRaw = [...activeBidder.items];
+    updatedRaw[index] = next;
+    const recalculation = calculateBOQMetrics(updatedRaw, currentProject.deviationThreshold);
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: currentProject.bidders.map(b => b.id === activeBidder.id
+        ? { ...b, items: recalculation.items, totals: recalculation.totals } : b),
+      updatedAt: new Date().toISOString()
+    };
+    if (corrected) {
+      updatedProj = addAuditLog(
+        updatedProj,
+        'إلغاء تصحيح اللجنة لتصحيح قراءة',
+        `أُلغي التصحيح الحسابي للفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) لأن الورقة تخالف القراءة: عاد مبلغها من (${fmt(before.bidderTotal)}) إلى ما دوّنه المجهز (${fmt(before.enteredBidderTotal)})${before.bidderSignedAt ? '، وسقط معه تأشير توقيع المجهز إزاءه' : ''}`,
+        { itemNo: before.itemNo, bidderId: activeBidder.id, oldValue: before.bidderTotal, newValue: before.enteredBidderTotal }
+      );
+    }
+    const changes = [
+      unit !== undefined ? `المفرد من (${fmt(oldUnit)}) إلى (${fmt(unit)})` : '',
+      `المبلغ من (${fmt(oldTotal)}) إلى (${fmt(bidderTotal)})`
+    ].filter(Boolean).join('، ');
+    updatedProj = addAuditLog(
+      updatedProj,
+      'تصحيح قراءة',
+      `طابقت اللجنة الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) بالورقة، فكانت القراءة هي الخطأ لا المجهز: ${changes}، وأُعيد فحصها`,
+      { itemNo: before.itemNo, bidderId: activeBidder.id, fieldName: hasTotal || unit === undefined ? 'total' : 'unitPrice', oldValue: hasTotal || unit === undefined ? oldTotal : oldUnit, newValue: hasTotal || unit === undefined ? bidderTotal : unit }
+    );
     saveProject(updatedProj);
   };
 
@@ -278,7 +349,7 @@ export function createItemHandlers(ctx: EditContext) {
       },
       'تصحيح قراءة',
       `اعتُبر المعتمد في الفقرة رقم (${before.itemNo}) في عطاء (${activeBidder.name}) هو ما كتبه المجهز في الورقة، وكانت القراءة هي الخطأ: المفرد من (${fmt(readUnit)}) إلى (${fmt(before.enteredUnitPrice)})، والمبلغ من (${fmt(before.enteredBidderTotal)}) إلى (${fmt(before.bidderTotal)})${before.bidderSignedAt ? '، وسقط تأشير توقيع المجهز إزاء التصحيح الملغى' : ''}، وأُعيد فحصها`,
-      { itemNo: before.itemNo, bidderId: activeBidder.id, oldValue: before.enteredBidderTotal, newValue: before.bidderTotal }
+      { itemNo: before.itemNo, bidderId: activeBidder.id, fieldName: 'total', oldValue: before.enteredBidderTotal, newValue: before.bidderTotal }
     );
     saveProject(updatedProj);
   };
@@ -365,7 +436,7 @@ export function createItemHandlers(ctx: EditContext) {
       'فواصل صفحات العطاء', `أُسندت فقرات عطاء (${activeBidder.name}) إلى (${count}) صفحة حسب فواصل الصفحات`);
   };
 
-  // تصدير جدول المجهز النشط: واقع الحال كما قدّمه بعيوبه، والجدول المعدل بعد تصحيحات اللجنة
+  // تصدير جدول المجهز النشط: واقع الحال كما قدّمه بعيوبه، وورقة «العطاء بعد التصحيح» بعد تصحيحات اللجنة
   const handleExportBidderAudit = () => {
     if (!hasBidAmounts(activeBidder)) {
       window.alert(`لا مبالغ في جدول (${activeBidder.name}) بعد، فلا عطاء يُصدَّر.`);
@@ -373,7 +444,7 @@ export function createItemHandlers(ctx: EditContext) {
     }
     const pending = activeBidder.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length;
     if (pending > 0 && !window.confirm(
-      `(${pending}) فقرة مؤشرة بانتظار قرار اللجنة. تظهر في الجدول المعدل بمبالغها كما دوّنها المجهز مع عبارة «بانتظار قرار اللجنة».\n\nهل تريد التصدير الآن؟`
+      `(${pending}) فقرة مؤشرة بانتظار قرار اللجنة. تظهر في ورقة «العطاء بعد التصحيح» بمبالغها كما دوّنها المجهز مع عبارة «بانتظار قرار اللجنة».\n\nهل تريد التصدير الآن؟`
     )) return;
     exportBidderAuditToExcel(currentProject, activeBidder);
   };
@@ -473,7 +544,7 @@ export function createItemHandlers(ctx: EditContext) {
   };
 
   return {
-    handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
+    handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleReadingFromPaper, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks
   };

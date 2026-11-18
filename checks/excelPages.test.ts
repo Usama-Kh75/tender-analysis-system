@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { buildBidderAuditWorkbook } from '../src/utils/bidderAuditExcel';
+import { buildBidderAuditWorkbook, buildOfferApprovalSheet } from '../src/utils/bidderAuditExcel';
 import type { Bidder, TenderProject } from '../src/types/tender';
 
 const make = (withPages: boolean, withOffer: boolean) => {
@@ -26,9 +26,25 @@ test('ورقة ملخص الصفحات تظهر مع الصفحات فقط، و�
   assert.ok(values.includes(1580));
 });
 
-test('ورقة اعتماد العرض الموزون تظهر مع العرض فقط، بأعمدة الوصف والوحدة والكمية ومفرد العرض ومبلغه', () => {
-  assert.ok(!make(false, false).SheetNames.includes('اعتماد العرض الموزون'));
-  const ws = make(false, true).Sheets['اعتماد العرض الموزون'] as any;
+const sheetOf = (withOffer: boolean) => {
+  const wb = make(false, withOffer);
+  return wb;
+};
+
+test('ملف التدقيق بلا ورقة اعتماد العرض الموزون حتى مع عرض فعّال (مكانها تصدير التوصية)', () => {
+  assert.ok(!sheetOf(false).SheetNames.includes('اعتماد العرض الموزون'));
+  assert.ok(!sheetOf(true).SheetNames.includes('اعتماد العرض الموزون'));
+});
+
+test('ورقة اعتماد العرض الموزون (buildOfferApprovalSheet) بأعمدة الوصف والوحدة والكمية ومفرد العرض ومبلغه', () => {
+  const { items, totals } = calculateBOQMetrics([
+    { itemNo: 1, description: 'أ', quantity: 2, estimatedTotal: 1000, bidderTotal: 1100, enteredUnitPrice: 550, enteredBidderTotal: 1100, offerUnitPrice: 600, offerTotal: 1200 },
+    { itemNo: 2, description: 'ب', quantity: 1, estimatedTotal: 500, bidderTotal: 480, enteredUnitPrice: 480, enteredBidderTotal: 480, offerUnitPrice: 380, offerTotal: 380 }
+  ], 20);
+  const bidder: Bidder = { id: 'b', name: 'شركة', submissionDate: '', items, totals, status: 'pending',
+    weightedOffer: { status: 'adopted', origin: 'corrected', startedAt: '', bidTotal: 1580 } };
+  const project = { title: 'م', referenceNumber: '', entityName: '', deviationThreshold: 20, bidders: [bidder], auditLogs: [] } as unknown as TenderProject;
+  const ws = buildOfferApprovalSheet(project, bidder) as any;
   assert.ok(ws);
   const text = Object.values(ws).map((c: any) => c?.v).filter(v => typeof v === 'string');
   for (const h of ['وصف الفقرة', 'الوحدة', 'الكمية', 'مفرد العرض الموزون', 'مبلغ العرض الموزون']) assert.ok(text.includes(h), h);
@@ -50,15 +66,19 @@ test('ورقة الاعتماد: مفرد العرض غير مقرّب، وغي�
   const bidder: Bidder = { id: 'b', name: 'شركة', submissionDate: '', items, totals, status: 'pending',
     weightedOffer: { status: 'adopted', origin: 'corrected', startedAt: '', bidTotal: totals.totalBidderAmount } };
   const project = { title: 'م', referenceNumber: '', entityName: '', deviationThreshold: 20, bidders: [bidder], auditLogs: [] } as unknown as TenderProject;
-  const ws = buildBidderAuditWorkbook(project, bidder).Sheets['اعتماد العرض الموزون'] as any;
+  const ws = buildOfferApprovalSheet(project, bidder) as any;
   assert.equal(ws.E6.v, 333.335);            // بلا تقريب إلى 333.34
   assert.equal(ws.F6.v, 333335);
   assert.equal(ws.E7.v, 450); assert.equal(ws.F7.v, 450);   // سُعّرت في العرض فلا شرطة
   assert.equal(ws.E8.v, '-'); assert.equal(ws.F8.v, '-');   // لم تُسعَّر في العرض
 });
 
-test('الجدول المعدل يضم عمودي العرض الموزون حين يوجد عرض', () => {
-  const header = (wb: ReturnType<typeof make>) => Object.values(wb.Sheets['الجدول المعدل']).map((c: any) => c?.v).filter(v => typeof v === 'string');
-  assert.ok(header(make(false, true)).includes('مبلغ العرض الموزون'));
-  assert.ok(!header(make(false, false)).includes('مبلغ العرض الموزون'));
+test('العطاء بعد التصحيح وملخص الصفحات بلا أعمدة العرض الموزون ولا النسبة السعرية', () => {
+  const texts = (ws: any) => Object.values(ws).map((c: any) => c?.v).filter(v => typeof v === 'string') as string[];
+  for (const wb of [make(true, true), make(true, false)]) {
+    for (const name of ['العطاء بعد التصحيح', 'ملخص الصفحات']) {
+      const all = texts(wb.Sheets[name]);
+      assert.ok(!all.some(t => t.includes('موزون') || t.includes('النسبة السعرية')), name);
+    }
+  }
 });
