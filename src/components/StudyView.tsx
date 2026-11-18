@@ -109,8 +109,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-800 text-xs">
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700">
             <div className="text-slate-400 font-semibold mb-1">الكلفة التخمينية المعتمدة</div>
-            <div className="text-base sm:text-lg font-black text-amber-400 font-mono">
-              {formatCurrency(estimatedTotal, project.currency)}
+            <div className={`text-base sm:text-lg font-black font-mono ${noEstimate ? 'text-slate-400' : 'text-amber-400'}`}>
+              {noEstimate ? 'بانتظار التخميني' : formatCurrency(estimatedTotal, project.currency)}
             </div>
           </div>
 
