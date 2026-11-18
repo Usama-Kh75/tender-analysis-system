@@ -146,21 +146,19 @@ test('الخطوة 4: عطاءات مدخلة بلا ترسية', () => {
 test('الخطوة 5: الترسية مختارة بلا سجل موقف', () => {
   const s = nextStep(chosen(allIn()))!;
   assert.equal(s.kind, 'report');
-  assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تسجيل الموقف عند إرساله');
-  assert.deepEqual(s.actions, [
-    { label: 'فتح المحضر', target: 'print' },
-    { label: 'تسجيل الموقف', target: 'status' }
-  ]);
+  assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تسجيل الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»');
+  // لا زر للموقف في الشريط (أسامة 2026-11-19)
+  assert.deepEqual(s.actions, [{ label: 'فتح المحضر', target: 'print' }]);
   assert.equal(nextStep({ ...chosen(allIn()), statusLog: [] })!.kind, 'report');
 });
 
-test('الموقف يُسجَّل من أول يوم: «قيد التحليل» أو «معادة من التدقيق» أو «إجراء آخر» تُبقي خطوة المحضر بزر «تحديث الموقف»', () => {
+test('الموقف يُسجَّل من أول يوم: «قيد التحليل» أو «معادة من التدقيق» أو «إجراء آخر» تُبقي خطوة المحضر بنص «تحديث الموقف»', () => {
   for (const stage of ['analysis', 'awaitingBidders', 'returnedFromAudit', 'other'] as const) {
     const e: StatusEntry = { id: 's1', stage, customText: stage === 'other' ? 'س' : undefined, recordedAt: '2026-11-01T00:00:00.000Z' };
     const s = nextStep({ ...chosen(allIn()), statusLog: [e] })!;
     assert.equal(s.kind, 'report', stage);
-    assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تحديث الموقف عند إرساله');
-    assert.deepEqual(s.actions[1], { label: 'تحديث الموقف', target: 'status' });
+    assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تحديث الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»');
+    assert.deepEqual(s.actions, [{ label: 'فتح المحضر', target: 'print' }]);
     assert.equal(stageStates({ ...chosen(allIn()), statusLog: [e] }).report, 'current', stage);
   }
 });

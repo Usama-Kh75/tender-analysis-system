@@ -279,11 +279,8 @@ export function App() {
       setActiveTab('study');
     } else if (action.target === 'report') {
       setActiveTab('report');
-    } else if (action.target === 'print') {
-      setIsPrintOpen(true);
     } else {
-      // الموقف نافذة لا تبويب
-      setIsStatusOpen(true);
+      setIsPrintOpen(true);
     }
   };
 

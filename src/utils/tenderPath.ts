@@ -78,7 +78,7 @@ export function stageStates(p: TenderProject): Record<StageId, StageState> {
   return out;
 }
 
-export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'report' | 'print' | 'status';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'report' | 'print';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
   /** stageDone: سطر ختام مرحلة العطاءات والتدقيق في تبويبها، أو مرحلة الدراسة والتوصية بعد اختيار الفائز (stageStep وحده) */
@@ -175,14 +175,12 @@ export function nextStep(p: TenderProject): NextStep | null {
     };
   }
   if (!reportLeftCommittee(p)) {
+    // لا زر للموقف هنا (أسامة 2026-11-19): أول موقف يُسجَّل عند إنشاء المناقصة، وتحديثه من شارة الموقف أو «كشف الموقف»
     const hasStatus = (p.statusLog?.length ?? 0) > 0;
     return {
       kind: 'report',
-      text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل، ثم ${hasStatus ? 'تحديث' : 'تسجيل'} الموقف عند إرساله`,
-      actions: [
-        { label: 'فتح المحضر', target: 'print' },
-        { label: hasStatus ? 'تحديث الموقف' : 'تسجيل الموقف', target: 'status' }
-      ]
+      text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل، ثم ${hasStatus ? 'تحديث' : 'تسجيل'} الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»`,
+      actions: [{ label: 'فتح المحضر', target: 'print' }]
     };
   }
   return null;
