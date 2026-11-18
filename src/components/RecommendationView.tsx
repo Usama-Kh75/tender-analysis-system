@@ -40,10 +40,13 @@ export const RecommendationView: React.FC<RecommendationViewProps> = ({
   // ويبقى ظاهراً كل عطاء له عرض مسجّل ليُرى ويُوقف إن لم يعد فائزاً
   // (العرض المسجّل يبقى ظاهراً ولو استُبعد العطاء بعده، ليُوقف: مراجعة Kimi 2026-11-18)
   const winner = offerWinner(project);
+  // غير الفائز يظهر ما دام عرضه فعّالاً أو معتمداً ليُوقف، والموقوف لا يقفل شيئاً فلا يبقى بطاقة بلا عمل؛
+  // والفائز يظهر بعرضه الموقوف ليستأنفه، أو بلا عرض إن لزمه التوزين (مراجعة Antigravity 2026-11-18)
   const balanceBidders = noEstimate ? [] : project.bidders.filter(b =>
-    b.weightedOffer ||
-    (b.id === winner?.id && hasBidAmounts(b) && b.status !== 'disqualified' && !isCommerciallyExcluded(b, exclusionThreshold) &&
-      assessBalance(correctedBalanceRows(b.items), project.deviationThreshold, exclusionThreshold).verdict === 'weighting-required'));
+    (b.weightedOffer && b.weightedOffer.status !== 'paused') ||
+    (b.id === winner?.id && (!!b.weightedOffer ||
+      (hasBidAmounts(b) && b.status !== 'disqualified' && !isCommerciallyExcluded(b, exclusionThreshold) &&
+        assessBalance(correctedBalanceRows(b.items), project.deviationThreshold, exclusionThreshold).verdict === 'weighting-required'))));
   const evaluated = evaluateBids(project);
   // قرار الترسية على المؤهلين وحدهم؛ المستبعدون يُعرضون في «الدراسة والتحليل»
   const decisionBids = evaluated.filter(b => b.commercialStatus === 'qualified' || b.commercialStatus === 'recommended');
@@ -293,6 +296,7 @@ export const RecommendationView: React.FC<RecommendationViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onOpenWeightedOffer(b.id)}
+                    aria-label={`فتح العرض الموزون لعطاء ${b.name} في جدول الفقرات`}
                     className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
                   >
                     فتح العرض الموزون في جدول الفقرات
