@@ -183,20 +183,21 @@ export const ReportView: React.FC<ReportViewProps> = ({
               {rec.chosenNotLowest ? 'باختيار اللجنة، وليس الأوطأ (المادة 10/أولاً/هـ)' : 'أوطأ العطاءات المؤهلة'}
               {isOfferFinal(rec.primary) && '، باعتماد أسعار العرض الموزون المعتمد'}
             </div>
-            {approval?.kind === 'note' && (
-              <div className="text-xs font-bold text-slate-700 mt-1">{approval.text}<OfficialText legalKey={approval.ref} /></div>
-            )}
-            {approval?.kind === 'missing' && (
-              <div className="text-xs font-bold text-amber-700 mt-1">
-                حدّد نوع الموازنة في إعدادات المناقصة لتظهر هنا الموافقة المطلوبة لقبول العطاء (ضوابط رقم (2) رابعاً).
-              </div>
-            )}
           </div>
          </div>
-          {/* العرض الموزون للفائز تحت بطاقته: لا يُطبع */}
+          {/* العرض الموزون للفائز مباشرة تحت مبلغه (تنبيه مهم لا يُدفن أسفل البطاقة): لا يُطبع */}
           {winnerBalance && (
             <div className="no-print border-t border-emerald-100 mt-3 pt-3">
               {renderBalance(winnerBalance, false)}
+            </div>
+          )}
+          {/* موافقة قبول العطاء (نوع الموازنة) بعد كتلة العرض الموزون */}
+          {approval?.kind === 'note' && (
+            <div className="text-xs font-bold text-slate-700 mt-3">{approval.text}<OfficialText legalKey={approval.ref} /></div>
+          )}
+          {approval?.kind === 'missing' && (
+            <div className="text-xs font-bold text-amber-700 mt-3">
+              حدّد نوع الموازنة في إعدادات المناقصة لتظهر هنا الموافقة المطلوبة لقبول العطاء (ضوابط رقم (2) رابعاً).
             </div>
           )}
         </div>
