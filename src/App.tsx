@@ -15,6 +15,7 @@ import { ReadingReliabilityCard } from './components/ReadingReliabilityCard';
 import { readingReliability } from './utils/readingReliability';
 import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
+import { StatusWindow } from './components/modals/StatusWindow';
 import { StudyView } from './components/StudyView';
 import { RecommendationView } from './components/RecommendationView';
 import { StartScreen } from './components/StartScreen';
@@ -78,6 +79,7 @@ export function App() {
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // نموذج تبويب الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isStatusDirty, setIsStatusDirty] = useState(false);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -297,6 +299,7 @@ export function App() {
         <ProjectHeader
           project={currentProject}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenStatus={() => setIsStatusOpen(true)}
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           pendingAudit={tenderPath(currentProject).audit.pending}
@@ -444,6 +447,16 @@ export function App() {
       <AppFooter onOpenWhatsNew={() => setIsWhatsNewOpen(true)} />
 
       {/* Modals */}
+      <StatusWindow
+        isOpen={isStatusOpen}
+        onClose={() => setIsStatusOpen(false)}
+        project={currentProject}
+        onAdd={handleAddStatus}
+        onEdit={handleEditStatus}
+        onDelete={handleDeleteStatus}
+        onOpenSheet={() => setIsStatusSheetOpen(true)}
+        onDirtyChange={setIsStatusDirty}
+      />
       <SmartTableImportModal
         isOpen={isSmartImportOpen}
         onClose={() => setIsSmartImportOpen(false)}

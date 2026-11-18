@@ -182,3 +182,9 @@ export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[]
 }
 
 export { isValidDate };
+
+/** نص زر الموقف في رأس المناقصة: آخر مدخل في المصفوفة (لا الأحدث تاريخاً) */
+export function statusBadgeText(log: StatusEntry[] | undefined): string {
+  const last = log?.[log.length - 1];
+  return last ? `الموقف: ${statusLine(last) || 'غير محدد'}` : 'الموقف: لم يُسجَّل';
+}

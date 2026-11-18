@@ -5,7 +5,7 @@ import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { announcementLabel, bidCountsLabel, tenderDetailParts } from '../utils/tenderDetails';
-import { statusLine } from '../utils/orderStatus';
+import { statusBadgeText } from '../utils/orderStatus';
 import type { NextStepAction } from '../utils/tenderPath';
 import { itemsWithErrorsText } from '../utils/arabicCount';
 import { NextStepBar } from './NextStepBar';
@@ -24,6 +24,8 @@ interface ProjectHeaderProps {
   pendingAudit: number;
   project: TenderProject;
   onOpenSettings: () => void;
+  /** زر الموقف يفتح سجله في نافذة */
+  onOpenStatus: () => void;
   /** الخطوة التالية تُعرض في تبويبي العطاءات والتحليل فقط */
   showNextStep: boolean;
   onGo: (a: NextStepAction) => void;
@@ -31,11 +33,9 @@ interface ProjectHeaderProps {
 
 // بطاقة رأس المناقصة: رقم الطلبية والعنوان وبياناتها للقراءة فقط (التعديل من الإعدادات)، والخطوة التالية
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  project: currentProject, onOpenSettings, showNextStep, onGo,
+  project: currentProject, onOpenSettings, onOpenStatus, showNextStep, onGo,
   activeTab, onSelectTab, pendingAudit
 }) => {
-  const lastStatus = currentProject.statusLog?.[currentProject.statusLog.length - 1];
-
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
       
@@ -91,12 +91,16 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           {bidCountsLabel(currentProject) && (
             <span className="bg-slate-50 text-slate-800 text-xs font-bold px-3.5 py-1 rounded-full border border-slate-200">{bidCountsLabel(currentProject)}</span>
           )}
-          {/* شارة الموقف: آخر مدخل في statusLog (الأخير في المصفوفة لا الأحدث تاريخاً)، وتختفي إن لم يوجد */}
-          {lastStatus && (
-            <span className="bg-blue-50 text-blue-900 text-xs font-bold px-3.5 py-1 rounded-full border border-blue-200">
-              الموقف: {statusLine(lastStatus) || 'غير محدد'}
-            </span>
-          )}
+          {/* زر الموقف: آخر مدخل في statusLog (الأخير في المصفوفة لا الأحدث تاريخاً)، يظهر دائماً ويفتح السجل في نافذة */}
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={onOpenStatus}
+            title="سجل موقف الطلبية"
+            className="bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold px-3.5 py-1 rounded-full border border-blue-200 cursor-pointer transition"
+          >
+            {statusBadgeText(currentProject.statusLog)}
+          </button>
           <button
             onClick={onOpenSettings}
             title="تعديل بيانات المناقصة"
