@@ -1,6 +1,5 @@
 import { asSubmitted, findAdoption, isCommitteeCorrected, readingBeforeCorrection, submittedFlags, submittedTotal, unitLostOf } from '../utils/bidderAuditEngine';
 import { AuditCell } from './AuditCell';
-import { MoreMenu } from './MoreMenu';
 import { auditFilterMatch, isHandled, isPending, pinPending, type AuditFilter, type NormalFilter } from '../utils/tableFilters';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -411,20 +410,29 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               <span>تصدير الجدول <bdi dir="ltr">(Excel)</bdi></span>
             </button>
           )}
-          <MoreMenu
-            dark
-            ariaLabel="المزيد من أدوات الجدول"
-            items={[
-              { label: 'إضافة فقرة', icon: <Plus className="w-3.5 h-3.5" />, onClick: onAddItem, disabled: sharedReadOnly },
-              ...(onClearBidderPrices ? [{
-                label: 'تصفير مبالغ المجهز',
-                icon: <RotateCcw className="w-3.5 h-3.5" />,
-                onClick: onClearBidderPrices,
-                disabled: locked,
-                title: 'تصفير مبالغ هذا المجهز لإعادة إدخالها مع الحفاظ على التخميني والفقرات'
-              }] : [])
-            ]}
-          />
+          {/* ظاهران لا في قائمة «…» (طلب أسامة 2026-11-19)، ويختفيان حين لا يُتاحان كزر الاستيراد */}
+          {!sharedReadOnly && (
+            <button
+              type="button"
+              onClick={onAddItem}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-slate-600"
+              title="إضافة فقرة جديدة في آخر الجدول"
+            >
+              <Plus className="w-4 h-4 text-slate-300" />
+              <span>إضافة فقرة</span>
+            </button>
+          )}
+          {onClearBidderPrices && !locked && (
+            <button
+              type="button"
+              onClick={onClearBidderPrices}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-rose-200 text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-slate-600"
+              title="تصفير مبالغ هذا المجهز لإعادة إدخالها مع الحفاظ على التخميني والفقرات"
+            >
+              <RotateCcw className="w-4 h-4 text-rose-300" />
+              <span>تصفير مبالغ المجهز</span>
+            </button>
+          )}
         </div>
 
       </div>
