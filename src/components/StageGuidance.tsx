@@ -1,63 +1,56 @@
 import React, { useState } from 'react';
+import { Scale } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
 import { stageGuidance } from '../utils/stageGuidance';
 import { LEGAL_TEXTS, type LegalKey } from '../utils/legalTexts';
 
-// «ما تقرره التعليمات هنا»: بطاقة مطوية بالمواد المنطبقة في المرحلة المفتوحة. عرض فقط، ولا تُطبع.
-const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700';
+// «ما تقرره التعليمات»: تلميح مفتوح دائماً بالمواد المنطبقة في المرحلة المفتوحة، فوق «الخطوة التالية» فيمهّد لها.
+// لونه النيلي للتعليمات وحدها: الكهرماني للعمل المعلّق، والأزرق للتبويب المفتوح. عرض فقط، ولا يُطبع.
+// كان بطاقة مطوية، فقال أسامة (2026-11-18): «ربما لا تنتبه إليه اللجنة»، وترك الشكل لرأيي.
+const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700';
 
 const Body: React.FC<{ project: TenderProject; tab: string }> = ({ project, tab }) => {
-  const [open, setOpen] = useState(false);
   const [shown, setShown] = useState<LegalKey | null>(null);
   const items = stageGuidance(project, tab);
   if (items.length === 0) return null;
-  const listId = `stage-guidance-${tab}`;
   return (
-    <section aria-label="ما تقرره التعليمات هنا" className="no-print print:hidden mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        onClick={() => setOpen(o => !o)}
-        className={`flex w-full items-center justify-between gap-2 font-bold text-slate-800 cursor-pointer rounded ${focus}`}
-      >
-        <span>ما تقرره التعليمات هنا ({items.length})</span>
-        <span aria-hidden="true" className={`text-slate-600 transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
-      </button>
-      {open && (
-        <ul id={listId} className="mt-2 space-y-2">
-          {items.map(({ key, ruling }) => {
-            const t = LEGAL_TEXTS[key];
-            const on = shown === key;
-            return (
-              <li key={key}>
-                <span className="font-semibold text-slate-800">{ruling}</span>{' '}
-                <span className="text-slate-600">({t.label})</span>{' '}
-                <button
-                  type="button"
-                  aria-expanded={on}
-                  aria-controls={on ? `legal-text-${key}` : undefined}
-                  aria-label={`${on ? 'إخفاء' : 'عرض'} النص الرسمي لـ ${t.label}`}
-                  onClick={() => setShown(on ? null : key)}
-                  className={`font-bold text-blue-800 underline cursor-pointer rounded whitespace-nowrap ${focus}`}
-                >
-                  {on ? 'إخفاء النص' : 'النص الرسمي'}
-                </button>
-                {on && (
-                  <blockquote id={`legal-text-${key}`} className="mt-1 rounded-lg bg-slate-50 px-3 py-2 leading-relaxed text-slate-700">
-                    «{t.text}» (ص {t.page})
-                  </blockquote>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <section aria-label="ما تقرره التعليمات" className="no-print print:hidden mt-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs text-indigo-950">
+      <h2 className="flex items-center gap-1.5 text-sm font-black text-indigo-900">
+        <Scale aria-hidden="true" className="w-4 h-4 shrink-0" />
+        ما تقرره التعليمات
+      </h2>
+      <ul className="mt-1.5 space-y-1.5 list-disc pr-5 marker:text-indigo-700">
+        {items.map(({ key, ruling }) => {
+          const t = LEGAL_TEXTS[key];
+          const on = shown === key;
+          return (
+            <li key={key} className="leading-relaxed">
+              <span className="font-semibold">{ruling}</span>{' '}
+              <span className="text-indigo-800">({t.label})</span>{' '}
+              <button
+                type="button"
+                aria-expanded={on}
+                aria-controls={on ? `legal-text-${key}` : undefined}
+                aria-label={`${on ? 'إخفاء' : 'عرض'} النص الرسمي لـ ${t.label}`}
+                onClick={() => setShown(on ? null : key)}
+                className={`font-bold text-indigo-800 underline cursor-pointer rounded whitespace-nowrap ${focus}`}
+              >
+                {on ? 'إخفاء النص' : 'النص الرسمي'}
+              </button>
+              {on && (
+                <blockquote id={`legal-text-${key}`} className="mt-1 rounded-lg border border-indigo-100 bg-white px-3 py-2 leading-relaxed text-slate-700">
+                  «{t.text}» (ص {t.page})
+                </blockquote>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 };
 
-// المفتاح يعيد البطاقة مطوية عند تبديل المناقصة أو التبويب
+// المفتاح يطوي النصوص المفتوحة عند تبديل المناقصة أو التبويب
 export const StageGuidance: React.FC<{ project: TenderProject; activeTab: string }> = ({ project, activeTab }) => (
   <Body key={`${project.id}-${activeTab}`} project={project} tab={activeTab} />
 );

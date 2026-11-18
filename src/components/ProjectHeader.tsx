@@ -187,8 +187,9 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         })}
       </div>
 
-      <NextStepBar project={currentProject} onGo={onGo} activeTab={activeTab} />
+      {/* التعليمات أولاً تمهّد للخطوة التالية تحتها */}
       <StageGuidance project={currentProject} activeTab={activeTab} />
+      <NextStepBar project={currentProject} onGo={onGo} activeTab={activeTab} />
 
     </div>
   );
