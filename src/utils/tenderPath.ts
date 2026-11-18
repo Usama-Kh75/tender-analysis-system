@@ -5,6 +5,17 @@ import type { Bidder, TenderProject } from '../types/tender';
 import { isPending } from './tableFilters';
 import { itemsCountText } from './arabicCount';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate } from './recommendation';
+import { currentStatus } from './orderStatus';
+import type { StatusStage } from '../types/tender';
+
+/** الموقف يُسجَّل من أول يوم تدخل فيه الطلبية ويتبع عمل اللجنة (أسامة 2026-11-19)، فوجوده لا يعني أن المحضر انتهى.
+ *  المحضر منتهٍ حين يكون آخر موقف خروج الطلبية من اللجنة بعد اختيار الفائز. «معادة من التدقيق» رجوع إلى اللجنة،
+ *  و«إجراء آخر» مجهول المعنى، فكلاهما يُبقي خطوة المحضر */
+const REPORT_DONE_STAGES: ReadonlySet<StatusStage> = new Set<StatusStage>(['audit', 'reviewCommittee', 'referralPending', 'referred', 'sentToContracts']);
+const reportLeftCommittee = (p: TenderProject): boolean => {
+  const s = currentStatus(p)?.stage;
+  return !!s && REPORT_DONE_STAGES.has(s as StatusStage);
+};
 
 export type BidderAuditState = { kind: 'empty' } | { kind: 'pending'; count: number } | { kind: 'done' };
 
@@ -49,13 +60,13 @@ const STAGE_ORDER: StageId[] = ['bids', 'study', 'report'];
 
 /** حال مراحل التبويبات الثلاثة، مستنتجة ولا تُخزَّن. كل مرحلة مكتملة بشرطها هي:
  *  الأولى بالكلفة التخمينية ومبالغ كل الشركات المسجّلة وبلا فقرات معلّقة، والثانية باختيار الترسية،
- *  والثالثة بمدخل موقف بعد الاختيار. وأول مرحلة غير مكتملة «قيد العمل»، وما بعدها من غير المكتمل «لم تبدأ» */
+ *  والثالثة بخروج الطلبية من اللجنة بعد الاختيار (آخر موقف: التدقيق أو المراجعة أو الإحالة أو العقود). وأول مرحلة غير مكتملة «قيد العمل»، وما بعدها من غير المكتمل «لم تبدأ» */
 export function stageStates(p: TenderProject): Record<StageId, StageState> {
   const path = tenderPath(p);
   const done: Record<StageId, boolean> = {
     bids: path.hasEstimate && path.bids.registered > 0 && path.bids.entered === path.bids.registered && path.audit.pending === 0,
     study: path.award !== null,
-    report: path.award !== null && (p.statusLog?.length ?? 0) > 0
+    report: path.award !== null && reportLeftCommittee(p)
   };
   let seenCurrent = false;
   const out = {} as Record<StageId, StageState>;
@@ -163,13 +174,14 @@ export function nextStep(p: TenderProject): NextStep | null {
       actions: [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]
     };
   }
-  if (!p.statusLog || p.statusLog.length === 0) {
+  if (!reportLeftCommittee(p)) {
+    const hasStatus = (p.statusLog?.length ?? 0) > 0;
     return {
       kind: 'report',
-      text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل`,
+      text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل، ثم ${hasStatus ? 'تحديث' : 'تسجيل'} الموقف عند إرساله`,
       actions: [
         { label: 'فتح المحضر', target: 'print' },
-        { label: 'تسجيل الموقف', target: 'status' }
+        { label: hasStatus ? 'تحديث الموقف' : 'تسجيل الموقف', target: 'status' }
       ]
     };
   }

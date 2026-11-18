@@ -146,7 +146,7 @@ test('الخطوة 4: عطاءات مدخلة بلا ترسية', () => {
 test('الخطوة 5: الترسية مختارة بلا سجل موقف', () => {
   const s = nextStep(chosen(allIn()))!;
   assert.equal(s.kind, 'report');
-  assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل');
+  assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تسجيل الموقف عند إرساله');
   assert.deepEqual(s.actions, [
     { label: 'فتح المحضر', target: 'print' },
     { label: 'تسجيل الموقف', target: 'status' }
@@ -154,9 +154,27 @@ test('الخطوة 5: الترسية مختارة بلا سجل موقف', () =>
   assert.equal(nextStep({ ...chosen(allIn()), statusLog: [] })!.kind, 'report');
 });
 
-test('الحالة الأخيرة: ترسية وسجل موقف ← null، والتراجع عن الترسية يعيد الخطوة 4', () => {
-  const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
-  const done = { ...chosen(allIn()), statusLog: [e] };
+test('الموقف يُسجَّل من أول يوم: «قيد التحليل» أو «معادة من التدقيق» أو «إجراء آخر» تُبقي خطوة المحضر بزر «تحديث الموقف»', () => {
+  for (const stage of ['analysis', 'awaitingBidders', 'returnedFromAudit', 'other'] as const) {
+    const e: StatusEntry = { id: 's1', stage, customText: stage === 'other' ? 'س' : undefined, recordedAt: '2026-11-01T00:00:00.000Z' };
+    const s = nextStep({ ...chosen(allIn()), statusLog: [e] })!;
+    assert.equal(s.kind, 'report', stage);
+    assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تحديث الموقف عند إرساله');
+    assert.deepEqual(s.actions[1], { label: 'تحديث الموقف', target: 'status' });
+    assert.equal(stageStates({ ...chosen(allIn()), statusLog: [e] }).report, 'current', stage);
+  }
+});
+
+test('الحالة الأخيرة: ترسية وخروج الطلبية من اللجنة ← null، والتراجع عن الترسية يعيد الخطوة 4', () => {
+  const first: StatusEntry = { id: 's0', stage: 'analysis', branch: 'commercial', recordedAt: '2026-10-01T00:00:00.000Z' };
+  for (const stage of ['audit', 'reviewCommittee', 'referralPending', 'referred', 'sentToContracts'] as const) {
+    const e: StatusEntry = { id: 's1', stage, recordedAt: '2026-11-01T00:00:00.000Z' };
+    assert.equal(nextStep({ ...chosen(allIn()), statusLog: [first, e] }), null, stage);
+  }
+  // الحالي هو آخر عنصر: الرجوع إلى «قيد التحليل» بعد الإرسال يعيد خطوة المحضر
+  const sent: StatusEntry = { id: 's1', stage: 'sentToContracts', recordedAt: '2026-11-01T00:00:00.000Z' };
+  assert.equal(nextStep({ ...chosen(allIn()), statusLog: [sent, first] })!.kind, 'report');
+  const done = { ...chosen(allIn()), statusLog: [first, sent] };
   assert.equal(nextStep(done), null);
   assert.equal(nextStep({ ...done, bidders: done.bidders.map(b => ({ ...b, status: 'qualified' as const })) })!.kind, 'award');
 });
@@ -186,7 +204,7 @@ test('حال المراحل: الأولى قيد العمل بلا كلفة أو
 test('حال المراحل: الدراسة قيد العمل، ثم التوصية، ثم الكل مكتمل', () => {
   assert.deepEqual(stageStates(allIn()), { bids: 'done', study: 'current', report: 'upcoming' });
   assert.deepEqual(stageStates(chosen(allIn())), { bids: 'done', study: 'done', report: 'current' });
-  const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
+  const e: StatusEntry = { id: 's1', stage: 'referred', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
   assert.deepEqual(stageStates({ ...chosen(allIn()), statusLog: [e] }), { bids: 'done', study: 'done', report: 'done' });
   // موقف مسجّل بلا ترسية لا يُكمل الثالثة
   assert.equal(stageStates({ ...allIn(), statusLog: [e] }).report, 'upcoming');
@@ -226,8 +244,8 @@ test('stageStep: خطوة التبويب المفتوح وحده', () => {
   assert.equal(pick.text, 'الخطوة التالية: اختيار العطاء الفائز في «الدراسة والتوصية»');
   const p1 = chosen(allIn());
   assert.deepEqual(stageStep(p1, 'report'), nextStep(p1));
-  // ترسية وموقف مسجّل: لا شيء في المحضر، ويبقى سطرا الختام للمرحلتين الأوليين في تبويبيهما
-  const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
+  // ترسية وخروج الطلبية من اللجنة: لا شيء في المحضر، ويبقى سطرا الختام للمرحلتين الأوليين في تبويبيهما
+  const e: StatusEntry = { id: 's1', stage: 'sentToContracts', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
   const closed = { ...chosen(allIn()), statusLog: [e] };
   assert.equal(stageStep(closed, 'report'), null);
   assert.deepEqual(stageStep(closed, 'study'), studyDone);
