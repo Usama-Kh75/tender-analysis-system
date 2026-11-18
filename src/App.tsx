@@ -77,8 +77,9 @@ export function App() {
   const [isMultiBidderOpen, setIsMultiBidderOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  // نموذج تبويب الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
+  // نافذة الموقف (تفتح من زر الموقف في رأس المناقصة)
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  // نموذج نافذة الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
   const [isStatusDirty, setIsStatusDirty] = useState(false);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);

@@ -1,4 +1,4 @@
-// «مسار التحليل» في تبويب الموقف: ما أُنجز وما بقي ومن ينفّذه، مشتق من حالة المناقصة وسجل تدقيقها.
+// «مسار التحليل» في نافذة الموقف (StatusWindow): ما أُنجز وما بقي ومن ينفّذه، مشتق من حالة المناقصة وسجل تدقيقها.
 // لا يُخزَّن ولا يُضاف له حقل، ولا يغيّر statusLog (الموقف الإجرائي يبقى يدوياً تحته). عرض فقط.
 import type { AuditLogEntry, TenderProject } from '../types/tender';
 import { localDate } from './localDate';
@@ -57,7 +57,7 @@ export function analysisPath(p: TenderProject): PathStage[] {
       ]
     },
     {
-      title: 'التحليل والتوصية',
+      title: 'الدراسة والتوصية',
       drafts: [
         { text: 'ترتيب العطاءات', ok: hasBids && path.hasEstimate && path.audit.pending === 0, actor: 'النظام' },
         {

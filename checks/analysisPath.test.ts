@@ -21,7 +21,7 @@ const find = (p: TenderProject, text: string) => analysisPath(p).flatMap(s => s.
 test('مناقصة بلا كلفة: ثلاث مراحل، والحالية هي الكلفة وما بعدها ينتظر', () => {
   const p = { ...blank(), receivedAt: '2026-11-01' };
   const path = analysisPath(p);
-  assert.deepEqual(path.map(s => s.title), ['الاستلام والإدخال', 'التدقيق الحسابي', 'التحليل والتوصية']);
+  assert.deepEqual(path.map(s => s.title), ['الاستلام والإدخال', 'التدقيق الحسابي', 'الدراسة والتوصية']);
   assert.equal(find(p, 'استلام العطاءات').state, 'done');
   assert.equal(find(p, 'استلام العطاءات').date, '2026-11-01');
   assert.equal(find(p, 'الكلفة التخمينية').state, 'current');
