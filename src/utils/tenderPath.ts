@@ -43,7 +43,7 @@ export function tenderPath(p: TenderProject): TenderPath {
   };
 }
 
-export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'analysis' | 'status';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'recommendation' | 'status';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
   kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report';
@@ -86,7 +86,7 @@ export function nextStep(p: TenderProject): NextStep | null {
         + (path.bids.expected > path.bids.registered
           ? `. استُلمت (${path.bids.expected}) عطاءات، وأُدخل منها (${path.bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
           : ''),
-      actions: [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]
+      actions: [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }]
     };
   }
   if (!p.statusLog || p.statusLog.length === 0) {
@@ -94,7 +94,7 @@ export function nextStep(p: TenderProject): NextStep | null {
       kind: 'report',
       text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل`,
       actions: [
-        { label: 'فتح المحضر', target: 'analysis' },
+        { label: 'فتح المحضر', target: 'recommendation' },
         { label: 'تسجيل الموقف', target: 'status' }
       ]
     };

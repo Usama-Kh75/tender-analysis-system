@@ -5,14 +5,16 @@ import { normalizeResumeTab } from '../src/resume';
 
 test('القيم الجديدة تبقى كما هي', () => {
   assert.equal(normalizeResumeTab('bids'), 'bids');
-  assert.equal(normalizeResumeTab('analysis'), 'analysis');
-  assert.equal(normalizeResumeTab('status'), 'status');
+  assert.equal(normalizeResumeTab('study'), 'study');
+  assert.equal(normalizeResumeTab('recommendation'), 'recommendation');
 });
 
 test('القيم القديمة تُقرأ على مقابلها', () => {
   assert.equal(normalizeResumeTab('table'), 'bids');
-  assert.equal(normalizeResumeTab('summary'), 'analysis');
-  assert.equal(normalizeResumeTab('charts'), 'analysis');
+  assert.equal(normalizeResumeTab('analysis'), 'study');
+  assert.equal(normalizeResumeTab('summary'), 'study');
+  assert.equal(normalizeResumeTab('charts'), 'study');
+  assert.equal(normalizeResumeTab('status'), 'recommendation');
 });
 
 test('ما سواها يفتح «العطاءات»', () => {

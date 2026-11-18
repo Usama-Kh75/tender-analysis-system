@@ -113,7 +113,7 @@ test('المستلمة أكثر من المسجّلين وكلهم بمبالغ:
   assert.equal(s.kind, 'award');
   assert.match(s.text, /^اكتمل إدخال العطاءات \(2 من 4\) والكلفة التخمينية\. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة/);
   assert.match(s.text, /استُلمت \(4\) عطاءات، وأُدخل منها \(2\) للتحليل التجاري\. العطاء الذي فيه نقص جوهري \(كالتأمينات الأولية\) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز»\./);
-  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]);
+  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }]);
 });
 
 test('مسجّل 3 واثنان بمبالغ: إدخال عطاء باسم صاحبه ولو زادت المستلمة', () => {
@@ -140,7 +140,7 @@ test('الخطوة 4: عطاءات مدخلة بلا ترسية', () => {
   const s = nextStep(allIn())!;
   assert.equal(s.kind, 'award');
   assert.equal(s.text, 'اكتمل إدخال العطاءات (2 من 2) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة');
-  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التحليل والتوصية', target: 'analysis' }]);
+  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }]);
 });
 
 test('الخطوة 5: الترسية مختارة بلا سجل موقف', () => {
@@ -148,7 +148,7 @@ test('الخطوة 5: الترسية مختارة بلا سجل موقف', () =>
   assert.equal(s.kind, 'report');
   assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل');
   assert.deepEqual(s.actions, [
-    { label: 'فتح المحضر', target: 'analysis' },
+    { label: 'فتح المحضر', target: 'recommendation' },
     { label: 'تسجيل الموقف', target: 'status' }
   ]);
   assert.equal(nextStep({ ...chosen(allIn()), statusLog: [] })!.kind, 'report');

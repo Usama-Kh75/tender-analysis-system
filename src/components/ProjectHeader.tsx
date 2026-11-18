@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Table2, Award, MapPin } from 'lucide-react';
+import { Settings, Table2, Award, BarChart3 } from 'lucide-react';
 import type { MainTab } from '../resume';
 import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
@@ -13,8 +13,8 @@ import { NextStepBar } from './NextStepBar';
 // ثلاثة تبويبات لمراحل المناقصة الواحدة: لكل واحد سؤال واحد يظهر تحت اسمه
 const TABS: { id: MainTab; label: string; question: string; Icon: React.ElementType }[] = [
   { id: 'bids', label: 'العطاءات والتدقيق', question: 'ماذا قدّم كل مجهز؟', Icon: Table2 },
-  { id: 'analysis', label: 'التحليل والتوصية', question: 'من الأفضل ولماذا؟', Icon: Award },
-  { id: 'status', label: 'الموقف', question: 'أين وصلت الطلبية؟', Icon: MapPin }
+  { id: 'study', label: 'الدراسة والتحليل', question: 'كيف تقارن العطاءات؟', Icon: BarChart3 },
+  { id: 'recommendation', label: 'التوصية والمحضر', question: 'بماذا توصي اللجنة؟', Icon: Award }
 ];
 
 interface ProjectHeaderProps {
@@ -26,14 +26,12 @@ interface ProjectHeaderProps {
   onOpenSettings: () => void;
   /** زر الموقف يفتح سجله في نافذة */
   onOpenStatus: () => void;
-  /** الخطوة التالية تُعرض في تبويبي العطاءات والتحليل فقط */
-  showNextStep: boolean;
   onGo: (a: NextStepAction) => void;
 }
 
 // بطاقة رأس المناقصة: رقم الطلبية والعنوان وبياناتها للقراءة فقط (التعديل من الإعدادات)، والخطوة التالية
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
-  project: currentProject, onOpenSettings, onOpenStatus, showNextStep, onGo,
+  project: currentProject, onOpenSettings, onOpenStatus, onGo,
   activeTab, onSelectTab, pendingAudit
 }) => {
   return (
@@ -174,7 +172,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         })}
       </div>
 
-      {showNextStep && <NextStepBar project={currentProject} onGo={onGo} />}
+      <NextStepBar project={currentProject} onGo={onGo} />
 
     </div>
   );

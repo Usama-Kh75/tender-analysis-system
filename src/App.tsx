@@ -35,7 +35,6 @@ import { ExclusionReasonsModal } from './components/modals/ExclusionReasonsModal
 import { createExclusionHandlers } from './app/exclusionHandlers';
 import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
-import { OrderStatusPanel } from './components/OrderStatusPanel';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { PageBreaksModal } from './components/modals/PageBreaksModal';
 import { PageSummaryTable } from './components/PageSummaryTable';
@@ -267,10 +266,11 @@ export function App() {
       setAuditInitialFilter(initialAuditFilter(target.items));
       setAuditProjectId(currentProject.id);
       scrollToTable();
-    } else if (action.target === 'analysis') {
-      setActiveTab('analysis');
+    } else if (action.target === 'recommendation') {
+      setActiveTab('recommendation');
     } else {
-      setActiveTab('status');
+      // الموقف نافذة لا تبويب
+      setIsStatusOpen(true);
     }
   };
 
@@ -303,7 +303,6 @@ export function App() {
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           pendingAudit={tenderPath(currentProject).audit.pending}
-          showNextStep={activeTab !== 'status'}
           onGo={handleGo}
         />
 
@@ -403,7 +402,7 @@ export function App() {
                 onOpenPageBreaks={() => setIsPageBreaksOpen(true)} />
             </div>
             </>
-          ) : activeTab === 'analysis' ? (
+          ) : activeTab === 'study' ? (
             <>
             <StudyView
               project={currentProject}
@@ -420,23 +419,14 @@ export function App() {
                 exclusionThreshold={exclusionThresholdOf(currentProject)}
               />
             )}
+            </>
+          ) : (
             <RecommendationView
               project={currentProject}
               onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
-            />
-            </>
-          ) : (
-            <OrderStatusPanel
-              key={currentProject.id}
-              project={currentProject}
-              onAdd={handleAddStatus}
-              onEdit={handleEditStatus}
-              onDelete={handleDeleteStatus}
-              onOpenSheet={() => setIsStatusSheetOpen(true)}
-              onDirtyChange={setIsStatusDirty}
             />
           )}
         </div>
