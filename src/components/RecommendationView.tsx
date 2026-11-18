@@ -170,6 +170,7 @@ export const RecommendationView: React.FC<RecommendationViewProps> = ({
               {rec.kind === 'tie' && equalPriceBids(rec.closeBids).length > 1 && (
                 <div className="text-xs font-bold text-amber-800 mt-1 leading-relaxed">
                   📌 الأسعار متساوية لأصغر فئة نقدية: تُخاطَب الشركات ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتها لغرض المفاضلة إن لم تقدّمها ابتداءً، وتصبح المبادرات جزءاً من العطاء، ويُستقطع مبلغ ما لا يُلتزم به عند التنفيذ حسب الأسعار السائدة ({preferenceReference(project.contractType).clause}).
+                  {' '}وإن نصّت شروط المناقصة على جواز إرسائها على أكثر من متقدم وتساوت الشروط أيضاً، فللجنة أن توصي بإرسائها عليها مجزّأة (المادة 15/رابعاً/أ).
                 </div>
               )}
               {approval?.kind === 'note' && (
