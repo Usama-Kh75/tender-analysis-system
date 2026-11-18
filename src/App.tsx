@@ -15,7 +15,8 @@ import { ReadingReliabilityCard } from './components/ReadingReliabilityCard';
 import { readingReliability } from './utils/readingReliability';
 import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
-import { ExecutiveSummaryView } from './components/ExecutiveSummaryView';
+import { StudyView } from './components/StudyView';
+import { RecommendationView } from './components/RecommendationView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
 import { BidderCards } from './components/BidderCards';
@@ -401,14 +402,10 @@ export function App() {
             </>
           ) : activeTab === 'analysis' ? (
             <>
-            <ExecutiveSummaryView
+            <StudyView
               project={currentProject}
-              onSelectBidder={handlePickBidder}
-              onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenExclusionReasons={setExclusionBidderId}
-              onOpenPrint={() => setIsPrintOpen(true)}
               onOpenAudit={() => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: tenderPath(currentProject).audit.firstBidderId ?? undefined })}
-              onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
               chartsOpen={chartsOpen}
               onToggleCharts={() => setChartsOpen(o => !o)}
@@ -420,6 +417,13 @@ export function App() {
                 exclusionThreshold={exclusionThresholdOf(currentProject)}
               />
             )}
+            <RecommendationView
+              project={currentProject}
+              onSelectBidder={handlePickBidder}
+              onUpdateBidderStatus={handleUpdateBidderStatus}
+              onOpenPrint={() => setIsPrintOpen(true)}
+              onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
+            />
             </>
           ) : (
             <OrderStatusPanel
