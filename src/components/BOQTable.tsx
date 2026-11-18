@@ -410,8 +410,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               <span>تصدير الجدول <bdi dir="ltr">(Excel)</bdi></span>
             </button>
           )}
-          {/* ظاهران لا في قائمة «…» (طلب أسامة 2026-11-19)، ويختفيان حين لا يُتاحان كزر الاستيراد */}
-          {!sharedReadOnly && (
+          {/* ظاهران لا في قائمة «…» (طلب أسامة 2026-11-19)، ويختفيان حين لا يُتاحان كزر الاستيراد:
+              وفي عرض «كما قدّمه المجهز» (للقراءة فقط)، والتصفير بلا مبالغ (مراجعة Antigravity 2026-11-19) */}
+          {!sharedReadOnly && !asSub && (
             <button
               type="button"
               onClick={onAddItem}
@@ -422,7 +423,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               <span>إضافة فقرة</span>
             </button>
           )}
-          {onClearBidderPrices && !locked && (
+          {onClearBidderPrices && !locked && !asSub && hasAmounts && (
             <button
               type="button"
               onClick={onClearBidderPrices}
