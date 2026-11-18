@@ -68,7 +68,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
             </div>
 
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-              المحضر
+              العطاء الفائز ومعاينة المحضر
             </h2>
           </div>
 
@@ -137,7 +137,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
       ) : (
         <div className="bg-slate-50 rounded-3xl border border-slate-200 p-5 text-sm font-bold text-slate-700 leading-relaxed">
           {rec.kind === 'referral' && rec.primary && (
-            <>لا فائز في هذه المناقصة: يُثبت المحضر توصية اللجنة برفع الموضوع إلى اللجنة المركزية للنظر في التفاوض مع ({rec.primary.name}) لتخفيض الأسعار (المادة 13/ثالثاً/ب).</>
+            <>لا فائز في هذه المناقصة: يُثبت المحضر توصية اللجنة برفع الموضوع إلى اللجنة المركزية للنظر في التفاوض مع (<bdi>{rec.primary.name}</bdi>) لتخفيض الأسعار (المادة 13/ثالثاً/ب).</>
           )}
           {rec.kind === 'retender' && (
             <>لا فائز في هذه المناقصة: يُثبت المحضر توصية اللجنة بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان (المادة 20/{rec.retenderReason === 'lowest-below' ? 'رابعاً' : 'ثالثاً'}).</>
@@ -150,7 +150,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
 
       {balanceBidders.length > 0 && (
         <div className="space-y-4 no-print">
-          <h3 className="text-sm sm:text-base font-black text-slate-800">العرض الموزون للعطاء الفائز</h3>
+          <h3 className="text-sm sm:text-base font-black text-slate-800">{rec.kind === 'award' && rec.chosenByCommittee ? 'العرض الموزون للعطاء الفائز' : 'العرض الموزون لأوطأ العطاءات المؤهلة (المرشّح للترسية)'}</h3>
           {balanceBidders.map(b => {
             const live = !!b.weightedOffer && b.weightedOffer.status !== 'paused';
             return (

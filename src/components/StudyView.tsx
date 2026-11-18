@@ -231,7 +231,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                       {formatNumber(bidder.totals.totalBidderAmount)}
                       {!noEstimate && (
                         <div className={`text-[11px] font-bold ${bidder.diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {bidder.diff > 0 ? '+' : ''}{formatNumber(bidder.diff)} {project.currency}
+                          <span dir="ltr">{bidder.diff > 0 ? '+' : ''}{formatNumber(bidder.diff)}</span> {project.currency}
                         </div>
                       )}
                     </td>
@@ -250,7 +250,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                           ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                           : 'bg-slate-100 text-slate-800'
                       }`}>
-                        {formatPercent(bidder.totals.totalDeviationPercent, 2, exclusionThreshold)}
+                        <span dir="ltr">{formatPercent(bidder.totals.totalDeviationPercent, 2, exclusionThreshold)}</span>
                       </span>
                     </td>
 
@@ -258,7 +258,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                     <td className="p-3.5 text-center border-l border-slate-200 font-black">
                       {/* استرشادي فقط - لا يُستخدم في الجدول المعتمد كمعيار استبعاد أو تحذير مستقل */}
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700">
-                        {bidder.totals.partialDeviationPercent.toFixed(2)}%
+                        <span dir="ltr">{bidder.totals.partialDeviationPercent.toFixed(2)}%</span>
                       </span>
                       <div className="text-[10px] text-slate-500 mt-0.5">
                         ({bidder.totals.deviatedItemsCount} فقرة منحرفة)
@@ -309,6 +309,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                         <button
                           type="button"
                           onClick={() => onOpenExclusionReasons(bidder.id)}
+                          aria-label={`أسباب استبعاد ${bidder.name}`}
                           className="mt-1.5 text-[11px] font-bold text-rose-700 hover:underline cursor-pointer"
                         >
                           أسباب الاستبعاد
@@ -406,7 +407,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
               {savedEdit && (
                 <div className="text-xs font-bold text-indigo-800 mt-1">
                   ✎ تُطبع التوصية في المحضر بصياغة اللجنة
-                  {basisChanges.length > 0 && <span className="text-rose-700"> — وتغيّر ما بُنيت عليه: {basisChanges.join('؛ ')}. راجعها من «طباعة المحضر النهائي».</span>}
+                  {basisChanges.length > 0 && <span className="text-rose-700"> — وتغيّر ما بُنيت عليه: {basisChanges.join('؛ ')}. راجعها من «معاينة المحضر وطباعته» في تبويب «المحضر».</span>}
                 </div>
               )}
             </div>
@@ -443,6 +444,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white font-medium">
+                  {decisionBids.length === 0 && (
+                    <tr><td colSpan={5} className="p-4 text-center text-xs font-bold text-slate-500">لا عطاء مؤهل للترسية في هذه المناقصة</td></tr>
+                  )}
                   {decisionBids.map(bidder => (
                     <tr key={bidder.id} className="hover:bg-blue-50/40 transition">
                       <td className="p-3.5 border-l border-slate-200 font-black text-slate-900 text-sm">{bidder.name}</td>
@@ -450,7 +454,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                         {formatNumber(bidder.totals.totalBidderAmount)}
                       </td>
                       <td className="p-3.5 text-center border-l border-slate-200 font-black">
-                        {formatPercent(bidder.totals.totalDeviationPercent, 2, exclusionThreshold)}
+                        <span dir="ltr">{formatPercent(bidder.totals.totalDeviationPercent, 2, exclusionThreshold)}</span>
                       </td>
                       <td className="p-3.5 text-center border-l border-slate-200">
                         <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black px-3 py-1 rounded-full">
@@ -460,7 +464,11 @@ export const StudyView: React.FC<StudyViewProps> = ({
                       </td>
                       <td className="p-3.5 text-center">
                         <button
+                          type="button"
+                          aria-pressed={bidder.status === 'recommended'}
+                          aria-label={bidder.status === 'recommended' ? `${bidder.name}: مُوصى به` : `اختيار ${bidder.name} للترسية`}
                           onClick={() => {
+                            if (bidder.status === 'recommended') return;
                             onSelectBidder(bidder.id);
                             onUpdateBidderStatus(bidder.id, 'recommended');
                           }}

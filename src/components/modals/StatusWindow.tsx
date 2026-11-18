@@ -43,6 +43,14 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen, requestClose]);
 
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    return () => { if (prev && prev.isConnected) prev.focus(); };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -55,7 +63,7 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
             </div>
             <h2 id="status-window-title" className="text-base sm:text-lg font-bold">موقف الطلبية</h2>
           </div>
-          <button type="button" onClick={() => requestClose()} aria-label="إغلاق" data-dirty={dirty} className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+          <button type="button" ref={closeRef} onClick={() => requestClose()} aria-label="إغلاق" data-dirty={dirty} className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
