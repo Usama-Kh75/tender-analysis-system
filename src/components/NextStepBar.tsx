@@ -1,5 +1,5 @@
 import React from 'react';
-import { nextStep, stepActionsFor, type NextStepAction } from '../utils/tenderPath';
+import { stageStep, type NextStepAction } from '../utils/tenderPath';
 import type { TenderProject } from '../types/tender';
 
 interface NextStepBarProps {
@@ -12,7 +12,8 @@ interface NextStepBarProps {
 // «الخطوة التالية» تحت عنوان المناقصة: خطوة واحدة تُستنتج من حالة المناقصة ولا يُخزَّن شيء.
 // الكهرماني لعمل معلّق (الكلفة، التدقيق، العطاءات)، والحيادي لما بعده (التوصية، المحضر).
 export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeTab }) => {
-  const step = nextStep(project);
+  // خطوة مرحلة التبويب المفتوح وحدها، بنصها وأزرارها (stageStep)
+  const step = stageStep(project, activeTab);
   if (!step) return null;
   const pendingWork = step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids';
   const tone = pendingWork
@@ -21,21 +22,28 @@ export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeT
   const btn = pendingWork
     ? 'bg-amber-700 hover:bg-amber-800 text-white'
     : 'bg-slate-700 hover:bg-slate-800 text-white';
-  return (
-    <nav aria-label="الخطوة التالية" className={`mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border px-3 py-2 text-xs ${tone}`}>
+  const actions = step.actions;
+  const className = `mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border px-3 py-2 text-xs ${tone}`;
+  const content = (
+    <>
       <span className="font-bold min-w-0 grow basis-60">{step.text}</span>
-      <span className="flex shrink-0 items-center gap-2">
-        {stepActionsFor(step, activeTab).map(a => (
-          <button
-            type="button"
-            key={a.label}
-            onClick={() => onGo(a)}
-            className={`font-bold whitespace-nowrap px-3 py-1.5 rounded-lg cursor-pointer transition ${btn}`}
-          >
-            {a.label}
-          </button>
-        ))}
-      </span>
-    </nav>
+      {actions.length > 0 && (
+        <span className="flex shrink-0 items-center gap-2">
+          {actions.map(a => (
+            <button
+              type="button"
+              key={a.label}
+              onClick={() => onGo(a)}
+              className={`font-bold whitespace-nowrap px-3 py-1.5 rounded-lg cursor-pointer transition ${btn}`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </span>
+      )}
+    </>
   );
+  return actions.length > 0
+    ? <nav aria-label="الخطوة التالية" className={className}>{content}</nav>
+    : <div className={className}>{content}</div>;
 };

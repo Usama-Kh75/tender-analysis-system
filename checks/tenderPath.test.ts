@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject } from '../src/utils/storageService';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { bidderAuditState, nextStep, stageStates, stepActionsFor, tenderPath } from '../src/utils/tenderPath';
+import { bidderAuditState, nextStep, stageStates, stageStep, tenderPath } from '../src/utils/tenderPath';
 import type { Bidder, BOQItem, StatusEntry, TenderProject } from '../src/types/tender';
 
 const row = (id: string, bidderTotal: number, flags: Partial<BOQItem> = {}): Partial<BOQItem> => ({
@@ -192,19 +192,33 @@ test('حال المراحل: الدراسة قيد العمل، ثم التوص�
   assert.equal(stageStates({ ...allIn(), statusLog: [e] }).recommendation, 'upcoming');
 });
 
-test('أزرار الخطوة: المحضر والموقف في «التوصية والمحضر» وحدها، وخارجها زر واحد ينقل إليها', () => {
-  const report = nextStep(chosen(allIn()))!;
+test('stageStep: خطوة التبويب المفتوح وحده', () => {
   const go = [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }];
-  assert.deepEqual(stepActionsFor(report, 'bids'), go);
-  assert.deepEqual(stepActionsFor(report, 'study'), go);
-  assert.deepEqual(stepActionsFor(report, 'recommendation'), report.actions);
-  // خطوة الترسية: زر الانتقال يختفي داخل تبويبه ويبقى خارجه
-  const award = nextStep(allIn())!;
-  assert.deepEqual(stepActionsFor(award, 'recommendation'), []);
-  assert.deepEqual(stepActionsFor(award, 'bids'), go);
-  // خطوات العطاءات والتدقيق تبقى كما هي في كل تبويب
-  const audit = nextStep(setup())!;
-  assert.deepEqual(stepActionsFor(audit, 'recommendation'), audit.actions);
+  // العطاءات والتدقيق: خطوات مرحلتها فقط، ولا فائز ولا زر غريب
+  const p0 = setup();
+  assert.deepEqual(stageStep(p0, 'bids'), nextStep(p0));
+  assert.equal(stageStep(allIn(), 'bids'), null);
+  assert.equal(stageStep(chosen(allIn()), 'bids'), null);
+  // الدراسة: خطوة الترسية وحدها
+  assert.equal(stageStep(setup(), 'study'), null);
+  const study = stageStep(allIn(), 'study')!;
+  assert.equal(study.kind, 'award');
+  assert.deepEqual(study.actions, go);
+  assert.ok(study.text.startsWith('اكتمل إدخال العطاءات (2 من 2) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات، ثم التوصية بالإحالة'));
+  assert.equal(stageStep(chosen(allIn()), 'study'), null);
+  // التوصية والمحضر
+  const early = stageStep(setup(), 'recommendation')!;
+  assert.deepEqual(early.actions, []);
+  assert.equal(early.text, 'لم تكتمل مرحلة العطاءات والتدقيق (3 فقرات فيها أخطاء لم تُعالج)، فالتوصية قبل إكمالها غير نهائية');
+  const pick = stageStep(allIn(), 'recommendation')!;
+  assert.deepEqual(pick.actions, []);
+  assert.equal(pick.text, 'الخطوة التالية: اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»');
+  const p1 = chosen(allIn());
+  assert.deepEqual(stageStep(p1, 'recommendation'), nextStep(p1));
+  // ترسية وموقف مسجّل: لا شيء في أي تبويب
+  const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
+  const done = { ...chosen(allIn()), statusLog: [e] };
+  for (const tab of ['bids', 'study', 'recommendation']) assert.equal(stageStep(done, tab), null);
 });
 
 test('حال المراحل: كل مرحلة بشرطها، فالترسية المختارة تبقى مكتملة إن عادت فقرة معلّقة', () => {

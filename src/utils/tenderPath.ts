@@ -75,18 +75,29 @@ export interface NextStep {
   actions: NextStepAction[];
 }
 
-const TO_RECOMMENDATION: NextStepAction = { label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' };
-
-/** أزرار الخطوة كما تُعرض في التبويب المفتوح: لا يعمل زر إلا في مرحلته. المحضر والموقف من عمل «التوصية والمحضر»،
- *  فخارجها يحل محلهما زر واحد ينقل إليها، وداخلها لا يظهر زر ينقل إلى التبويب نفسه. النص لا يتغير */
-export function stepActionsFor(step: NextStep, activeTab?: string): NextStepAction[] {
-  if (activeTab === 'recommendation') return step.actions.filter(a => a.target !== 'recommendation');
-  const out: NextStepAction[] = [];
-  for (const a of step.actions) {
-    const act = a.target === 'print' || a.target === 'status' ? TO_RECOMMENDATION : a;
-    if (!out.some(o => o.target === act.target && o.label === act.label)) out.push(act);
+/** خطوة التبويب المفتوح وحده (قرار أسامة 2026-11-18: التلميحات والأزرار خاصة بالتبويب الذي يحتويها).
+ *  العطاءات والتدقيق: خطوات الكلفة والتدقيق والإدخال، ولا شيء بعد اكتمالها، فلا يُعلَن فيها فائز.
+ *  الدراسة والتحليل: بعد اكتمال الإدخال وقبل الترسية فقط، وزرها الانتقال إلى التوصية لأنه خاتمة الدراسة.
+ *  التوصية والمحضر: اختيار الفائز بلا زر، ثم المحضر والموقف؛ وما لم تكتمل الأولى سطر بلا زر */
+export function stageStep(p: TenderProject, tab?: string): NextStep | null {
+  const step = nextStep(p);
+  if (!step) return null;
+  const firstStage = step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids';
+  if (tab === 'recommendation') {
+    if (firstStage) {
+      return { ...step, text: `لم تكتمل مرحلة العطاءات والتدقيق (${step.text.replace(/^الخطوة التالية: /, '')})، فالتوصية قبل إكمالها غير نهائية`, actions: [] };
+    }
+    if (step.kind === 'award') {
+      return { ...step, text: 'الخطوة التالية: اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»', actions: [] };
+    }
+    return step;
   }
-  return out;
+  if (tab === 'study') {
+    return step.kind === 'award'
+      ? { ...step, text: step.text.replace('الخطوة التالية: دراسة العطاءات والتوصية بالإحالة', 'الخطوة التالية: دراسة العطاءات، ثم التوصية بالإحالة') }
+      : null;
+  }
+  return firstStage ? step : null;
 }
 
 /** الخطوة الواحدة التالية: أول شرط يتحقق، وnull حين لا شيء ينتظر. مستنتجة ولا تُخزَّن */
