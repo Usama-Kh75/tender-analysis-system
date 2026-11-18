@@ -17,7 +17,7 @@ const Body: React.FC<{ project: TenderProject; tab: string }> = ({ project, tab 
       <button
         type="button"
         aria-expanded={open}
-        aria-controls={listId}
+        aria-controls={open ? listId : undefined}
         onClick={() => setOpen(o => !o)}
         className={`flex w-full items-center justify-between gap-2 font-bold text-slate-800 cursor-pointer rounded ${focus}`}
       >
@@ -36,13 +36,15 @@ const Body: React.FC<{ project: TenderProject; tab: string }> = ({ project, tab 
                 <button
                   type="button"
                   aria-expanded={on}
+                  aria-controls={on ? `legal-text-${key}` : undefined}
+                  aria-label={`${on ? 'إخفاء' : 'عرض'} النص الرسمي لـ ${t.label}`}
                   onClick={() => setShown(on ? null : key)}
-                  className={`font-bold text-blue-800 underline cursor-pointer rounded ${focus}`}
+                  className={`font-bold text-blue-800 underline cursor-pointer rounded whitespace-nowrap ${focus}`}
                 >
                   {on ? 'إخفاء النص' : 'النص الرسمي'}
                 </button>
                 {on && (
-                  <blockquote className="mt-1 rounded-lg bg-slate-50 px-3 py-2 leading-relaxed text-slate-700">
+                  <blockquote id={`legal-text-${key}`} className="mt-1 rounded-lg bg-slate-50 px-3 py-2 leading-relaxed text-slate-700">
                     «{t.text}» (ص {t.page})
                   </blockquote>
                 )}
