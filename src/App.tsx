@@ -338,7 +338,7 @@ export function App() {
         <div id="boq-table-container">
           {activeTab === 'bids' ? (
             <>
-            {hasBidAmounts(activeBidder) && (
+            {hasBidAmounts(activeBidder) && isOfferLocked(activeBidder) && (
               <div className="mb-4">
                 <WeightedOfferBar bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)} />
               </div>
@@ -412,6 +412,7 @@ export function App() {
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
               chartsOpen={chartsOpen}
               onToggleCharts={() => setChartsOpen(o => !o)}
+              onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}
             />
             {chartsOpen && (
               <ChartsView

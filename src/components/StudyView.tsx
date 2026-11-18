@@ -2,11 +2,13 @@ import React from 'react';
 import { CheckCircle2, XCircle, Building2, FileCheck } from 'lucide-react';
 import { TenderProject } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
-import { buildRecommendation, hasBidAmounts, hasNoEstimate, eligibilityCounts, exclusionThresholdOf } from '../utils/recommendation';
+import { buildRecommendation, hasBidAmounts, isCommerciallyExcluded, hasNoEstimate, eligibilityCounts, exclusionThresholdOf } from '../utils/recommendation';
 import { rankingEffect } from '../utils/rankingEffect';
 import { evaluateBids } from '../utils/bidEvaluation';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { errorsCountText } from '../utils/arabicCount';
+import { assessBalance, correctedBalanceRows } from '../utils/weightedOffer';
+import { WeightedOfferBar } from './WeightedOfferBar';
 
 interface StudyViewProps {
   project: TenderProject;
@@ -17,6 +19,8 @@ interface StudyViewProps {
   onOpenMatrix: () => void;
   chartsOpen: boolean;
   onToggleCharts: () => void;
+  /** يختار المجهز وينقل إلى جدول الفقرات في تبويب «العطاءات والتدقيق» لإعداد عرضه الموزون */
+  onOpenWeightedOffer: (bidderId: string) => void;
 }
 
 /** «الدراسة والتحليل»: مقارنة العطاءات تجارياً بالأرقام والانحرافات وأثر التصحيح، بلا قرار ولا توصية */
@@ -26,7 +30,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onOpenAudit,
   onOpenMatrix,
   chartsOpen,
-  onToggleCharts
+  onToggleCharts,
+  onOpenWeightedOffer
 }) => {
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
@@ -37,6 +42,10 @@ export const StudyView: React.FC<StudyViewProps> = ({
   const sortedBidders = evaluateBids(project);
   // التوصية من المحرك المشترك: تُستعمل هنا لتلوين صف الموصى به فقط
   const rec = buildRecommendation(project);
+  // حكم التوازن (ضوابط (4) سادساً/5): عطاء غير مستبعد يلزمه عرض موزون أو له عرض
+  const balanceBidders = noEstimate ? [] : project.bidders.filter(b =>
+    hasBidAmounts(b) && b.status !== 'disqualified' && !isCommerciallyExcluded(b, exclusionThreshold) &&
+    (b.weightedOffer || assessBalance(correctedBalanceRows(b.items), project.deviationThreshold, exclusionThreshold).verdict === 'weighting-required'));
 
   return (
     <div className="space-y-6 mb-8">
@@ -360,6 +369,25 @@ export const StudyView: React.FC<StudyViewProps> = ({
           </div>
         );
       })()}
+
+      {balanceBidders.length > 0 && (
+        <div className="space-y-4 no-print">
+          <h3 className="text-sm sm:text-base font-black text-slate-800">توازن العطاءات والعرض الموزون</h3>
+          {balanceBidders.map(b => (
+            <div key={b.id} className="space-y-2">
+              <div className="text-sm font-black text-slate-800">{b.name}</div>
+              <WeightedOfferBar bidder={b} threshold={project.deviationThreshold} exclusionThreshold={exclusionThreshold} />
+              <button
+                type="button"
+                onClick={() => onOpenWeightedOffer(b.id)}
+                className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
+              >
+                {b.weightedOffer ? 'فتح العرض الموزون في جدول الفقرات' : 'إعداد العرض الموزون في جدول الفقرات'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );
