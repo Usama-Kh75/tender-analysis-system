@@ -42,6 +42,14 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     if (refocus) focusBackId.current = id;
   };
 
+  // الخروج من حقل الاسم أو زر «حفظ» إلى خارج حاوية التعديل يحفظ بلا سحب التركيز؛ والانتقال بينهما (Tab أو النقر على «حفظ») لا يُنهي التعديل،
+  // وإلا أُزيل الزر قبل وصول التركيز إليه (مراجعة Antigravity 2026-11-19)
+  const leaveEdit = (e: React.FocusEvent<HTMLElement>, id: string, current: string) => {
+    const to = e.relatedTarget;
+    if (to instanceof Node && e.currentTarget.parentElement?.contains(to)) return;
+    finishRename(id, current, true, false);
+  };
+
   // عدّاد العطاءات: أخضر حين تكتمل مبالغ كل المسجّلين. المستلمة قد تزيد على المحلَّلة بحق (العطاء غير المستوفي لا يُحلَّل)
   const bids = tenderPath(project).bids;
   const complete = bids.registered > 0 && bids.entered === bids.registered;
@@ -78,12 +86,12 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                     if (e.key === 'Enter') finishRename(b.id, b.name, true);
                     if (e.key === 'Escape') finishRename(b.id, b.name, false);
                   }}
-                  onBlur={() => finishRename(b.id, b.name, true, false)}
+                  onBlur={(e) => leaveEdit(e, b.id, b.name)}
                   className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
                   aria-label="اسم الشركة"
                   autoFocus
                 />
-                <button onClick={() => finishRename(b.id, b.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
+                <button onBlur={(e) => leaveEdit(e, b.id, b.name)} onClick={() => finishRename(b.id, b.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
                   حفظ
                 </button>
               </div>
