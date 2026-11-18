@@ -38,10 +38,12 @@ export const RecommendationView: React.FC<RecommendationViewProps> = ({
   const exclusionThreshold = exclusionThresholdOf(project);
   // العرض الموزون للعطاء الفائز وحده (ضوابط (4) سادساً/5) إن تجاوزت فقراته غير المتوازنة 10% من عددها،
   // ويبقى ظاهراً كل عطاء له عرض مسجّل ليُرى ويُوقف إن لم يعد فائزاً
+  // (العرض المسجّل يبقى ظاهراً ولو استُبعد العطاء بعده، ليُوقف: مراجعة Kimi 2026-11-18)
   const winner = offerWinner(project);
   const balanceBidders = noEstimate ? [] : project.bidders.filter(b =>
-    hasBidAmounts(b) && b.status !== 'disqualified' && !isCommerciallyExcluded(b, exclusionThreshold) &&
-    (b.weightedOffer || (b.id === winner?.id && assessBalance(correctedBalanceRows(b.items), project.deviationThreshold, exclusionThreshold).verdict === 'weighting-required')));
+    b.weightedOffer ||
+    (b.id === winner?.id && hasBidAmounts(b) && b.status !== 'disqualified' && !isCommerciallyExcluded(b, exclusionThreshold) &&
+      assessBalance(correctedBalanceRows(b.items), project.deviationThreshold, exclusionThreshold).verdict === 'weighting-required'));
   const evaluated = evaluateBids(project);
   // قرار الترسية على المؤهلين وحدهم؛ المستبعدون يُعرضون في «الدراسة والتحليل»
   const decisionBids = evaluated.filter(b => b.commercialStatus === 'qualified' || b.commercialStatus === 'recommended');
