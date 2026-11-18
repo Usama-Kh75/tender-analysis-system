@@ -5,7 +5,7 @@ import type { TenderProject } from '../types/tender';
 interface NextStepBarProps {
   project: TenderProject;
   onGo: (a: NextStepAction) => void;
-  /** التبويب المفتوح: لا يظهر زر ينقل إلى التبويب نفسه */
+  /** التبويب المفتوح: يُعرض نص خطوة مرحلته وأزرارها وحدها (stageStep) */
   activeTab?: string;
 }
 
