@@ -5,11 +5,13 @@ import type { TenderProject } from '../types/tender';
 interface NextStepBarProps {
   project: TenderProject;
   onGo: (a: NextStepAction) => void;
+  /** التبويب المفتوح: لا يظهر زر ينقل إلى التبويب نفسه */
+  activeTab?: string;
 }
 
 // «الخطوة التالية» تحت عنوان المناقصة: خطوة واحدة تُستنتج من حالة المناقصة ولا يُخزَّن شيء.
 // الكهرماني لعمل معلّق (الكلفة، التدقيق، العطاءات)، والحيادي لما بعده (التوصية، المحضر).
-export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo }) => {
+export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeTab }) => {
   const step = nextStep(project);
   if (!step) return null;
   const pendingWork = step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids';
@@ -23,7 +25,7 @@ export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo }) => {
     <nav aria-label="الخطوة التالية" className={`mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border px-3 py-2 text-xs ${tone}`}>
       <span className="font-bold min-w-0 grow basis-60">{step.text}</span>
       <span className="flex shrink-0 items-center gap-2">
-        {step.actions.map(a => (
+        {step.actions.filter(a => !(a.target === 'recommendation' && activeTab === 'recommendation')).map(a => (
           <button
             type="button"
             key={a.label}

@@ -148,7 +148,7 @@ test('الخطوة 5: الترسية مختارة بلا سجل موقف', () =>
   assert.equal(s.kind, 'report');
   assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل');
   assert.deepEqual(s.actions, [
-    { label: 'فتح المحضر', target: 'recommendation' },
+    { label: 'فتح المحضر', target: 'print' },
     { label: 'تسجيل الموقف', target: 'status' }
   ]);
   assert.equal(nextStep({ ...chosen(allIn()), statusLog: [] })!.kind, 'report');

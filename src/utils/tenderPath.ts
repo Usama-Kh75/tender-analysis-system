@@ -43,7 +43,7 @@ export function tenderPath(p: TenderProject): TenderPath {
   };
 }
 
-export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'recommendation' | 'status';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'recommendation' | 'print' | 'status';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
   kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report';
@@ -94,7 +94,7 @@ export function nextStep(p: TenderProject): NextStep | null {
       kind: 'report',
       text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل`,
       actions: [
-        { label: 'فتح المحضر', target: 'recommendation' },
+        { label: 'فتح المحضر', target: 'print' },
         { label: 'تسجيل الموقف', target: 'status' }
       ]
     };

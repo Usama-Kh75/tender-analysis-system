@@ -269,6 +269,8 @@ export function App() {
       scrollToTable();
     } else if (action.target === 'recommendation') {
       setActiveTab('recommendation');
+    } else if (action.target === 'print') {
+      setIsPrintOpen(true);
     } else {
       // الموقف نافذة لا تبويب
       setIsStatusOpen(true);

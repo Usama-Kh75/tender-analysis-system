@@ -172,7 +172,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         })}
       </div>
 
-      <NextStepBar project={currentProject} onGo={onGo} />
+      <NextStepBar project={currentProject} onGo={onGo} activeTab={activeTab} />
 
     </div>
   );
