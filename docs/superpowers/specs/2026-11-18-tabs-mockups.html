@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>نماذج تبويبات المراحل</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .lead { color: #475569; font-size: 13px; margin: 0 0 24px; }
+  .variant { margin-bottom: 36px; }
+  .variant > h2 { font-size: 16px; margin: 0 0 4px; }
+  .variant > p { font-size: 13px; color: #475569; margin: 0 0 10px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 24px; padding: 20px 24px; margin-bottom: 10px; }
+  .narrow { max-width: 700px; }
+  .title { font-size: 20px; font-weight: 800; margin: 0 0 14px; }
+  .meta { font-size: 11px; color: #64748b; margin-bottom: 6px; }
+  .legend { font-size: 12px; color: #64748b; margin-top: 8px; }
+  .q { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .ico { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-size: 11px; font-weight: 800; flex: none; }
+
+  /* أ: Path — شرائح متصلة على شكل أسهم */
+  .path { display: flex; gap: 0; }
+  .path .seg { flex: 1; position: relative; padding: 10px 26px 10px 18px; min-height: 58px; cursor: pointer;
+    clip-path: polygon(100% 0, 14px 0, 0 50%, 14px 100%, 100% 100%, calc(100% - 14px) 50%); margin-left: -12px; }
+  .path .seg:first-child { clip-path: polygon(100% 0, 14px 0, 0 50%, 14px 100%, 100% 100%); padding-right: 18px; border-radius: 0 12px 12px 0; }
+  .path .seg:last-child { clip-path: polygon(100% 0, 0 0, 0 100%, 100% 100%, calc(100% - 14px) 50%); margin-left: 0; }
+  .path .done { background: #047857; color: #fff; }
+  .path .done .q { color: #ecfdf5; }
+  .path .current { background: #1e3a8a; color: #fff; }
+  .path .current .q { color: #bfdbfe; }
+  .path .future { background: #e2e8f0; color: #334155; }
+  .path .future .q { color: #475569; }
+  .path .viewing { box-shadow: inset 0 -4px 0 #f59e0b; }
+  .path .t { font-size: 14px; font-weight: 800; display: flex; gap: 6px; align-items: center; }
+
+  /* ب: بطاقات مراحل متصلة (رأي Gemini) */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .cards .st { position: relative; border-radius: 12px; padding: 14px 14px 10px; min-height: 76px; cursor: pointer; overflow: hidden;
+    background: #f8fafc; border: 1px solid #e2e8f0; }
+  .cards .st::before { content: ''; position: absolute; top: 0; right: 0; left: 0; height: 4px; background: var(--bar); }
+  .cards .st.viewing { background: #fff; border-color: transparent; box-shadow: 0 0 0 2px #2563eb, 0 2px 6px rgba(15,23,42,.08); }
+  .cards .row { display: flex; align-items: center; gap: 8px; }
+  .cards .t { font-size: 14px; font-weight: 700; }
+  .pill { margin-inline-start: auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
+  .p-done { background: #d1fae5; color: #047857; }
+  .p-cur { background: #fef3c7; color: #b45309; }
+  .p-fut { background: #f1f5f9; color: #475569; }
+
+  /* ج: شريط تقدّم مقسّم وتحته التسميات */
+  .track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .track .bar { height: 8px; border-radius: 999px; background: var(--bar); }
+  .track .lab { padding: 10px 4px 8px; cursor: pointer; border-bottom: 3px solid transparent; }
+  .track .lab.viewing { border-bottom-color: #2563eb; }
+  .track .lab .t { font-size: 15px; font-weight: 700; display: flex; gap: 6px; align-items: center; }
+  .track .lab.viewing .t { color: #1d4ed8; }
+  .track .s { font-size: 11px; font-weight: 700; margin-top: 3px; }
+
+  @media (max-width: 760px) { .pill .txt { display: none; } }
+</style>
+</head>
+<body>
+<h1>نماذج تبويبات المراحل — للمقارنة قبل التنفيذ</h1>
+<p class="lead">الحالة في كل النماذج واحدة: المرحلة الأولى منجزة، والثانية جارية وهي المفتوحة الآن، والثالثة لم تبدأ. وكل نموذج معروض مرتين: بعرض الشاشة كاملاً، وبعرض 700 (حاسبة صغيرة أو نافذة نصفية).</p>
+
+<!-- ===== أ ===== -->
+<section class="variant">
+  <h2>أ. شرائح الأسهم «Path» (نمط Salesforce)</h2>
+  <p>أسهم متصلة تقرأ اتجاه العمل من اليمين إلى اليسار. لون الشريحة لحال المرحلة، وخط برتقالي أسفل المفتوحة الآن.</p>
+  <div class="card"><div class="meta">11 / 26 / 9014 · نوع العقد: تجهيز</div><div class="title">تجهيز جهاز قياس نسبة تركيز الغازات</div>
+    <div class="path" role="tablist">
+      <div class="seg done" role="tab" aria-selected="false"><div class="t"><span>✓</span>العطاءات والتدقيق</div><div class="q">ماذا قدّم كل مجهز؟</div></div>
+      <div class="seg current viewing" role="tab" aria-selected="true"><div class="t">الدراسة والتحليل</div><div class="q">كيف تقارن العطاءات؟</div></div>
+      <div class="seg future" role="tab" aria-selected="false"><div class="t">التوصية والمحضر</div><div class="q">بماذا توصي اللجنة؟</div></div>
+    </div></div>
+  <div class="card narrow"><div class="title">بعرض 700</div>
+    <div class="path">
+      <div class="seg done"><div class="t"><span>✓</span>العطاءات والتدقيق</div><div class="q">ماذا قدّم كل مجهز؟</div></div>
+      <div class="seg current viewing"><div class="t">الدراسة والتحليل</div><div class="q">كيف تقارن العطاءات؟</div></div>
+      <div class="seg future"><div class="t">التوصية والمحضر</div><div class="q">بماذا توصي اللجنة؟</div></div>
+    </div></div>
+</section>
+
+<!-- ===== ب ===== -->
+<section class="variant">
+  <h2>ب. بطاقات مراحل متصلة (رأي Gemini، ورأيي بعد المقارنة)</h2>
+  <p>لكل مرحلة بطاقة: شريط رفيع ملوّن في أعلاها وشارة لحالها، وإطار أزرق للمفتوحة الآن. الأمران منفصلان فلا يختلطان.</p>
+  <div class="card"><div class="meta">11 / 26 / 9014 · نوع العقد: تجهيز</div><div class="title">تجهيز جهاز قياس نسبة تركيز الغازات</div>
+    <div class="cards" role="tablist">
+      <div class="st" style="--bar:#059669" role="tab" aria-selected="false"><div class="row"><span class="t">العطاءات والتدقيق</span><span class="pill p-done">✓ <span class="txt">مكتملة</span></span></div><div class="q">ماذا قدّم كل مجهز؟</div></div>
+      <div class="st viewing" style="--bar:#f59e0b" role="tab" aria-selected="true"><div class="row"><span class="t">الدراسة والتحليل</span><span class="pill p-cur">● <span class="txt">قيد العمل</span></span></div><div class="q">كيف تقارن العطاءات؟</div></div>
+      <div class="st" style="--bar:#cbd5e1" role="tab" aria-selected="false"><div class="row"><span class="t">التوصية والمحضر</span><span class="pill p-fut">○ <span class="txt">لم تبدأ</span></span></div><div class="q">بماذا توصي اللجنة؟</div></div>
+    </div></div>
+  <div class="card narrow"><div class="title">بعرض 700</div>
+    <div class="cards">
+      <div class="st" style="--bar:#059669"><div class="row"><span class="t">العطاءات والتدقيق</span><span class="pill p-done">✓</span></div><div class="q">ماذا قدّم كل مجهز؟</div></div>
+      <div class="st viewing" style="--bar:#f59e0b"><div class="row"><span class="t">الدراسة والتحليل</span><span class="pill p-cur">●</span></div><div class="q">كيف تقارن العطاءات؟</div></div>
+      <div class="st" style="--bar:#cbd5e1"><div class="row"><span class="t">التوصية والمحضر</span><span class="pill p-fut">○</span></div><div class="q">بماذا توصي اللجنة؟</div></div>
+    </div></div>
+</section>
+
+<!-- ===== ج ===== -->
+<section class="variant">
+  <h2>ج. شريط تقدّم مقسّم (نمط Atlassian)</h2>
+  <p>شريط واحد مقسّم ثلاثة أجزاء يُظهر تقدّم المناقصة، وتحته أسماء المراحل تبويباتٍ، والمفتوحة بخط أزرق.</p>
+  <div class="card"><div class="meta">11 / 26 / 9014 · نوع العقد: تجهيز</div><div class="title">تجهيز جهاز قياس نسبة تركيز الغازات</div>
+    <div class="track" role="tablist">
+      <div><div class="bar" style="--bar:#059669"></div><div class="lab" role="tab" aria-selected="false"><div class="t">العطاءات والتدقيق</div><div class="q">ماذا قدّم كل مجهز؟</div><div class="s" style="color:#047857">✓ مكتملة</div></div></div>
+      <div><div class="bar" style="--bar:#f59e0b"></div><div class="lab viewing" role="tab" aria-selected="true"><div class="t">الدراسة والتحليل</div><div class="q">كيف تقارن العطاءات؟</div><div class="s" style="color:#b45309">● قيد العمل</div></div></div>
+      <div><div class="bar" style="--bar:#e2e8f0"></div><div class="lab" role="tab" aria-selected="false"><div class="t">التوصية والمحضر</div><div class="q">بماذا توصي اللجنة؟</div><div class="s" style="color:#64748b">○ لم تبدأ</div></div></div>
+    </div></div>
+  <div class="card narrow"><div class="title">بعرض 700</div>
+    <div class="track">
+      <div><div class="bar" style="--bar:#059669"></div><div class="lab"><div class="t">العطاءات والتدقيق</div><div class="q">ماذا قدّم كل مجهز؟</div><div class="s" style="color:#047857">✓ مكتملة</div></div></div>
+      <div><div class="bar" style="--bar:#f59e0b"></div><div class="lab viewing"><div class="t">الدراسة والتحليل</div><div class="q">كيف تقارن العطاءات؟</div><div class="s" style="color:#b45309">● قيد العمل</div></div></div>
+      <div><div class="bar" style="--bar:#e2e8f0"></div><div class="lab"><div class="t">التوصية والمحضر</div><div class="q">بماذا توصي اللجنة؟</div><div class="s" style="color:#64748b">○ لم تبدأ</div></div></div>
+    </div></div>
+</section>
+
+<p class="legend">نموذج للمعاينة فقط، وليس في التطبيق. إعداد المهندس أسامة خليل هاشم</p>
+</body>
+</html>
