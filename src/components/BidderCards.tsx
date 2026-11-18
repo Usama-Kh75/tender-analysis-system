@@ -42,11 +42,11 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     if (refocus) focusBackId.current = id;
   };
 
-  // الخروج من حقل الاسم أو زر «حفظ» إلى خارج حاوية التعديل يحفظ بلا سحب التركيز؛ والانتقال بينهما (Tab أو النقر على «حفظ») لا يُنهي التعديل،
-  // وإلا أُزيل الزر قبل وصول التركيز إليه (مراجعة Antigravity 2026-11-19)
+  // blur الحاوية (يرتفع من الحقل والزر): الخروج إلى خارجها يحفظ بلا سحب التركيز؛ والانتقال بين الحقل و«حفظ» (Tab أو النقر) لا يُنهي التعديل،
+  // وإلا أُزيل الزر قبل وصول التركيز إليه. وEscape على الحاوية يلغي من الحقل أو الزر (مراجعة Antigravity 2026-11-19)
   const leaveEdit = (e: React.FocusEvent<HTMLElement>, id: string, current: string) => {
     const to = e.relatedTarget;
-    if (to instanceof Node && e.currentTarget.parentElement?.contains(to)) return;
+    if (to instanceof Node && e.currentTarget.contains(to)) return;
     finishRename(id, current, true, false);
   };
 
@@ -77,21 +77,21 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
             className={`flex items-center gap-2 px-3 py-1 transition ${active ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
           >
             {active && editingId === b.id ? (
-              <div className="flex items-center gap-2 py-1.5">
+              <div
+                className="flex items-center gap-2 py-1.5"
+                onKeyDown={(e) => { if (e.key === 'Escape') finishRename(b.id, b.name, false); }}
+                onBlur={(e) => leaveEdit(e, b.id, b.name)}
+              >
                 <input
                   type="text"
                   value={tempName}
                   onChange={(e) => setTempName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') finishRename(b.id, b.name, true);
-                    if (e.key === 'Escape') finishRename(b.id, b.name, false);
-                  }}
-                  onBlur={(e) => leaveEdit(e, b.id, b.name)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') finishRename(b.id, b.name, true); }}
                   className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
                   aria-label="اسم الشركة"
                   autoFocus
                 />
-                <button onBlur={(e) => leaveEdit(e, b.id, b.name)} onClick={() => finishRename(b.id, b.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
+                <button onClick={() => finishRename(b.id, b.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
                   حفظ
                 </button>
               </div>
