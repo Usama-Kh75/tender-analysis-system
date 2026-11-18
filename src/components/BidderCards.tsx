@@ -32,13 +32,14 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     }
   }, [editingId]);
 
-  const finishRename = (id: string, current: string, save: boolean) => {
+  // refocus=false عند الخروج من الحقل بالنقر أو Tab (blur): لا يُسحب التركيز من حيث ذهب المستخدم (مراجعة Kimi 2026-11-19)
+  const finishRename = (id: string, current: string, save: boolean, refocus = true) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     const next = tempName.trim();
     if (save && next && next !== current) onRename(next);
     setEditingId(null);
-    focusBackId.current = id;
+    if (refocus) focusBackId.current = id;
   };
 
   // عدّاد العطاءات: أخضر حين تكتمل مبالغ كل المسجّلين. المستلمة قد تزيد على المحلَّلة بحق (العطاء غير المستوفي لا يُحلَّل)
@@ -77,7 +78,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                     if (e.key === 'Enter') finishRename(b.id, b.name, true);
                     if (e.key === 'Escape') finishRename(b.id, b.name, false);
                   }}
-                  onBlur={() => finishRename(b.id, b.name, true)}
+                  onBlur={() => finishRename(b.id, b.name, true, false)}
                   className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
                   aria-label="اسم الشركة"
                   autoFocus
