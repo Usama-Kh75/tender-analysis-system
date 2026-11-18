@@ -30,8 +30,11 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
     onDirtyChange(d);
   }, [onDirtyChange]);
 
+  // الإغلاق للانتقال إلى «كشف الموقف» لا يعيد المؤشر إلى شارة الموقف: الكشف يأخذه (مراجعة Antigravity 2026-11-19)
+  const handoffRef = useRef(false);
   const requestClose = useCallback((then?: () => void) => {
     if (dirtyRef.current && !window.confirm('في نموذج الموقف ما لم يُحفظ. أتغلق النافذة دونه؟')) return;
+    handoffRef.current = !!then;
     onClose();
     then?.();
   }, [onClose]);
@@ -46,9 +49,10 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!isOpen) return;
+    handoffRef.current = false;
     const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
-    return () => { if (prev && prev.isConnected) prev.focus(); };
+    return () => { if (!handoffRef.current && prev && prev.isConnected) prev.focus(); };
   }, [isOpen]);
 
   if (!isOpen) return null;

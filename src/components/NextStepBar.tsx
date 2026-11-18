@@ -34,6 +34,8 @@ export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeT
               type="button"
               key={a.label}
               onClick={() => onGo(a)}
+              // المعاينة والاستيراد يفتحان نافذة، وبقية الأهداف تنقل بين التبويبات
+              aria-haspopup={a.target === 'print' || a.target === 'importEstimate' ? 'dialog' : undefined}
               className={`font-bold whitespace-nowrap px-3 py-1.5 rounded-lg cursor-pointer transition ${btn}`}
             >
               {a.label}

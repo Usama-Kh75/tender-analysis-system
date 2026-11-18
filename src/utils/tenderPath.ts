@@ -180,7 +180,7 @@ export function nextStep(p: TenderProject): NextStep | null {
     return {
       kind: 'report',
       text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل، ثم ${hasStatus ? 'تحديث' : 'تسجيل'} الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»`,
-      actions: [{ label: 'فتح المحضر', target: 'print' }]
+      actions: [{ label: 'معاينة المحضر وطباعته', target: 'print' }]
     };
   }
   return null;

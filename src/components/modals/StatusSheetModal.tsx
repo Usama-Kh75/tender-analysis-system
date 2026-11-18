@@ -79,7 +79,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               <Printer className="w-5 h-5 text-amber-400" />
               <div className="text-base font-bold">كشف موقف الطلبيات</div>
             </div>
-            <button type="button" onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+            <button type="button" onClick={onClose} aria-label="إغلاق" autoFocus className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>

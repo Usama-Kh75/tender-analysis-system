@@ -148,7 +148,7 @@ test('الخطوة 5: الترسية مختارة بلا سجل موقف', () =>
   assert.equal(s.kind, 'report');
   assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تسجيل الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»');
   // لا زر للموقف في الشريط (أسامة 2026-11-19)
-  assert.deepEqual(s.actions, [{ label: 'فتح المحضر', target: 'print' }]);
+  assert.deepEqual(s.actions, [{ label: 'معاينة المحضر وطباعته', target: 'print' }]);
   assert.equal(nextStep({ ...chosen(allIn()), statusLog: [] })!.kind, 'report');
 });
 
@@ -158,7 +158,7 @@ test('الموقف يُسجَّل من أول يوم: «قيد التحليل» 
     const s = nextStep({ ...chosen(allIn()), statusLog: [e] })!;
     assert.equal(s.kind, 'report', stage);
     assert.equal(s.text, 'اختارت اللجنة «أ». الخطوة التالية: طباعة محضر التحليل، ثم تحديث الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»');
-    assert.deepEqual(s.actions, [{ label: 'فتح المحضر', target: 'print' }]);
+    assert.deepEqual(s.actions, [{ label: 'معاينة المحضر وطباعته', target: 'print' }]);
     assert.equal(stageStates({ ...chosen(allIn()), statusLog: [e] }).report, 'current', stage);
   }
 });

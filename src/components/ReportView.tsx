@@ -68,7 +68,8 @@ export const ReportView: React.FC<ReportViewProps> = ({
             </div>
 
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-              العطاء الفائز ومعاينة المحضر
+              {/* «العطاء الفائز» بعد اختيار اللجنة وحده: في الإحالة وإعادة الإعلان لا فائز (مراجعة Antigravity 2026-11-19) */}
+              {rec.kind === 'award' && rec.chosenByCommittee ? 'العطاء الفائز ومعاينة المحضر' : 'معاينة المحضر'}
             </h2>
           </div>
 
@@ -150,7 +151,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
 
       {balanceBidders.length > 0 && (
         <div className="space-y-4 no-print">
-          <h3 className="text-sm sm:text-base font-black text-slate-800">{rec.kind === 'award' && rec.chosenByCommittee ? 'العرض الموزون للعطاء الفائز' : 'العرض الموزون لأوطأ العطاءات المؤهلة (المرشّح للترسية)'}</h3>
+          <h3 className="text-sm sm:text-base font-black text-slate-800">{rec.kind !== 'award' ? 'العرض الموزون' : rec.chosenByCommittee ? 'العرض الموزون للعطاء الفائز' : 'العرض الموزون لأوطأ العطاءات المؤهلة (المرشّح للترسية)'}</h3>
           {balanceBidders.map(b => {
             const live = !!b.weightedOffer && b.weightedOffer.status !== 'paused';
             return (
