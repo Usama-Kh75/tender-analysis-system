@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Award, FileSpreadsheet, Printer } from 'lucide-react';
 import { TenderProject } from '../types/tender';
 import { formatCurrency, formatPercent } from '../utils/calculations';
@@ -6,6 +6,31 @@ import { buildRecommendation, hasNoEstimate, exclusionThresholdOf, offerWinner, 
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { isOfferFinal, assessBalance, correctedBalanceRows } from '../utils/weightedOffer';
 import { WeightedOfferBar } from './WeightedOfferBar';
+import { LEGAL_TEXTS, type LegalKey } from '../utils/legalTexts';
+
+// «النص الرسمي» للمادة المذكورة في بطاقة الفائز: يبقى النص في الصفحة مخفياً ليشير إليه aria-controls دائماً (عرض فقط، لا يُطبع)
+const OfficialText: React.FC<{ legalKey: LegalKey }> = ({ legalKey }) => {
+  const [on, setOn] = useState(false);
+  const t = LEGAL_TEXTS[legalKey];
+  return (
+    <span className="no-print print:hidden">
+      {' '}
+      <button
+        type="button"
+        aria-expanded={on}
+        aria-controls={`legal-text-${legalKey}`}
+        aria-label={`${on ? 'إخفاء' : 'عرض'} النص الرسمي لـ ${t.label}`}
+        onClick={() => setOn(!on)}
+        className="font-bold text-indigo-800 underline cursor-pointer rounded whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+      >
+        {on ? 'إخفاء النص' : 'النص الرسمي'}
+      </button>
+      <blockquote id={`legal-text-${legalKey}`} hidden={!on} className="mt-1 rounded-lg border border-indigo-100 bg-white px-3 py-2 leading-relaxed text-slate-700 font-normal">
+        «{t.text}» (ص {t.page})
+      </blockquote>
+    </span>
+  );
+};
 
 interface ReportViewProps {
   project: TenderProject;
@@ -46,6 +71,52 @@ export const ReportView: React.FC<ReportViewProps> = ({
   const rec = buildRecommendation(project);
   const approval = rec.kind === 'award' && rec.primary
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
+
+  // بطاقة الفائز تضم عرضه الموزون تحتها؛ وغير الفائز يبقى في قسم مستقل (قرار أسامة 2026-11-19)
+  const winnerCard = rec.kind === 'award' && rec.chosenByCommittee && !!rec.primary;
+  const winnerBalance = winnerCard ? balanceBidders.find(b => b.id === winner?.id) : undefined;
+  const otherBalance = winnerBalance ? balanceBidders.filter(b => b.id !== winnerBalance.id) : balanceBidders;
+
+  // محتوى التوازن والعرض الموزون لعطاء واحد؛ withName=false داخل بطاقة الفائز لأن اسمه فيها
+  const renderBalance = (b: typeof balanceBidders[number], withName: boolean) => {
+    const live = !!b.weightedOffer && b.weightedOffer.status !== 'paused';
+    return (
+      <div key={b.id} className="space-y-2">
+        {withName && <div className="text-sm font-black text-slate-800">{b.name}</div>}
+        <WeightedOfferBar bidder={b} threshold={project.deviationThreshold} exclusionThreshold={exclusionThreshold} />
+        {b.id !== winner?.id && (
+          <p className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)، وهذا العطاء ليس الفائز في التوصية الحالية{live && '، فأوقف مرحلته من جدول فقراته'}.
+          </p>
+        )}
+        {b.id === winner?.id && !b.weightedOffer && (
+          <p className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
+            يلزم اعتماد الجدول الموزون لهذا العطاء (ضوابط رقم (4) سادساً/5): كل فقرة = مبلغها في الكلفة التخمينية × النسبة السعرية. الجدول محسوب تلقائياً، ويظهر في معاينة المحضر وفي ورقة «الجدول الموزون» في تصدير Excel.
+          </p>
+        )}
+        {b.id === winner?.id && b.weightedOffer?.status === 'paused' && (
+          <button
+            type="button"
+            onClick={() => onResumeWeightedOffer(b.id)}
+            aria-label={`استئناف العرض الموزون لعطاء ${b.name}`}
+            className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
+          >
+            استئناف العرض الموزون
+          </button>
+        )}
+        {live && (
+          <button
+            type="button"
+            onClick={() => onOpenWeightedOffer(b.id)}
+            aria-label={`فتح العرض الموزون لعطاء ${b.name} في جدول الفقرات`}
+            className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
+          >
+            فتح العرض الموزون في جدول الفقرات
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 mb-8">
@@ -96,7 +167,8 @@ export const ReportView: React.FC<ReportViewProps> = ({
 
       {/* العطاء الفائز: بعد اختيار اللجنة له في «الدراسة والتوصية» */}
       {rec.kind === 'award' && rec.chosenByCommittee && rec.primary ? (
-        <div className="bg-white rounded-3xl border border-emerald-200 shadow-sm p-5 flex items-start gap-3">
+        <div className="bg-white rounded-3xl border border-emerald-200 shadow-sm p-5">
+         <div className="flex items-start gap-3">
           <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
             <Award className="w-6 h-6" />
           </div>
@@ -112,7 +184,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
               {isOfferFinal(rec.primary) && '، باعتماد أسعار العرض الموزون المعتمد'}
             </div>
             {approval?.kind === 'note' && (
-              <div className="text-xs font-bold text-slate-700 mt-1">{approval.text}</div>
+              <div className="text-xs font-bold text-slate-700 mt-1">{approval.text}<OfficialText legalKey={approval.ref} /></div>
             )}
             {approval?.kind === 'missing' && (
               <div className="text-xs font-bold text-amber-700 mt-1">
@@ -120,6 +192,13 @@ export const ReportView: React.FC<ReportViewProps> = ({
               </div>
             )}
           </div>
+         </div>
+          {/* العرض الموزون للفائز تحت بطاقته: لا يُطبع */}
+          {winnerBalance && (
+            <div className="no-print border-t border-emerald-100 mt-3 pt-3">
+              {renderBalance(winnerBalance, false)}
+            </div>
+          )}
         </div>
       ) : (rec.kind === 'award' || rec.kind === 'tie') ? (
         <div className="bg-slate-50 rounded-3xl border border-slate-200 p-5 flex flex-wrap items-center justify-between gap-3 no-print">
@@ -148,48 +227,10 @@ export const ReportView: React.FC<ReportViewProps> = ({
         </div>
       )}
 
-      {balanceBidders.length > 0 && (
+      {otherBalance.length > 0 && (
         <div className="space-y-4 no-print">
-          <h3 className="text-sm sm:text-base font-black text-slate-800">{rec.kind !== 'award' ? 'العرض الموزون' : rec.chosenByCommittee ? 'العرض الموزون للعطاء الفائز' : 'العرض الموزون لأوطأ العطاءات المؤهلة (المرشّح للترسية)'}</h3>
-          {balanceBidders.map(b => {
-            const live = !!b.weightedOffer && b.weightedOffer.status !== 'paused';
-            return (
-              <div key={b.id} className="space-y-2">
-                <div className="text-sm font-black text-slate-800">{b.name}</div>
-                <WeightedOfferBar bidder={b} threshold={project.deviationThreshold} exclusionThreshold={exclusionThreshold} />
-                {b.id !== winner?.id && (
-                  <p className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                    العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)، وهذا العطاء ليس الفائز في التوصية الحالية{live && '، فأوقف مرحلته من جدول فقراته'}.
-                  </p>
-                )}
-                {b.id === winner?.id && !b.weightedOffer && (
-                  <p className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
-                    يلزم اعتماد الجدول الموزون لهذا العطاء (ضوابط رقم (4) سادساً/5): كل فقرة = مبلغها في الكلفة التخمينية × النسبة السعرية. الجدول محسوب تلقائياً، ويظهر في معاينة المحضر وفي ورقة «الجدول الموزون» في تصدير Excel.
-                  </p>
-                )}
-                {b.id === winner?.id && b.weightedOffer?.status === 'paused' && (
-                  <button
-                    type="button"
-                    onClick={() => onResumeWeightedOffer(b.id)}
-                    aria-label={`استئناف العرض الموزون لعطاء ${b.name}`}
-                    className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
-                  >
-                    استئناف العرض الموزون
-                  </button>
-                )}
-                {live && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenWeightedOffer(b.id)}
-                    aria-label={`فتح العرض الموزون لعطاء ${b.name} في جدول الفقرات`}
-                    className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
-                  >
-                    فتح العرض الموزون في جدول الفقرات
-                  </button>
-                )}
-              </div>
-            );
-          })}
+          <h3 className="text-sm sm:text-base font-black text-slate-800">{winnerBalance ? 'عروض موزونة لعطاءات غير الفائز' : rec.kind !== 'award' ? 'العرض الموزون' : rec.chosenByCommittee ? 'العرض الموزون للعطاء الفائز' : 'العرض الموزون لأوطأ العطاءات المؤهلة (المرشّح للترسية)'}</h3>
+          {otherBalance.map(b => renderBalance(b, true))}
         </div>
       )}
 

@@ -7,7 +7,6 @@ import {
 } from './recommendation';
 import { assessBalance, correctedBalanceRows } from './weightedOffer';
 import { isCommitteeCorrected } from './bidderAuditEngine';
-import { budgetApprovalNote } from './budgetTypes';
 import { preferenceReference } from './contractTypes';
 
 export interface GuidanceItem { key: LegalKey; ruling: string }
@@ -33,7 +32,7 @@ export function stageGuidance(project: TenderProject, tab: string): GuidanceItem
     }
     if (rows.some(i => i.unpriced)) add('art10_1_t', 'الفقرة التي لم يُدوَّن سعر إزاءها تُعدّ كلفتها مشمولة بالمبلغ الإجمالي للعطاء');
     if (withAmounts.length >= 2) add('ann4_5_b6', 'يُحدَّد تسلسل مقدمي العطاءات بعد إجراء التصحيح والتدقيق الحسابي لجميع العطاءات');
-  } else if ((tab === 'study' || tab === 'report') && !hasNoEstimate(project)) {
+  } else if (tab === 'study' && !hasNoEstimate(project)) {
     const rec = buildRecommendation(project);
     const threshold = exclusionThresholdOf(project);
     const pref = preferenceReference(project.contractType).legalKey;
@@ -41,28 +40,21 @@ export function stageGuidance(project: TenderProject, tab: string): GuidanceItem
     const equal = equalPriceBids(rec.closeBids).length > 1;
     const prefRuling = 'العطاءات المتساوية أو المتقاربة لغاية (1%) من الكلفة التخمينية يُفاضَل بينها بمعايير المفاضلة المحوّلة لقيمة مالية';
 
-    if (tab === 'study') {
-      if (withAmounts.some(b => isCommerciallyExcluded(b, threshold))) {
-        add('art13_3a', 'يُستبعد العطاء الذي يزيد أو يقل عن (20%) من الكلفة التخمينية'
-          + (threshold !== 20 ? `، والحد المعتمد في هذه المناقصة (${threshold}%)` : ''));
-      }
-      if (rec.eligible.some(b => weightingRequired(project, b.items))) {
-        add('ann4_6_5', 'العطاء الأنسب سعراً الذي تتجاوز فقراته غير المتوازنة بالزيادة (10%) من عدد الفقرات تُقبل إحالته بجدول الكميات المسعّر من جهة التعاقد معدّلاً بنسبة مبلغه');
-      }
-      if (close) add(pref, prefRuling + (equal ? '، وعند التساوي لأصغر فئة نقدية يجوز استكمال المبادرات إن لم تُقدَّم ابتداءً وتصبح جزءاً من العطاء' : ''));
-      if (equal) add('art15_4a', 'يجوز الإرساء على أكثر من متقدم إذا تساوت الأسعار والشروط ونصّت على ذلك شروط المناقصة');
-      if (rec.chosenNotLowest) add('art10_1_h', 'جهة التعاقد غير ملزمة بقبول أوطأ العطاءات');
-      if (rec.kind === 'referral') {
-        add('art13_3b', 'للجنة التحليل التوصية بالتفاوض لتخفيض الأسعار إلى الحدود المسموحة للكلفة التخمينية دون المساس بنطاق العمل المعلن، إذا كان أقل العطاءات المطابقة للمواصفات يزيد على الحدود المقبولة');
-      } else if (rec.kind === 'retender') {
-        if (rec.retenderReason === 'lowest-below') add('art20_4', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كان مبلغ العطاء المستجيب أقل من الكلفة التخمينية بنسبة (20%) أو أكثر');
-        else add('art20_3', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كانت جميع العطاءات المستلمة لا تتطابق مع شروط ومعايير المناقصة');
-      }
-    } else {
-      // ann4_6_5 لا يُضاف هنا: بطاقة التوازن في «المحضر» تعرض سادساً/5 للعطاء الفائز في الحالات نفسها
-      const approval = rec.kind === 'award' && rec.primary
-        ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
-      if (approval?.kind === 'note') add(approval.ref, 'صلاحية قبول العطاء الزائد على الكلفة التخمينية بحسب نوع الموازنة ونسبة الزيادة');
+    if (withAmounts.some(b => isCommerciallyExcluded(b, threshold))) {
+      add('art13_3a', 'يُستبعد العطاء الذي يزيد أو يقل عن (20%) من الكلفة التخمينية'
+        + (threshold !== 20 ? `، والحد المعتمد في هذه المناقصة (${threshold}%)` : ''));
+    }
+    if (rec.eligible.some(b => weightingRequired(project, b.items))) {
+      add('ann4_6_5', 'العطاء الأنسب سعراً الذي تتجاوز فقراته غير المتوازنة بالزيادة (10%) من عدد الفقرات تُقبل إحالته بجدول الكميات المسعّر من جهة التعاقد معدّلاً بنسبة مبلغه');
+    }
+    if (close) add(pref, prefRuling + (equal ? '، وعند التساوي لأصغر فئة نقدية يجوز استكمال المبادرات إن لم تُقدَّم ابتداءً وتصبح جزءاً من العطاء' : ''));
+    if (equal) add('art15_4a', 'يجوز الإرساء على أكثر من متقدم إذا تساوت الأسعار والشروط ونصّت على ذلك شروط المناقصة');
+    if (rec.chosenNotLowest) add('art10_1_h', 'جهة التعاقد غير ملزمة بقبول أوطأ العطاءات');
+    if (rec.kind === 'referral') {
+      add('art13_3b', 'للجنة التحليل التوصية بالتفاوض لتخفيض الأسعار إلى الحدود المسموحة للكلفة التخمينية دون المساس بنطاق العمل المعلن، إذا كان أقل العطاءات المطابقة للمواصفات يزيد على الحدود المقبولة');
+    } else if (rec.kind === 'retender') {
+      if (rec.retenderReason === 'lowest-below') add('art20_4', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كان مبلغ العطاء المستجيب أقل من الكلفة التخمينية بنسبة (20%) أو أكثر');
+      else add('art20_3', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كانت جميع العطاءات المستلمة لا تتطابق مع شروط ومعايير المناقصة');
     }
   }
   const keys = uniqueLegalKeys(out.map(i => i.key));

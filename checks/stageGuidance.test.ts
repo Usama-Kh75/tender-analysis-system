@@ -105,12 +105,11 @@ test('المحضر: لا سادساً/5 في التعليمات، فبطاقة �
   for (const p of [proj([unbalanced()]), withOffer, proj([900])]) assert.ok(!keys(p, 'report').includes('ann4_6_5'));
 });
 
-test('المحضر: زيادة على الكلفة تظهر معها مادة نوع الموازنة، ولا شيء بلا زيادة', () => {
-  assert.deepEqual(keys(proj([1050]), 'report'), ['ann2_4_2']);
-  assert.deepEqual(keys(proj([1050], { budgetType: 'investment' }), 'report'), ['ann2_4_1a']);
-  assert.deepEqual(keys(proj([950]), 'report'), []);
-  // نوع غير محدد: تذكير على الشاشة فقط، لا مادة
-  assert.deepEqual(keys(proj([1050], { budgetType: undefined }), 'report'), []);
+test('المحضر: لا تعليمات في التبويب (مادة نوع الموازنة في بطاقة الفائز)، والدراسة بلا مادتها', () => {
+  for (const p of [proj([1050]), proj([1050], { budgetType: 'investment' }), proj([950]), proj([1050], { budgetType: undefined })]) {
+    assert.deepEqual(keys(p, 'report'), []);
+  }
+  assert.ok(!keys(proj([1050]), 'study').includes('ann2_4_2' as LegalKey));
 });
 
 test('الدراسة والتوصية: إحالة، وإعادة طرح (الأقل ناقص، وكل العطاءات مستبعدة)', () => {
