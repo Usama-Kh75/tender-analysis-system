@@ -75,6 +75,20 @@ export interface NextStep {
   actions: NextStepAction[];
 }
 
+const TO_RECOMMENDATION: NextStepAction = { label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' };
+
+/** أزرار الخطوة كما تُعرض في التبويب المفتوح: لا يعمل زر إلا في مرحلته. المحضر والموقف من عمل «التوصية والمحضر»،
+ *  فخارجها يحل محلهما زر واحد ينقل إليها، وداخلها لا يظهر زر ينقل إلى التبويب نفسه. النص لا يتغير */
+export function stepActionsFor(step: NextStep, activeTab?: string): NextStepAction[] {
+  if (activeTab === 'recommendation') return step.actions.filter(a => a.target !== 'recommendation');
+  const out: NextStepAction[] = [];
+  for (const a of step.actions) {
+    const act = a.target === 'print' || a.target === 'status' ? TO_RECOMMENDATION : a;
+    if (!out.some(o => o.target === act.target && o.label === act.label)) out.push(act);
+  }
+  return out;
+}
+
 /** الخطوة الواحدة التالية: أول شرط يتحقق، وnull حين لا شيء ينتظر. مستنتجة ولا تُخزَّن */
 export function nextStep(p: TenderProject): NextStep | null {
   const path = tenderPath(p);

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject } from '../src/utils/storageService';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { bidderAuditState, nextStep, stageStates, tenderPath } from '../src/utils/tenderPath';
+import { bidderAuditState, nextStep, stageStates, stepActionsFor, tenderPath } from '../src/utils/tenderPath';
 import type { Bidder, BOQItem, StatusEntry, TenderProject } from '../src/types/tender';
 
 const row = (id: string, bidderTotal: number, flags: Partial<BOQItem> = {}): Partial<BOQItem> => ({
@@ -190,6 +190,21 @@ test('حال المراحل: الدراسة قيد العمل، ثم التوص�
   assert.deepEqual(stageStates({ ...chosen(allIn()), statusLog: [e] }), { bids: 'done', study: 'done', recommendation: 'done' });
   // موقف مسجّل بلا ترسية لا يُكمل الثالثة
   assert.equal(stageStates({ ...allIn(), statusLog: [e] }).recommendation, 'upcoming');
+});
+
+test('أزرار الخطوة: المحضر والموقف في «التوصية والمحضر» وحدها، وخارجها زر واحد ينقل إليها', () => {
+  const report = nextStep(chosen(allIn()))!;
+  const go = [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }];
+  assert.deepEqual(stepActionsFor(report, 'bids'), go);
+  assert.deepEqual(stepActionsFor(report, 'study'), go);
+  assert.deepEqual(stepActionsFor(report, 'recommendation'), report.actions);
+  // خطوة الترسية: زر الانتقال يختفي داخل تبويبه ويبقى خارجه
+  const award = nextStep(allIn())!;
+  assert.deepEqual(stepActionsFor(award, 'recommendation'), []);
+  assert.deepEqual(stepActionsFor(award, 'bids'), go);
+  // خطوات العطاءات والتدقيق تبقى كما هي في كل تبويب
+  const audit = nextStep(setup())!;
+  assert.deepEqual(stepActionsFor(audit, 'recommendation'), audit.actions);
 });
 
 test('حال المراحل: كل مرحلة بشرطها، فالترسية المختارة تبقى مكتملة إن عادت فقرة معلّقة', () => {

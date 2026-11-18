@@ -1,5 +1,5 @@
 import React from 'react';
-import { nextStep, type NextStepAction } from '../utils/tenderPath';
+import { nextStep, stepActionsFor, type NextStepAction } from '../utils/tenderPath';
 import type { TenderProject } from '../types/tender';
 
 interface NextStepBarProps {
@@ -25,7 +25,7 @@ export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeT
     <nav aria-label="الخطوة التالية" className={`mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border px-3 py-2 text-xs ${tone}`}>
       <span className="font-bold min-w-0 grow basis-60">{step.text}</span>
       <span className="flex shrink-0 items-center gap-2">
-        {step.actions.filter(a => !(a.target === 'recommendation' && activeTab === 'recommendation')).map(a => (
+        {stepActionsFor(step, activeTab).map(a => (
           <button
             type="button"
             key={a.label}
