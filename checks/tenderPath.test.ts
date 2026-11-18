@@ -113,7 +113,7 @@ test('المستلمة أكثر من المسجّلين وكلهم بمبالغ:
   assert.equal(s.kind, 'award');
   assert.match(s.text, /^اكتمل إدخال العطاءات \(2 من 4\) والكلفة التخمينية\. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة/);
   assert.match(s.text, /استُلمت \(4\) عطاءات، وأُدخل منها \(2\) للتحليل التجاري\. العطاء الذي فيه نقص جوهري \(كالتأمينات الأولية\) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز»\./);
-  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }]);
+  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]);
 });
 
 test('مسجّل 3 واثنان بمبالغ: إدخال عطاء باسم صاحبه ولو زادت المستلمة', () => {
@@ -140,7 +140,7 @@ test('الخطوة 4: عطاءات مدخلة بلا ترسية', () => {
   const s = nextStep(allIn())!;
   assert.equal(s.kind, 'award');
   assert.equal(s.text, 'اكتمل إدخال العطاءات (2 من 2) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة');
-  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }]);
+  assert.deepEqual(s.actions, [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]);
 });
 
 test('الخطوة 5: الترسية مختارة بلا سجل موقف', () => {
@@ -176,61 +176,66 @@ test('اختلاف القراءتين يُعدّ فقرة فيها أخطاء م
 });
 
 test('حال المراحل: الأولى قيد العمل بلا كلفة أو مع فقرات معلّقة أو شركة بلا مبالغ', () => {
-  assert.deepEqual(stageStates(blankTender()), { bids: 'current', study: 'upcoming', recommendation: 'upcoming' });
-  assert.deepEqual(stageStates(setup()), { bids: 'current', study: 'upcoming', recommendation: 'upcoming' });
-  assert.deepEqual(stageStates(clean(setup())), { bids: 'current', study: 'upcoming', recommendation: 'upcoming' });
+  assert.deepEqual(stageStates(blankTender()), { bids: 'current', study: 'upcoming', report: 'upcoming' });
+  assert.deepEqual(stageStates(setup()), { bids: 'current', study: 'upcoming', report: 'upcoming' });
+  assert.deepEqual(stageStates(clean(setup())), { bids: 'current', study: 'upcoming', report: 'upcoming' });
   // المستلمة أكثر من المسجّلة لا تمنع اكتمال الأولى (كالخطوة التالية)
   assert.equal(stageStates({ ...allIn(), receivedBidsCount: 4 }).bids, 'done');
 });
 
 test('حال المراحل: الدراسة قيد العمل، ثم التوصية، ثم الكل مكتمل', () => {
-  assert.deepEqual(stageStates(allIn()), { bids: 'done', study: 'current', recommendation: 'upcoming' });
-  assert.deepEqual(stageStates(chosen(allIn())), { bids: 'done', study: 'done', recommendation: 'current' });
+  assert.deepEqual(stageStates(allIn()), { bids: 'done', study: 'current', report: 'upcoming' });
+  assert.deepEqual(stageStates(chosen(allIn())), { bids: 'done', study: 'done', report: 'current' });
   const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
-  assert.deepEqual(stageStates({ ...chosen(allIn()), statusLog: [e] }), { bids: 'done', study: 'done', recommendation: 'done' });
+  assert.deepEqual(stageStates({ ...chosen(allIn()), statusLog: [e] }), { bids: 'done', study: 'done', report: 'done' });
   // موقف مسجّل بلا ترسية لا يُكمل الثالثة
-  assert.equal(stageStates({ ...allIn(), statusLog: [e] }).recommendation, 'upcoming');
+  assert.equal(stageStates({ ...allIn(), statusLog: [e] }).report, 'upcoming');
 });
 
 test('stageStep: خطوة التبويب المفتوح وحده', () => {
-  const go = [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }];
   // العطاءات والتدقيق: خطوات مرحلتها فقط، ولا فائز ولا زر غريب
   const p0 = setup();
   assert.deepEqual(stageStep(p0, 'bids'), nextStep(p0));
   // بعد اكتمالها: سطر ختام وزر إلى الدراسة، بلا اسم الفائز ولو اختير؛ والانتقال يدوي
   const done = stageStep(allIn(), 'bids')!;
   assert.equal(done.kind, 'stageDone');
-  assert.equal(done.text, 'اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (2 من 2) ودُقّقت. المرحلة التالية: الدراسة والتحليل');
-  assert.deepEqual(done.actions, [{ label: 'الانتقال إلى الدراسة والتحليل', target: 'study' }]);
+  assert.equal(done.text, 'اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (2 من 2) ودُقّقت. المرحلة التالية: الدراسة والتوصية');
+  assert.deepEqual(done.actions, [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]);
   assert.deepEqual(stageStep(chosen(allIn()), 'bids'), done);
   // العطاءات المستلمة أكثر من المسجّلة: ملاحظتها في سطر الختام لا في الدراسة
   assert.match(stageStep({ ...allIn(), receivedBidsCount: 4 }, 'bids')!.text, /\(2 من 4\).*استُلمت \(4\) عطاءات، وأُدخل منها \(2\)/);
-  // الدراسة: خطوة الترسية وحدها
+  // الدراسة والتوصية: قبل اختيار الفائز نص بلا أزرار
   assert.equal(stageStep(setup(), 'study'), null);
   const study = stageStep(allIn(), 'study')!;
   assert.equal(study.kind, 'award');
-  assert.deepEqual(study.actions, go);
-  assert.equal(study.text, 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم التوصية بالإحالة');
+  assert.deepEqual(study.actions, []);
+  assert.equal(study.text, 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»');
   assert.equal(stageStep({ ...allIn(), receivedBidsCount: 4 }, 'study')!.text, study.text);
-  assert.equal(stageStep(chosen(allIn()), 'study'), null);
-  // التوصية والمحضر
-  const early = stageStep(setup(), 'recommendation')!;
+  // بعد اختيار الفائز: سطر ختام وزر إلى المحضر
+  const studyDone = stageStep(chosen(allIn()), 'study')!;
+  assert.equal(studyDone.kind, 'stageDone');
+  assert.equal(studyDone.text, 'اكتملت مرحلة الدراسة والتوصية: اختارت اللجنة «أ». المرحلة التالية: المحضر');
+  assert.deepEqual(studyDone.actions, [{ label: 'الانتقال إلى المحضر', target: 'report' }]);
+  // المحضر
+  const early = stageStep(setup(), 'report')!;
   assert.deepEqual(early.actions, []);
-  assert.equal(early.text, 'لم تكتمل مرحلة العطاءات والتدقيق (3 فقرات فيها أخطاء لم تُعالج)، فالتوصية قبل إكمالها غير نهائية');
-  const pick = stageStep(allIn(), 'recommendation')!;
-  assert.deepEqual(pick.actions, []);
-  assert.equal(pick.text, 'الخطوة التالية: اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»');
+  assert.equal(early.text, 'لم تكتمل مرحلة العطاءات والتدقيق (3 فقرات فيها أخطاء لم تُعالج)، فالمحضر قبل إكمالها غير نهائي');
+  // قبل اختيار الفائز: خطوة المحضر زرها إلى الدراسة والتوصية
+  const pick = stageStep(allIn(), 'report')!;
+  assert.deepEqual(pick.actions, [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]);
+  assert.equal(pick.text, 'الخطوة التالية: اختيار العطاء الفائز في «الدراسة والتوصية»');
   const p1 = chosen(allIn());
-  assert.deepEqual(stageStep(p1, 'recommendation'), nextStep(p1));
-  // ترسية وموقف مسجّل: لا شيء في الدراسة والتوصية، ويبقى سطر ختام المرحلة الأولى في تبويبها
+  assert.deepEqual(stageStep(p1, 'report'), nextStep(p1));
+  // ترسية وموقف مسجّل: لا شيء في المحضر، ويبقى سطرا الختام للمرحلتين الأوليين في تبويبيهما
   const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
   const closed = { ...chosen(allIn()), statusLog: [e] };
-  for (const tab of ['study', 'recommendation']) assert.equal(stageStep(closed, tab), null);
+  assert.equal(stageStep(closed, 'report'), null);
+  assert.deepEqual(stageStep(closed, 'study'), studyDone);
   assert.equal(stageStep(closed, 'bids')!.kind, 'stageDone');
 });
 
 test('حال المراحل: كل مرحلة بشرطها، فالترسية المختارة تبقى مكتملة إن عادت فقرة معلّقة', () => {
   const p = chosen(allIn());
   const reopened = { ...p, bidders: p.bidders.map((b, i) => (i === 1 ? { ...b, items: b.items.map((it, j) => (j === 0 ? { ...it, hasMathError: true } : it)) } : b)) };
-  assert.deepEqual(stageStates(reopened), { bids: 'current', study: 'done', recommendation: 'upcoming' });
+  assert.deepEqual(stageStates(reopened), { bids: 'current', study: 'done', report: 'upcoming' });
 });

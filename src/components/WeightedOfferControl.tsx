@@ -103,7 +103,7 @@ export const WeightedOfferControl: React.FC<Props> = ({ bidder, threshold, exclu
   const offer = bidder.weightedOffer;
   if (balance.verdict === 'no-estimate') return null;
 
-  // البدء والاستئناف من «الدراسة والتحليل»: الشريط هنا مع العرض الفعّال أو المعتمد فقط
+  // البدء والاستئناف من «المحضر»: الشريط هنا مع العرض الفعّال أو المعتمد فقط
   if (!offer || offer.status === 'paused') return null;
 
   const status = offerStatus(bidder);

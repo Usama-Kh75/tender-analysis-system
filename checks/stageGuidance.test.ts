@@ -26,7 +26,7 @@ const withBidder = (p: TenderProject, i: number, over: Partial<BOQItem>[], extra
   ...p, bidders: p.bidders.map((b, k) => k === i ? { ...b, items: b.items.map((it, j) => ({ ...it, ...(over[j] ?? {}) })), ...extra } : b)
 });
 const keys = (p: TenderProject, tab: string) => stageGuidance(p, tab).map(g => g.key);
-const TABS = ['bids', 'study', 'recommendation'];
+const TABS = ['bids', 'study', 'report'];
 
 test('العطاءات: خطأ ضرب يظهر معه ن وب/2 لا ب/1', () => {
   const p = withBidder(proj([900, 950]), 0, [{ hasMathError: true }]);
@@ -82,43 +82,45 @@ test('الدراسة والتوصية: التقارب يظهر معه مفتاح
   const close = proj([900, 905]);
   const prefKey = keys(close, 'study')[0];
   assert.ok(prefKey.startsWith('ann5_'));
-  assert.deepEqual(keys(close, 'recommendation').slice(0, 1), [prefKey]);
-  assert.ok(!keys(close, 'recommendation').includes('art15_4a'));
+  assert.ok(!keys(close, 'study').includes('art15_4a'));
   const tie = proj([900, 900]);
-  const g = stageGuidance(tie, 'recommendation');
+  const g = stageGuidance(tie, 'study');
   assert.ok(g[0].ruling.includes('المبادرات'));
   assert.ok(g.some(x => x.key === 'art15_4a'));
-  assert.ok(!stageGuidance(close, 'recommendation')[0].ruling.includes('المبادرات'));
+  assert.ok(!stageGuidance(close, 'study')[0].ruling.includes('المبادرات'));
+  // المحضر لا يحمل بنود المفاضلة
+  assert.ok(!keys(tie, 'report').includes(prefKey as LegalKey) && !keys(tie, 'report').includes('art15_4a'));
 });
 
-test('التوصية: اختيار عطاء غير الأوطأ يظهر معه 10/أولاً/هـ', () => {
+test('الدراسة والتوصية: اختيار عطاء غير الأوطأ يظهر معه 10/أولاً/هـ', () => {
   let p = proj([900, 980]);
   p = { ...p, bidders: p.bidders.map((b, i) => i === 1 ? { ...b, status: 'recommended' as const } : b) };
-  assert.ok(keys(p, 'recommendation').includes('art10_1_h'));
-  assert.ok(!keys(proj([900, 980]), 'recommendation').includes('art10_1_h'));
+  assert.ok(keys(p, 'study').includes('art10_1_h'));
+  assert.ok(!keys(proj([900, 980]), 'study').includes('art10_1_h'));
+  assert.ok(!keys(p, 'report').includes('art10_1_h'));
 });
 
-test('التوصية: العرض الموزون للفائز، بعدم التوازن أو بعرض مسجَّل', () => {
-  assert.ok(keys(proj([unbalanced()]), 'recommendation').includes('ann4_6_5'));
+test('المحضر: العرض الموزون للفائز، بعدم التوازن أو بعرض مسجَّل', () => {
+  assert.ok(keys(proj([unbalanced()]), 'report').includes('ann4_6_5'));
   const withOffer = withBidder(proj([900]), 0, [], { weightedOffer: { status: 'active', origin: 'corrected', startedAt: '2026-11-18', bidTotal: 900 } });
-  assert.ok(keys(withOffer, 'recommendation').includes('ann4_6_5'));
-  assert.ok(!keys(proj([900]), 'recommendation').includes('ann4_6_5'));
+  assert.ok(keys(withOffer, 'report').includes('ann4_6_5'));
+  assert.ok(!keys(proj([900]), 'report').includes('ann4_6_5'));
 });
 
-test('التوصية: زيادة على الكلفة تظهر معها مادة نوع الموازنة، ولا شيء بلا زيادة', () => {
-  assert.deepEqual(keys(proj([1050]), 'recommendation'), ['ann2_4_2']);
-  assert.deepEqual(keys(proj([1050], { budgetType: 'investment' }), 'recommendation'), ['ann2_4_1a']);
-  assert.deepEqual(keys(proj([950]), 'recommendation'), []);
+test('المحضر: زيادة على الكلفة تظهر معها مادة نوع الموازنة، ولا شيء بلا زيادة', () => {
+  assert.deepEqual(keys(proj([1050]), 'report'), ['ann2_4_2']);
+  assert.deepEqual(keys(proj([1050], { budgetType: 'investment' }), 'report'), ['ann2_4_1a']);
+  assert.deepEqual(keys(proj([950]), 'report'), []);
   // نوع غير محدد: تذكير على الشاشة فقط، لا مادة
-  assert.deepEqual(keys(proj([1050], { budgetType: undefined }), 'recommendation'), []);
+  assert.deepEqual(keys(proj([1050], { budgetType: undefined }), 'report'), []);
 });
 
-test('التوصية: إحالة، وإعادة طرح (الأقل ناقص، وكل العطاءات مستبعدة)', () => {
-  assert.deepEqual(keys(proj([1300]), 'recommendation'), ['art13_3b']);
-  assert.deepEqual(keys(proj([500]), 'recommendation'), ['art20_4']);
+test('الدراسة والتوصية: إحالة، وإعادة طرح (الأقل ناقص، وكل العطاءات مستبعدة)', () => {
+  assert.deepEqual(keys(proj([1300]), 'study'), ['art13_3a', 'art13_3b']);
+  assert.deepEqual(keys(proj([500]), 'study'), ['art13_3a', 'art20_4']);
   const all = proj([900]);
   const rejected = { ...all, bidders: all.bidders.map(b => ({ ...b, status: 'disqualified' as const })) };
-  assert.deepEqual(keys(rejected, 'recommendation'), ['art20_3']);
+  assert.deepEqual(keys(rejected, 'study'), ['art20_3']);
 });
 
 test('مناقصة فارغة: لا شيء في أي تبويب', () => {
@@ -130,7 +132,7 @@ test('مناقصة فارغة: لا شيء في أي تبويب', () => {
 test('بلا كلفة تخمينية: لا شيء في الدراسة والتوصية', () => {
   const p = proj([[row('1', 900, 0)], [row('1', 905, 0)]]);
   assert.deepEqual(stageGuidance(p, 'study'), []);
-  assert.deepEqual(stageGuidance(p, 'recommendation'), []);
+  assert.deepEqual(stageGuidance(p, 'report'), []);
   assert.ok(stageGuidance(p, 'bids').length > 0);
 });
 

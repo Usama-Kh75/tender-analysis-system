@@ -14,8 +14,8 @@ import { StageGuidance } from './StageGuidance';
 // ثلاثة تبويبات لمراحل المناقصة الواحدة: لكل واحد سؤال واحد يظهر تحت اسمه
 const TABS: { id: MainTab; label: string; question: string }[] = [
   { id: 'bids', label: 'العطاءات والتدقيق', question: 'ماذا قدّم كل مجهز؟' },
-  { id: 'study', label: 'الدراسة والتحليل', question: 'كيف تقارن العطاءات؟' },
-  { id: 'recommendation', label: 'التوصية والمحضر', question: 'بماذا توصي اللجنة؟' }
+  { id: 'study', label: 'الدراسة والتوصية', question: 'من الأفضل، وبماذا توصي اللجنة؟' },
+  { id: 'report', label: 'المحضر', question: 'ماذا يُثبت المحضر ويُطبع؟' }
 ];
 
 // بطاقات المراحل (النموذج ب، اختيار أسامة 2026-11-18): الشريط العلوي والشارة لحال المرحلة،

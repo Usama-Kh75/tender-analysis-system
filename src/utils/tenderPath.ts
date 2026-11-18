@@ -43,9 +43,9 @@ export function tenderPath(p: TenderProject): TenderPath {
   };
 }
 
-export type StageId = 'bids' | 'study' | 'recommendation';
+export type StageId = 'bids' | 'study' | 'report';
 export type StageState = 'done' | 'current' | 'upcoming';
-const STAGE_ORDER: StageId[] = ['bids', 'study', 'recommendation'];
+const STAGE_ORDER: StageId[] = ['bids', 'study', 'report'];
 
 /** حال مراحل التبويبات الثلاثة، مستنتجة ولا تُخزَّن. كل مرحلة مكتملة بشرطها هي:
  *  الأولى بالكلفة التخمينية ومبالغ كل الشركات المسجّلة وبلا فقرات معلّقة، والثانية باختيار الترسية،
@@ -55,7 +55,7 @@ export function stageStates(p: TenderProject): Record<StageId, StageState> {
   const done: Record<StageId, boolean> = {
     bids: path.hasEstimate && path.bids.registered > 0 && path.bids.entered === path.bids.registered && path.audit.pending === 0,
     study: path.award !== null,
-    recommendation: path.award !== null && (p.statusLog?.length ?? 0) > 0
+    report: path.award !== null && (p.statusLog?.length ?? 0) > 0
   };
   let seenCurrent = false;
   const out = {} as Record<StageId, StageState>;
@@ -67,10 +67,10 @@ export function stageStates(p: TenderProject): Record<StageId, StageState> {
   return out;
 }
 
-export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'recommendation' | 'print' | 'status';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'report' | 'print' | 'status';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
-  /** stageDone: سطر ختام مرحلة العطاءات والتدقيق في تبويبها (stageStep وحده) */
+  /** stageDone: سطر ختام مرحلة العطاءات والتدقيق في تبويبها، أو مرحلة الدراسة والتوصية بعد اختيار الفائز (stageStep وحده) */
   kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report' | 'stageDone';
   text: string;
   actions: NextStepAction[];
@@ -79,36 +79,47 @@ export interface NextStep {
 /** خطوة التبويب المفتوح وحده (قرار أسامة 2026-11-18: التلميحات والأزرار خاصة بالتبويب الذي يحتويها).
  *  العطاءات والتدقيق: خطوات الكلفة والتدقيق والإدخال، فإذا اكتملت سطر ختام وزر إلى الدراسة، بلا اسم فائز.
  *  والانتقال يدوي: اللجنة قد تراجع الفقرة الأخيرة بعد إدخالها، فلا يُقفز بها وحده.
- *  الدراسة والتحليل: بعد اكتمال الإدخال وقبل الترسية فقط، وزرها الانتقال إلى التوصية لأنه خاتمة الدراسة.
- *  التوصية والمحضر: اختيار الفائز بلا زر، ثم المحضر والموقف؛ وما لم تكتمل الأولى سطر بلا زر */
+ *  الدراسة والتوصية: قبل اختيار الفائز نص بلا أزرار (جدول «قرار اللجنة» في التبويب نفسه)، وبعده سطر ختام
+ *  وزر إلى المحضر (سواء سُجّل الموقف أم لا)، وما لم تكتمل الأولى null.
+ *  المحضر: ما لم تكتمل الأولى سطر بلا زر؛ وقبل اختيار الفائز سطر وزر إلى الدراسة والتوصية؛ ثم المحضر والموقف */
 export function stageStep(p: TenderProject, tab?: string): NextStep | null {
   const step = nextStep(p);
   const firstStage = !!step && (step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids');
-  if (tab !== 'study' && tab !== 'recommendation' && !firstStage) {
+  if (tab !== 'study' && tab !== 'report' && !firstStage) {
     const { bids } = tenderPath(p);
     return {
       kind: 'stageDone',
-      text: `اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (${bids.entered} من ${bids.expected}) ودُقّقت. المرحلة التالية: الدراسة والتحليل`
+      text: `اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (${bids.entered} من ${bids.expected}) ودُقّقت. المرحلة التالية: الدراسة والتوصية`
         + (bids.expected > bids.registered
           ? `. استُلمت (${bids.expected}) عطاءات، وأُدخل منها (${bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
           : ''),
-      actions: [{ label: 'الانتقال إلى الدراسة والتحليل', target: 'study' }]
+      actions: [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]
     };
   }
+  if (tab === 'study' && !firstStage) {
+    const { award } = tenderPath(p);
+    if (award) {
+      return {
+        kind: 'stageDone',
+        text: `اكتملت مرحلة الدراسة والتوصية: اختارت اللجنة «${award.name}». المرحلة التالية: المحضر`,
+        actions: [{ label: 'الانتقال إلى المحضر', target: 'report' }]
+      };
+    }
+  }
   if (!step) return null;
-  if (tab === 'recommendation') {
+  if (tab === 'report') {
     if (firstStage) {
-      return { ...step, text: `لم تكتمل مرحلة العطاءات والتدقيق (${step.text.replace(/^الخطوة التالية: /, '')})، فالتوصية قبل إكمالها غير نهائية`, actions: [] };
+      return { ...step, text: `لم تكتمل مرحلة العطاءات والتدقيق (${step.text.replace(/^الخطوة التالية: /, '')})، فالمحضر قبل إكمالها غير نهائي`, actions: [] };
     }
     if (step.kind === 'award') {
-      return { ...step, text: 'الخطوة التالية: اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»', actions: [] };
+      return { ...step, text: 'الخطوة التالية: اختيار العطاء الفائز في «الدراسة والتوصية»', actions: [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }] };
     }
     return step;
   }
   if (tab === 'study') {
+    // الفائز لم يُختر (وإلا عاد سطر الختام أعلاه). ملاحظة العطاءات المستلمة تخص الإدخال، فمكانها سطر ختام المرحلة الأولى
     return step.kind === 'award'
-      // ملاحظة العطاءات المستلمة تخص الإدخال، فمكانها سطر ختام المرحلة الأولى
-      ? { ...step, text: 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم التوصية بالإحالة' }
+      ? { ...step, text: 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»', actions: [] }
       : null;
   }
   return firstStage ? step : null;
@@ -149,7 +160,7 @@ export function nextStep(p: TenderProject): NextStep | null {
         + (path.bids.expected > path.bids.registered
           ? `. استُلمت (${path.bids.expected}) عطاءات، وأُدخل منها (${path.bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
           : ''),
-      actions: [{ label: 'الانتقال إلى التوصية والمحضر', target: 'recommendation' }]
+      actions: [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]
     };
   }
   if (!p.statusLog || p.statusLog.length === 0) {

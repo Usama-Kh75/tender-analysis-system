@@ -5,14 +5,14 @@
  */
 const KEY = 'tender_analysis_resume';
 
-export type ResumeTab = 'bids' | 'study' | 'recommendation';
+export type ResumeTab = 'bids' | 'study' | 'report';
 export type MainTab = ResumeTab;
 
-// القيم المحفوظة قبل v1.24.0 (table/summary/charts) ومن v1.24.0 (analysis/status) تُقرأ على مقابلها الجديد
+// القيم المحفوظة قبل v1.24.0 (table/summary/charts) ومن v1.24.0 (analysis/status) ومن التبويبات الثلاثة الأولى (recommendation) تُقرأ على مقابلها الجديد
 export function normalizeResumeTab(v: unknown): ResumeTab {
-  if (v === 'bids' || v === 'study' || v === 'recommendation') return v;
+  if (v === 'bids' || v === 'study' || v === 'report') return v;
   if (v === 'analysis' || v === 'summary' || v === 'charts') return 'study';
-  if (v === 'status') return 'recommendation';
+  if (v === 'recommendation' || v === 'status') return 'report';
   return 'bids';
 }
 

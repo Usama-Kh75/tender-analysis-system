@@ -17,7 +17,7 @@ import { WeightedOfferControl } from './components/WeightedOfferControl';
 import { ChartsView } from './components/ChartsView';
 import { StatusWindow } from './components/modals/StatusWindow';
 import { StudyView } from './components/StudyView';
-import { RecommendationView } from './components/RecommendationView';
+import { ReportView } from './components/ReportView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
 import { BidderCards } from './components/BidderCards';
@@ -214,7 +214,7 @@ export function App() {
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
-  // بدء العرض الموزون للعطاء الفائز من «التوصية والمحضر» ثم فتح جدول فقراته؛ السياق مربوط بذلك المجهز لا بالنشط
+  // بدء العرض الموزون للعطاء الفائز من «المحضر» ثم فتح جدول فقراته؛ السياق مربوط بذلك المجهز لا بالنشط
   const startOfferFor = (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => {
     if (offerWinner(currentProject)?.id !== bidderId) { window.alert('العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)'); return; }
     const bidder = currentProject.bidders.find(b => b.id === bidderId);
@@ -277,8 +277,8 @@ export function App() {
       scrollToTable();
     } else if (action.target === 'study') {
       setActiveTab('study');
-    } else if (action.target === 'recommendation') {
-      setActiveTab('recommendation');
+    } else if (action.target === 'report') {
+      setActiveTab('report');
     } else if (action.target === 'print') {
       setIsPrintOpen(true);
     } else {
@@ -420,6 +420,8 @@ export function App() {
             <StudyView
               project={currentProject}
               onOpenExclusionReasons={setExclusionBidderId}
+              onSelectBidder={handlePickBidder}
+              onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenAudit={() => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: tenderPath(currentProject).audit.firstBidderId ?? undefined })}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
               chartsOpen={chartsOpen}
@@ -434,10 +436,9 @@ export function App() {
             )}
             </>
           ) : (
-            <RecommendationView
+            <ReportView
               project={currentProject}
-              onSelectBidder={handlePickBidder}
-              onUpdateBidderStatus={handleUpdateBidderStatus}
+              onGoStudy={() => setActiveTab('study')}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
               onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}

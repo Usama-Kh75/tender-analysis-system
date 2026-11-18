@@ -6,7 +6,7 @@ import { normalizeResumeTab } from '../src/resume';
 test('القيم الجديدة تبقى كما هي', () => {
   assert.equal(normalizeResumeTab('bids'), 'bids');
   assert.equal(normalizeResumeTab('study'), 'study');
-  assert.equal(normalizeResumeTab('recommendation'), 'recommendation');
+  assert.equal(normalizeResumeTab('report'), 'report');
 });
 
 test('القيم القديمة تُقرأ على مقابلها', () => {
@@ -14,7 +14,9 @@ test('القيم القديمة تُقرأ على مقابلها', () => {
   assert.equal(normalizeResumeTab('analysis'), 'study');
   assert.equal(normalizeResumeTab('summary'), 'study');
   assert.equal(normalizeResumeTab('charts'), 'study');
-  assert.equal(normalizeResumeTab('status'), 'recommendation');
+  assert.equal(normalizeResumeTab('status'), 'report');
+  // «recommendation» هي القيمة المحفوظة للتبويب الثالث قبل أن يصير «المحضر»
+  assert.equal(normalizeResumeTab('recommendation'), 'report');
 });
 
 test('ما سواها يفتح «العطاءات»', () => {
