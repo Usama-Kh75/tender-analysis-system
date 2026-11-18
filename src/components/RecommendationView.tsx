@@ -2,13 +2,15 @@ import React from 'react';
 import { Award, CheckCircle2, FileSpreadsheet, Printer } from 'lucide-react';
 import { TenderProject, Bidder } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
-import { buildRecommendation, equalPriceBids, hasNoEstimate, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
+import { buildRecommendation, equalPriceBids, hasNoEstimate, exclusionThresholdOf, PREFERENCE_BAND_PERCENT, offerWinner, hasBidAmounts, isCommerciallyExcluded } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { recommendationBasis, recommendationEditChanges, savedRecommendationEdit } from '../utils/recommendationText';
 import { decisionSensitivity } from '../utils/decisionSensitivity';
 import { evaluateBids } from '../utils/bidEvaluation';
-import { isOfferFinal } from '../utils/weightedOffer';
+import { isOfferFinal, assessBalance, correctedBalanceRows, startOfferBlocker } from '../utils/weightedOffer';
+import { WeightedOfferBar } from './WeightedOfferBar';
+import { StartMenu } from './WeightedOfferControl';
 
 interface RecommendationViewProps {
   project: TenderProject;
@@ -16,6 +18,10 @@ interface RecommendationViewProps {
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
   onOpenPrint: () => void;
   onExportExcel: () => void;
+  /** يختار المجهز وينقل إلى جدول الفقرات في تبويب «العطاءات والتدقيق» لإعداد عرضه الموزون */
+  onOpenWeightedOffer: (bidderId: string) => void;
+  /** يبدأ العرض الموزون أو يستأنفه لمجهز بعينه ثم ينقل إلى جدول فقراته */
+  onStartWeightedOffer: (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => void;
 }
 
 /** «التوصية والمحضر»: توصية اللجنة وقرار الترسية والمحضر المطبوع */
@@ -24,10 +30,18 @@ export const RecommendationView: React.FC<RecommendationViewProps> = ({
   onSelectBidder,
   onUpdateBidderStatus,
   onOpenPrint,
-  onExportExcel
+  onExportExcel,
+  onOpenWeightedOffer,
+  onStartWeightedOffer
 }) => {
   const noEstimate = hasNoEstimate(project);
   const exclusionThreshold = exclusionThresholdOf(project);
+  // العرض الموزون للعطاء الفائز وحده (ضوابط (4) سادساً/5) إن تجاوزت فقراته غير المتوازنة 10% من عددها،
+  // ويبقى ظاهراً كل عطاء له عرض مسجّل ليُرى ويُوقف إن لم يعد فائزاً
+  const winner = offerWinner(project);
+  const balanceBidders = noEstimate ? [] : project.bidders.filter(b =>
+    hasBidAmounts(b) && b.status !== 'disqualified' && !isCommerciallyExcluded(b, exclusionThreshold) &&
+    (b.weightedOffer || (b.id === winner?.id && assessBalance(correctedBalanceRows(b.items), project.deviationThreshold, exclusionThreshold).verdict === 'weighting-required')));
   const evaluated = evaluateBids(project);
   // قرار الترسية على المؤهلين وحدهم؛ المستبعدون يُعرضون في «الدراسة والتحليل»
   const decisionBids = evaluated.filter(b => b.commercialStatus === 'qualified' || b.commercialStatus === 'recommended');
@@ -250,6 +264,42 @@ export const RecommendationView: React.FC<RecommendationViewProps> = ({
         )}
 
       </div>
+
+      {balanceBidders.length > 0 && (
+        <div className="space-y-4 no-print">
+          <h3 className="text-sm sm:text-base font-black text-slate-800">العرض الموزون للعطاء الفائز</h3>
+          {balanceBidders.map(b => {
+            const live = !!b.weightedOffer && b.weightedOffer.status !== 'paused';
+            return (
+              <div key={b.id} className="space-y-2">
+                <div className="text-sm font-black text-slate-800">{b.name}</div>
+                <WeightedOfferBar bidder={b} threshold={project.deviationThreshold} exclusionThreshold={exclusionThreshold} />
+                {b.id !== winner?.id && (
+                  <p className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)، وهذا العطاء ليس الفائز في التوصية الحالية{live && '، فأوقف مرحلته من جدول فقراته'}.
+                  </p>
+                )}
+                {b.id === winner?.id && !live && (
+                  <StartMenu
+                    paused={b.weightedOffer?.status === 'paused'}
+                    blocker={startOfferBlocker(b, exclusionThreshold)}
+                    onStart={(o) => onStartWeightedOffer(b.id, o)}
+                  />
+                )}
+                {live && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenWeightedOffer(b.id)}
+                    className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
+                  >
+                    فتح العرض الموزون في جدول الفقرات
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
     </div>
   );

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { unitPriceOutliers } from './utils/unitOutliers';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
-import { hasBidAmounts, exclusionThresholdOf } from './utils/recommendation';
+import { hasBidAmounts, exclusionThresholdOf, offerWinner } from './utils/recommendation';
 import { tenderPath, type NextStepAction } from './utils/tenderPath';
 import { exportTenderToExcel } from './utils/excelService';
 import { isOfferLocked, offerStatus, offerDeviationTotals } from './utils/weightedOffer';
@@ -214,8 +214,9 @@ export function App() {
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
-  // بدء العرض الموزون لمجهز بعينه من «الدراسة والتحليل» ثم فتح جدول فقراته؛ السياق مربوط بذلك المجهز لا بالنشط
+  // بدء العرض الموزون للعطاء الفائز من «التوصية والمحضر» ثم فتح جدول فقراته؛ السياق مربوط بذلك المجهز لا بالنشط
   const startOfferFor = (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => {
+    if (offerWinner(currentProject)?.id !== bidderId) { window.alert('العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)'); return; }
     const bidder = currentProject.bidders.find(b => b.id === bidderId);
     if (!bidder) return;
     const started = createOfferHandlers(createEditContext(currentProject, bidder, setProjects)).handleStartOffer(origin);
@@ -421,8 +422,6 @@ export function App() {
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
               chartsOpen={chartsOpen}
               onToggleCharts={() => setChartsOpen(o => !o)}
-              onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}
-              onStartWeightedOffer={startOfferFor}
             />
             {chartsOpen && (
               <ChartsView
@@ -439,6 +438,8 @@ export function App() {
               onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
+              onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}
+              onStartWeightedOffer={startOfferFor}
             />
           )}
         </div>

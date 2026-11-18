@@ -151,3 +151,11 @@ export function buildRecommendation(project: TenderProject): Recommendation {
 
   return { ...none, kind: 'award', eligible, primary: lowest };
 }
+
+/** العطاء الفائز الذي يجوز له العرض الموزون (ضوابط (4) سادساً/5: «العطاء المستجيب والأنسب سعراً»،
+ *  وتعديل الأسعار «بنفس نسبة مبلغ العطاء الفائز»): الموصى به في توصية ترسية وحدها، أي الأدنى المؤهل
+ *  أو مختار اللجنة. لا شيء في التساوي قبل اختيارها، ولا في الإحالة بالتفاوض أو إعادة الطرح */
+export function offerWinner(project: TenderProject): Bidder | undefined {
+  const rec = buildRecommendation(project);
+  return rec.kind === 'award' && rec.primary && hasBidAmounts(rec.primary) ? rec.primary : undefined;
+}
