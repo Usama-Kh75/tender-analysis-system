@@ -1,6 +1,7 @@
 // كشف موقف الطلبيات إلى Excel بأسلوب ملفات اللجنة (Arial، رأس أبيض غامق على 1F4E78، حدود رفيعة، RTL).
 // وثيقة رسمية: بتوقيع رئيس اللجنة وحده. الصفوف من statusSheetRows نفسها التي تُبنى منها الطباعة
 import * as XLSX from 'xlsx-js-style';
+import { downloadXlsx } from './xlsxPrint';
 import { formatSheetDate } from './orderStatus';
 import type { StatusSheetRow } from './orderStatus';
 
@@ -66,6 +67,9 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
   aoa.push([], [...pad, 'رئيس اللجنة'], [...pad, 'التوقيع: .....................']);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = cols.map(c => ({ wch: c.wch }));
+  // إعداد الطباعة: A4 أفقي (حتى 9 أعمدة)، ملاءمة العرض، تكرار صف الرؤوس، «صفحة P من N» (تكتبها downloadXlsx)
+  ws['!margins'] = { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 };
+  ws['!print'] = { orientation: 'landscape', repeatRow: o + 1 };
   // توقيع رئيس اللجنة في آخر عمودين (يسار الصفحة في ورقة RTL): كل سطر دمج الأخيرين
   const signCol = lastCol - 1;
   ws['!merges'] = [
@@ -113,5 +117,5 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
 }
 
 export function exportStatusSheetToExcel(rows: StatusSheetRow[], asOf: string, columns?: Iterable<OptionalStatusColumnKey>, committeeName?: string | null): void {
-  XLSX.writeFile(buildStatusSheetWorkbook(rows, asOf, columns, committeeName), `موقف الطلبيات ${asOf}.xlsx`);
+  downloadXlsx(buildStatusSheetWorkbook(rows, asOf, columns, committeeName), `موقف الطلبيات ${asOf}.xlsx`);
 }

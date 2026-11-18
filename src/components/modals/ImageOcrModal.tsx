@@ -14,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { BOQItem } from '../../types/tender';
-import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, detectWriting, ReadingPages, ReadItem, Writing } from '../../utils/ocrService';
+import { extractBOQFromImage, extractBOQWithGeminiVision, testGeminiApiKey, geminiFailureKind, GEMINI_CREDIT_MESSAGE, GEMINI_SPEND_CAP_MESSAGE, GEMINI_QUOTA_MESSAGE, compressImageDataUrl, detectWriting, ReadingPages, ReadItem, Writing } from '../../utils/ocrService';
 import { lowResolutionPages, LOW_RESOLUTION_EDGE } from '../../utils/readAdvice';
 import { auditRowAmounts, quantityMismatches } from '../../utils/bidderAuditEngine';
 import { isPdfFile, pdfToImages } from '../../utils/pdfService';
@@ -63,9 +63,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   const [writing, setWriting] = useState<Writing | null>(null);
   const writingTriedKey = useRef<string | null>(null);
   const writingGen = useRef(0);
+  // اختيار المستخدم اليدوي للقراءة الثانية في هذا الملف يغلب الضبط التلقائي؛ يُصفَّر مع تنبيه القراءة
+  const [doubleReadTouched, setDoubleReadTouched] = useState(false);
   const resetReadAdvice = () => {
     setScanEdges({});
     setWriting(null);
+    setDoubleReadTouched(false);
     writingTriedKey.current = null;
     writingGen.current += 1;
   };
@@ -81,9 +84,14 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
   // نتيجة قراءة Gemini الأخيرة: الإجمالي المكتوب في العطاء (للمقارنة بمجموع الفقرات) والنموذج المستخدم
   const [geminiCheck, setGeminiCheck] = useState<{ statedTotal: number | null; statedText?: string; modelUsed: string; doubleRead?: { onlyInSecond: number; secondReadError?: string } } | null>(null);
   // نفد رصيد Google: لافتة دائمة برابط الدفع (التنبيه المنبثق لا يحمل رابطاً)
-  const [creditNotice, setCreditNotice] = useState(false);
+  const [accountNotice, setAccountNotice] = useState<null | 'credit' | 'spendCap'>(null);
   // قراءة مزدوجة تعلّم الفقرات المختلفة وتضاعف كلفة القراءة؛ الاختيار يُحفظ في المتصفح
   const [doubleRead, setDoubleRead] = useState<boolean>(() => localStorage.getItem('gemini_double_read') !== '0');
+  // الضبط التلقائي تبعاً لفحص الكتابة: لا يُكتب في localStorage، وتعذّر الفحص يُبقي التفضيل المحفوظ (لا يُطفأ الفحص بصمت)
+  useEffect(() => {
+    if (doubleReadTouched) return;
+    setDoubleRead(writing === 'handwritten' || writing === 'mixed' ? true : writing === 'printed' ? false : localStorage.getItem('gemini_double_read') !== '0');
+  }, [writing, doubleReadTouched]);
   // الصفحات التي تُقرأ الآن: تنتقل إليها المعاينة وتُعلَّم في شريط الصفحات، وما قبلها مقروء
   const [readingRange, setReadingRange] = useState<ReadingPages | null>(null);
   const lastReading = useRef('');
@@ -172,7 +180,9 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
     setKeyTestStatus({ isTesting: true });
     try {
       const res = await testGeminiApiKey(apiKey, true);
-      if (res.message === GEMINI_CREDIT_MESSAGE) setCreditNotice(true);
+      if (res.success) setAccountNotice(null);
+      else if (res.message === GEMINI_CREDIT_MESSAGE) setAccountNotice('credit');
+      else if (res.message === GEMINI_SPEND_CAP_MESSAGE) setAccountNotice('spendCap');
       setKeyTestStatus({ isTesting: false, success: res.success, message: res.message });
     } catch (e: any) {
       setKeyTestStatus({ isTesting: false, success: false, message: e.message });
@@ -327,8 +337,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
       return 'مفتاح Gemini غير صالح.';
     }
     if (kind === 'credit') {
-      setCreditNotice(true);
+      setAccountNotice('credit');
       return GEMINI_CREDIT_MESSAGE;
+    }
+    if (kind === 'spendCap') {
+      setAccountNotice('spendCap');
+      return GEMINI_SPEND_CAP_MESSAGE;
     }
     return kind === 'quota' ? GEMINI_QUOTA_MESSAGE : message;
   };
@@ -342,6 +356,7 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
         followReading(reading);
       }, undefined, doubleRead);
       setExtractedItems(result.items);
+      setAccountNotice(null);
       setGeminiCheck({ statedTotal: result.grandTotal, statedText: result.grandTotalText, modelUsed: result.modelUsed, doubleRead: result.doubleRead });
       if (result.doubleRead?.secondReadError) {
         alert(`القراءة الثانية (للتحقق) لم تكتمل: ${explainGeminiError(result.doubleRead.secondReadError)}\nالجدول من القراءة الأولى وحدها، بلا تعليم للفقرات المختلفة.`);
@@ -661,18 +676,20 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
 
         </div>
 
-        {creditNotice && (
+        {accountNotice && (
           <div role="alert" className="bg-rose-50 border-b border-rose-300 px-4 sm:px-6 py-2.5 text-xs text-rose-950 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-black">⚠️ نفد رصيد حسابك في Google، فلا تتم القراءة بالذكاء الاصطناعي حتى تُضيف رصيداً.</span>
+            <span className="font-black">{accountNotice === 'credit'
+              ? '⚠️ نفد رصيد حسابك في Google، فلا تتم القراءة بالذكاء الاصطناعي حتى تُضيف رصيداً.'
+              : '⚠️ بلغ مشروعك في Google سقف الإنفاق الشهري، فلا تتم القراءة بالذكاء الاصطناعي حتى ترفع السقف أو يتجدد الشهر.'}</span>
             <a
-              href="https://aistudio.google.com/billing"
+              href={accountNotice === 'credit' ? 'https://aistudio.google.com/billing' : 'https://ai.studio/spend'}
               target="_blank"
               rel="noopener noreferrer"
               className="font-black text-indigo-700 underline hover:text-indigo-900"
             >
-              إضافة رصيد (aistudio.google.com/billing)
+              {accountNotice === 'credit' ? 'إضافة رصيد (aistudio.google.com/billing)' : 'رفع السقف (ai.studio/spend)'}
             </a>
-            <button onClick={() => setCreditNotice(false)} className="ms-auto text-rose-700 hover:text-rose-900 font-bold cursor-pointer">إخفاء</button>
+            <button onClick={() => setAccountNotice(null)} className="ms-auto text-rose-700 hover:text-rose-900 font-bold cursor-pointer">إخفاء</button>
           </div>
         )}
 
@@ -944,10 +961,12 @@ export const ImageOcrModal: React.FC<ImageOcrModalProps> = ({
                       type="checkbox"
                       checked={doubleRead}
                       disabled={isLoading}
-                      onChange={(e) => { setDoubleRead(e.target.checked); localStorage.setItem('gemini_double_read', e.target.checked ? '1' : '0'); }}
+                      onChange={(e) => { setDoubleReadTouched(true); setDoubleRead(e.target.checked); localStorage.setItem('gemini_double_read', e.target.checked ? '1' : '0'); }}
                       className="mt-0.5"
                     />
-                    <span><strong>قراءة ثانية للتحقق</strong>: بعد القراءة الكاملة يعيد النموذج قراءة عمود المبلغ وحده (بلا كمية ولا مفرد، فلا يحسب المبلغ بل ينقل المكتوب) ويعلّم الفقرات التي يختلف مبلغها عن القراءة الأولى لتراجعها مع الأصل. تزيد الكلفة والوقت.</span>
+                    <span><strong>قراءة ثانية للتحقق</strong>: بعد القراءة الكاملة يعيد النموذج قراءة عمود المبلغ وحده (بلا كمية ولا مفرد، فلا يحسب المبلغ بل ينقل المكتوب) ويعلّم الفقرات التي يختلف مبلغها عن القراءة الأولى لتراجعها مع الأصل. تزيد الكلفة والوقت.
+                      {writing === 'printed' && !doubleReadTouched && !doubleRead && <span className="block text-slate-500">عُطّلت لأن الصفحة المفحوصة مطبوعة؛ فعّلها بيدك إن كانت أرقام بعض الصفحات بخط اليد.</span>}
+                    </span>
                   </label>
                 )}
 

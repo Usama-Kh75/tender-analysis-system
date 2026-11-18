@@ -4,10 +4,11 @@ import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { ADOPTION_ACTIONS, asSubmitted, auditRowAmounts, findAdoption, isCommitteeCorrected, unitLostOf, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
 import { percentDecimals } from './calculations';
-import { exclusionThresholdOf } from './recommendation';
+import { exclusionThresholdOf, buildRecommendation, hasBidAmounts } from './recommendation';
 import { summarizePages } from './pageSummary';
-import { isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
+import { assessBalance, correctedBalanceRows, isOfferEdited, isOfferFinal, offerStatus } from './weightedOffer';
 import { tenderDetailParts } from './tenderDetails';
+import { downloadXlsx } from './xlsxPrint';
 
 /**
  * تصدير عطاء مجهز واحد إلى Excel بثلاث أوراق:
@@ -55,9 +56,9 @@ const BOX = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 const AMOUNT_FMT = '#,##0;\\(#,##0\\);\\-';
 const AMOUNT_FMT_DEC = '#,##0.00;\\(#,##0.00\\);\\-';
 
-type Cell = string | number | XLSX.CellObject | null | undefined;
+export type Cell = string | number | XLSX.CellObject | null | undefined;
 
-const amount = (v: number, color = TEXT): XLSX.CellObject => {
+export const amount = (v: number, color = TEXT): XLSX.CellObject => {
   const numFmt = Number.isInteger(v) ? AMOUNT_FMT : AMOUNT_FMT_DEC;
   return { t: 'n', v, z: numFmt, s: { font: { name: FONT, sz: 10, color: { rgb: color } }, numFmt } };
 };
@@ -68,13 +69,23 @@ const pct = (v: number, decimals = 2): XLSX.CellObject => {
   return { t: 'n', v: v / 100, z: fmt, s: { numFmt: fmt } };
 };
 const ratio = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0.0000', s: { numFmt: '0.0000' } });
-const count = (v: number): XLSX.CellObject => ({ t: 'n', v });
+const count = (v: number): XLSX.CellObject => ({ t: 'n', v, z: '0' });
 
-// رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»)
+// رقم الفقرة رقماً إن كان رقماً صرفاً (بلا فواصل آلاف)، وإلا نصاً كما هو («12 (مكرر)»).
+// التنسيق «0» للصحيح وحده: الفقرة 1.1 بالتنسيق «0» تظهر «1» (وجدته فحص الملف في Excel 2026-11-17)
 const itemNoCell = (itemNo: number | string): Cell => {
   const n = Number(itemNo);
-  return Number.isFinite(n) && String(n) === String(itemNo).trim() ? { t: 'n', v: n } : String(itemNo);
+  return Number.isFinite(n) && String(n) === String(itemNo).trim()
+    ? { t: 'n', v: n, z: Number.isInteger(n) ? '0' : 'General' }
+    : String(itemNo);
 };
+
+// اتجاه كل أوراق المصنف من اليمين إلى اليسار: المكتبة تكتب rightToLeft="1" في sheetView كل ورقة من Workbook.Views[0].RTL
+// (فُحص بفك ملف xlsx الناتج في checks/excelTenderFormat.test.ts)
+export function markRtl(wb: XLSX.WorkBook): XLSX.WorkBook {
+  wb.Workbook = { ...(wb.Workbook || {}), Views: [{ RTL: true }] };
+  return wb;
+}
 
 interface SheetLayout {
   widths: number[];
@@ -84,10 +95,12 @@ interface SheetLayout {
   center?: number[];                       // أعمدة تُوسَّط
   wrap?: number[];                         // أعمدة نص طويل يلتف
   filter?: boolean;
+  vertical?: 'top' | 'center';             // محاذاة البيانات رأسياً (الافتراضي: وسط)
+  orientation?: 'portrait' | 'landscape';  // اتجاه الطباعة (الافتراضي: أفقي)
 }
 
 // العنوان (الصف 1) وسطرا التعريف والشرح (2 و3) مدمجة بعرض الجدول، ثم الرؤوس، ثم البيانات بحدود، ثم أسطر المجاميع
-function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
+export function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
   const { widths, dataFrom, dataTo } = layout;
   const lastCol = widths.length - 1;
   const header = dataFrom - 1;
@@ -105,7 +118,7 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
       const own = cell.s || {};
       const font = { name: FONT, sz: 10, color: { rgb: TEXT }, ...(own.font || {}) };
       if (r === 0) {
-        cell.s = { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center' } };
+        cell.s = { font: { name: FONT, sz: 14, bold: true }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
       } else if (r < header) {
         cell.s = { font: { name: FONT, sz: 9, color: { rgb: NOTE_COLOR } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
       } else if (r === header) {
@@ -120,7 +133,7 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
           ...own, font, border: BOX,
           ...(fill ? { fill: { patternType: 'solid', fgColor: { rgb: fill } } } : {}),
           alignment: {
-            horizontal: layout.center?.includes(c) ? 'center' : 'right', vertical: 'center',
+            horizontal: layout.center?.includes(c) ? 'center' : 'right', vertical: layout.vertical ?? 'center',
             wrapText: !!layout.wrap?.includes(c)
           }
         };
@@ -135,8 +148,21 @@ function buildSheet(rows: Cell[][], layout: SheetLayout): XLSX.WorkSheet {
   ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: lastCol } });
   ws['!cols'] = widths.map(wch => ({ wch }));
   ws['!merges'] = [0, 1, 2].filter(r => r < header).map(r => ({ s: { r, c: 0 }, e: { r, c: lastCol } }));
+  // الصفوف المدمجة لا يضبط Excel ارتفاعها تلقائياً: يُحسب من طول النص وعرض الجدول كي لا يُقصّ
+  const totalWidth = widths.reduce((s, w) => s + w, 0);
+  const fitHeight = (text: unknown, sz: number, width: number, min: number) => {
+    const perLine = Math.max(1, width * (10 / sz) * 0.95);
+    const lines = Math.max(1, Math.ceil((typeof text === 'string' ? text.length : 0) / perLine));
+    return Math.max(min, Math.ceil(lines * sz * 1.35 + 4));
+  };
   ws['!rows'] = [{ hpt: 22 }, { hpt: 18 }, { hpt: 30 }];
-  ws['!rows'][header] = { hpt: 32 };
+  [[0, 14], [1, 9], [2, 9]].forEach(([r, sz]) => {
+    if (r < header) ws['!rows']![r] = { hpt: fitHeight(rows[r]?.[0], sz, totalWidth, ws['!rows']![r].hpt!) };
+  });
+  const headerH = (rows[header] || []).reduce<number>((m, v, c) => Math.max(m, fitHeight(v, 10, widths[c] ?? 10, 32)), 32);
+  ws['!rows'][header] = { hpt: headerH };
+  ws['!margins'] = { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 };
+  ws['!print'] = { orientation: layout.orientation ?? 'landscape', repeatRow: header };
   if (layout.filter && dataTo >= dataFrom) {
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: header, c: 0 }, e: { r: dataTo, c: lastCol } }) };
   }
@@ -456,7 +482,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
 // مفرد العرض بلا تقريب لمنزلتين (العرض المنطلق من التصحيح مفرده مبلغ ÷ كمية)، فيُعرض بأربع منازل على الأكثر
 // كي لا يخالف الكمية × المفرد المبلغَ الذي يوقّع عليه المجهز
 const UNIT_FMT_DEC = '#,##0.00##;\\(#,##0.00##\\);\\-';
-const unitCell = (v: number): XLSX.CellObject => {
+export const unitCell = (v: number): XLSX.CellObject => {
   const x = Math.round(v * 1e4) / 1e4;
   if (Number.isInteger(x)) return amount(x);
   const c = amount(x);
@@ -465,43 +491,55 @@ const unitCell = (v: number): XLSX.CellObject => {
 
 // ورقة اعتماد المجهز للعرض الموزون: الوصف والوحدة والكمية ومفرد العرض الموزون ومبلغه فقط، ليضع المجهز أسعار
 // عطائه عليها ويوقّع ويختم. تظهر مع عرض فعّال أو معتمد (الموقوف لا يُعرض). المجموع بصيغة Excel
-function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder): XLSX.WorkSheet | null {
-  if (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused') return null;
+// source 'formula': لا عرض موزون بدأ، فالأسعار الموزونة بالمعادلة (التخميني × النسبة السعرية، المسوّاة) كما يطبعها المحضر
+// حين يلزم التوزين؛ والفقرة بلا كلفة تخمينية شرطة كما في المحضر
+export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder, source: 'offer' | 'formula' = 'offer'): XLSX.WorkSheet | null {
+  const byFormula = source === 'formula';
+  if (!byFormula && (!bidder.weightedOffer || bidder.weightedOffer.status === 'paused')) return null;
   const items = bidder.items;
   const last = FIRST + items.length - 1;
-  const final = isOfferFinal(bidder);
+  const final = !byFormula && isOfferFinal(bidder);
+  const rowUnit = (item: BOQItem) => byFormula ? item.weightedUnitPrice
+    : item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
+  const rowTotal = (item: BOQItem) => byFormula ? item.newPrice : item.offerTotal ?? item.bidderTotal;
   const data: Cell[][] = items.map(item => {
     // غير مسعّرة بلا سعر في العرض: شرطة. أما العرض المنطلق من المعادلة فقد يسعّر الفقرة، فيُعرض سعره ليطابق المجموع
-    if (item.unpriced && !((item.offerTotal ?? 0) > 0)) return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
-    const unit = item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
+    if (byFormula ? !(item.estimatedTotal > 0) : item.unpriced && !((item.offerTotal ?? 0) > 0)) {
+      return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
+    }
     return [
       itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity),
-      unitCell(unit), amount(item.offerTotal ?? item.bidderTotal)
+      unitCell(rowUnit(item)), amount(rowTotal(item))
     ];
   });
-  const offerSum = round2(items.reduce((s, i) => s + (i.offerTotal ?? i.bidderTotal), 0));
+  const offerSum = round2(items.reduce((s, i) => s + (byFormula && !(i.estimatedTotal > 0) ? 0 : rowTotal(i)), 0));
   const gap = round2(offerSum - bidder.totals.totalBidderAmount);
-  const note = 'للمجهز: يُعتمد هذا الجدول بأسعار العرض الموزون الجديدة، وتُوضع بها أسعار عطائك. الوصف والوحدة والكمية كما في جدول العطاء.'
-    + (final ? '' : ' تنبيه: العرض الموزون لم يُعتمد نهائياً من اللجنة بعد، فالأسعار غير نهائية.');
+  const note = byFormula
+    ? 'للمجهز: الأسعار الموزونة بالمعادلة (الكلفة التخمينية × النسبة السعرية) كما في جدول المحضر، لأن عطاءك يحتاج توزيناً (ضوابط رقم (4) سادساً/5). لم يُبدأ عرض موزون رسمي بعد، فالأسعار غير نهائية. الوصف والوحدة والكمية كما في جدول العطاء.'
+    : 'للمجهز: يُعتمد هذا الجدول بأسعار العرض الموزون الجديدة، وتُوضع بها أسعار عطائك. الوصف والوحدة والكمية كما في جدول العطاء.'
+      + (final ? '' : ' تنبيه: العرض الموزون لم يُعتمد نهائياً من اللجنة بعد، فالأسعار غير نهائية.');
   const tail = (label: string, value: Cell): Cell[] => [label, '', '', '', '', value];
+  const noun = byFormula ? 'الموزون' : 'العرض الموزون';
 
   return buildSheet([
-    [`اعتماد العرض الموزون: ${bidder.name}`],
+    [`الجدول الموزون: ${bidder.name}${project.title ? ` — ${project.title}` : ''}${project.referenceNumber ? ` — رقم الطلبية: ${project.referenceNumber}` : ''}`],
     [projectLine(project)],
     [note],
     [],
-    ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', 'مفرد العرض الموزون', 'مبلغ العرض الموزون'],
+    ['ت', 'وصف الفقرة', 'الوحدة', 'الكمية', byFormula ? 'المفرد الموزون' : 'مفرد العرض الموزون', byFormula ? 'المبلغ الموزون' : 'مبلغ العرض الموزون'],
     ...data,
     [],
-    tail('مجموع العرض الموزون', formula(`SUM(F${FIRST}:F${last})`, offerSum)),
+    tail(`مجموع ${noun}`, formula(`SUM(F${FIRST}:F${last})`, offerSum)),
     ...(Math.abs(gap) >= 0.005 ? [tail('الفرق عن مبلغ العطاء بعد التصحيح الحسابي', amount(gap))] : []),
     [],
     ['اسم المجهز: ' + bidder.name],
-    ['اسم المفوض بالتوقيع: ………………………………   التوقيع: ………………………   الختم: ………………………   التاريخ: ……… / ……… / ………']
+    ['اسم المفوض بالتوقيع: ………………………………………………'],
+    ['التوقيع: ………………………………   الختم: ………………………………'],
+    ['التاريخ: ……… / ……… / ………']
   ], {
     widths: [6, 52, 10, 12, 20, 22],
     dataFrom: HEADER_ROWS + 1, dataTo: HEADER_ROWS + items.length,
-    center: [0, 2], wrap: [1], filter: false
+    center: [0, 2], wrap: [1], filter: false, orientation: 'portrait'
   });
 }
 
@@ -548,12 +586,25 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
   if (approvalSheet) XLSX.utils.book_append_sheet(wb, approvalSheet, 'اعتماد العرض الموزون');
   const pagesSheet = buildPagesSheet(project, bidder);
   if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
-  wb.Workbook = { Views: [{ RTL: true }] };
-  return wb;
+  return markRtl(wb);
 }
 
 export function exportBidderAuditToExcel(project: TenderProject, bidder: Bidder) {
   const wb = buildBidderAuditWorkbook(project, bidder);
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, ' ').trim();
-  XLSX.writeFile(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
+  downloadXlsx(wb, `${safe(`جدول عطاء ${bidder.name} - ${project.title || 'تحليل العطاءات'}`)}.xlsx`);
+}
+
+// المجهز الذي تُكتب له ورقة «الجدول الموزون» في تصدير الخلاصة: الموصى بترسيته فقط (اختيار اللجنة أو الأدنى المؤهل).
+// primary يُملأ أيضاً في الإحالة وإعادة الطرح (أقل عطاء قد يكون مستبعداً) وفي التعادل قبل اختيار اللجنة،
+// فلا يصحّ مجهزاً «موصى به» (مراجعة Codex 2026-11-17). بلا مجهز لا تُكتب الورقة.
+// المصدر: عرضه الموزون (فعّال أو معتمد)، وإلا الأسعار الموزونة بالمعادلة حين يلزم توزين عطائه (سادساً/5)، وهو
+// شرط طباعة جدولها في المحضر (recommendationPieces.weightingNeeded)؛ فقبول العطاء كما هو لا جدول له
+export function offerSheetTarget(project: TenderProject): { bidder?: Bidder; source?: 'offer' | 'formula' } {
+  const rec = buildRecommendation(project);
+  const primary = rec.kind === 'award' ? rec.primary : undefined;
+  if (!primary || !hasBidAmounts(primary)) return {};
+  if (primary.weightedOffer && primary.weightedOffer.status !== 'paused') return { bidder: primary, source: 'offer' };
+  const balance = assessBalance(correctedBalanceRows(primary.items), project.deviationThreshold, exclusionThresholdOf(project));
+  return balance.verdict === 'weighting-required' ? { bidder: primary, source: 'formula' } : {};
 }
