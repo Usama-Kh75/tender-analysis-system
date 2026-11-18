@@ -71,10 +71,17 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
       <style>{'@media print { @page { size: A4 landscape; margin: 12mm; } .status-sheet-head th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }'}</style>
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden print:max-w-none print:max-h-none print:overflow-visible print:rounded-none print:shadow-none print:border-0 print:block">
 
-        <div className="p-4 bg-slate-950 text-white flex items-center justify-between gap-3 flex-wrap no-print border-b border-amber-500/30">
-          <div className="flex items-center gap-2">
-            <Printer className="w-5 h-5 text-amber-400" />
-            <h2 className="text-base font-bold">كشف موقف الطلبيات</h2>
+        {/* العنوان وزر الإغلاق في سطر، والأدوات تحته: فلا يهبط الإغلاق مع التفاف الأدوات.
+            والعنوان ليس عنواناً هيكلياً: عنوان الكشف (h1) في الجسم، واسم النافذة في aria-label */}
+        <div className="p-4 bg-slate-950 text-white flex flex-col gap-3 no-print border-b border-amber-500/30">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-amber-400" />
+              <div className="text-base font-bold">كشف موقف الطلبيات</div>
+            </div>
+            <button type="button" onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -84,15 +91,17 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
             >
               <Plus className="w-4 h-4" /> إضافة طلبية بلا تحليل
             </button>
-            <label htmlFor="status-sheet-date" className="text-xs font-bold text-slate-300">تاريخ الكشف</label>
-            <input
-              id="status-sheet-date"
-              type="date"
-              value={asOf}
-              onChange={(e) => setAsOf(e.target.value)}
-              className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs"
-            />
-            {/* التسمية والقائمة معاً كي لا يفصل التفاف الشريط بينهما */}
+            {/* كل تسمية مع حقلها كي لا يفصل التفاف الشريط بينهما */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <label htmlFor="status-sheet-date" className="text-xs font-bold text-slate-300">تاريخ الكشف</label>
+              <input
+                id="status-sheet-date"
+                type="date"
+                value={asOf}
+                onChange={(e) => setAsOf(e.target.value)}
+                className="bg-white text-slate-900 border border-slate-300 rounded-lg px-2 py-1 text-xs"
+              />
+            </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <label htmlFor="status-sheet-sort" className="text-xs font-bold text-slate-300">الترتيب:</label>
               <select
@@ -137,9 +146,6 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
             >
               <Printer className="w-4 h-4" /> طباعة
             </button>
-            <button type="button" onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
-              <X className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
@@ -168,7 +174,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={r.no} className="break-inside-avoid">
+                  <tr key={`${r.kind}-${r.id}`} className="break-inside-avoid">
                     {cols.map(c => (
                       <td key={c.key} className={`${c.align === 'center' ? `${cell} text-center` : cell}${c.key === 'referenceNumber' ? ' whitespace-nowrap' : c.key === 'action' || c.key === 'note' ? ' whitespace-pre-line' : ''}`}>
                         {c.key === 'no' || c.key === 'announcement' ? r[c.key] : c.align === 'center' ? <bdi>{r[c.key]}</bdi> : r[c.key]}
