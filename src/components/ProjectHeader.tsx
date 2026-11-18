@@ -1,21 +1,29 @@
 import React from 'react';
-import { Settings, Table2, Award, BarChart3 } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import type { MainTab } from '../resume';
 import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { announcementLabel, bidCountsLabel, tenderDetailParts } from '../utils/tenderDetails';
 import { statusBadgeText } from '../utils/orderStatus';
-import type { NextStepAction } from '../utils/tenderPath';
+import { stageStates, type NextStepAction, type StageState } from '../utils/tenderPath';
 import { itemsWithErrorsText } from '../utils/arabicCount';
 import { NextStepBar } from './NextStepBar';
 
 // ثلاثة تبويبات لمراحل المناقصة الواحدة: لكل واحد سؤال واحد يظهر تحت اسمه
-const TABS: { id: MainTab; label: string; question: string; Icon: React.ElementType }[] = [
-  { id: 'bids', label: 'العطاءات والتدقيق', question: 'ماذا قدّم كل مجهز؟', Icon: Table2 },
-  { id: 'study', label: 'الدراسة والتحليل', question: 'كيف تقارن العطاءات؟', Icon: BarChart3 },
-  { id: 'recommendation', label: 'التوصية والمحضر', question: 'بماذا توصي اللجنة؟', Icon: Award }
+const TABS: { id: MainTab; label: string; question: string }[] = [
+  { id: 'bids', label: 'العطاءات والتدقيق', question: 'ماذا قدّم كل مجهز؟' },
+  { id: 'study', label: 'الدراسة والتحليل', question: 'كيف تقارن العطاءات؟' },
+  { id: 'recommendation', label: 'التوصية والمحضر', question: 'بماذا توصي اللجنة؟' }
 ];
+
+// بطاقات المراحل (النموذج ب، اختيار أسامة 2026-11-18): الشريط العلوي والشارة لحال المرحلة،
+// والإطار الأزرق للتبويب المفتوح، فلا يختلط الأمران. الأزرق لا يُستعمل لحال المرحلة
+const STAGE_LOOK: Record<StageState, { bar: string; pill: string; mark: string; text: string }> = {
+  done: { bar: 'bg-emerald-600', pill: 'bg-emerald-100 text-emerald-800', mark: '✓', text: 'مكتملة' },
+  current: { bar: 'bg-amber-500', pill: 'bg-amber-100 text-amber-800', mark: '●', text: 'قيد العمل' },
+  upcoming: { bar: 'bg-slate-300', pill: 'bg-slate-100 text-slate-600', mark: '○', text: 'لم تبدأ' }
+};
 
 interface ProjectHeaderProps {
   activeTab: MainTab;
@@ -34,6 +42,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project: currentProject, onOpenSettings, onOpenStatus, onGo,
   activeTab, onSelectTab, pendingAudit
 }) => {
+  const states = stageStates(currentProject);
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
       
@@ -123,11 +132,11 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         </div>
       </div>
 
-      {/* تبويبات المراحل: تحت العنوان مباشرة، والمفتوح بخط سفلي */}
+      {/* تبويبات المراحل: بطاقات تحت العنوان مباشرة، وحال كل مرحلة مستنتجة (stageStates) */}
       <div
         role="tablist"
         aria-label="مراحل المناقصة"
-        className="mt-4 flex items-stretch gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200"
+        className="mt-4 grid grid-cols-3 gap-2.5"
         onKeyDown={(e) => {
           // اتجاه RTL: السهم الأيسر = التالي بصرياً
           const i = TABS.findIndex(t => t.id === activeTab);
@@ -142,8 +151,9 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[n]?.focus();
         }}
       >
-        {TABS.map(({ id, label, question, Icon }) => {
+        {TABS.map(({ id, label, question }) => {
           const on = activeTab === id;
+          const look = STAGE_LOOK[states[id]];
           return (
             <button
               key={id}
@@ -152,21 +162,25 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               aria-selected={on}
               tabIndex={on ? 0 : -1}
               onClick={() => onSelectTab(id)}
-              className={`flex items-center gap-2 px-4 py-2 whitespace-nowrap border-b-4 transition cursor-pointer ${
-                on ? 'border-blue-600 text-blue-800' : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              className={`@container relative overflow-hidden rounded-xl px-3.5 pt-3.5 pb-2.5 min-h-[76px] min-w-0 text-start transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
+                on ? 'bg-white border border-transparent ring-2 ring-blue-600 shadow-md' : 'bg-slate-50 border border-slate-200 hover:bg-white hover:border-slate-300'
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="flex flex-col items-start leading-tight">
-                <span className="text-sm font-black">{label}</span>
-                <span className="text-[11px] font-medium text-slate-500">{question}</span>
-              </span>
-              {id === 'bids' && pendingAudit > 0 && (
-                <span aria-hidden="true" title={itemsWithErrorsText(pendingAudit)} className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[1.25rem] px-1.5 py-0.5 text-center">
-                  {pendingAudit}
+              <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-1 ${look.bar}`} />
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`text-sm font-black leading-tight min-w-0 ${on ? 'text-slate-950' : 'text-slate-800'}`}>{label}</span>
+                {id === 'bids' && pendingAudit > 0 && (
+                  <span aria-hidden="true" title={itemsWithErrorsText(pendingAudit)} className="shrink-0 bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[1.25rem] px-1.5 py-0.5 text-center">
+                    {pendingAudit}
+                  </span>
+                )}
+                {/* نص الشارة يختفي حسب عرض البطاقة نفسها لا عرض الشاشة، وتبقى العلامة */}
+                <span aria-hidden="true" className={`ms-auto shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${look.pill}`}>
+                  {look.mark}<span className="hidden @min-[15rem]:inline">{look.text}</span>
                 </span>
-              )}
-              {id === 'bids' && pendingAudit > 0 && <span className="sr-only">{itemsWithErrorsText(pendingAudit)}</span>}
+              </span>
+              <span className="block mt-0.5 text-[11px] font-medium text-slate-600 truncate">{question}</span>
+              <span className="sr-only">، {look.text}{id === 'bids' && pendingAudit > 0 ? `، ${itemsWithErrorsText(pendingAudit)}` : ''}</span>
             </button>
           );
         })}

@@ -43,7 +43,31 @@ export function tenderPath(p: TenderProject): TenderPath {
   };
 }
 
-export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'recommendation' | 'print' | 'status';
+export type StageId = 'bids' | 'study' | 'recommendation';
+export type StageState = 'done' | 'current' | 'upcoming';
+const STAGE_ORDER: StageId[] = ['bids', 'study', 'recommendation'];
+
+/** حال مراحل التبويبات الثلاثة، مستنتجة ولا تُخزَّن. كل مرحلة مكتملة بشرطها هي:
+ *  الأولى بالكلفة التخمينية ومبالغ كل الشركات المسجّلة وبلا فقرات معلّقة، والثانية باختيار الترسية،
+ *  والثالثة بمدخل موقف بعد الاختيار. وأول مرحلة غير مكتملة «قيد العمل»، وما بعدها من غير المكتمل «لم تبدأ» */
+export function stageStates(p: TenderProject): Record<StageId, StageState> {
+  const path = tenderPath(p);
+  const done: Record<StageId, boolean> = {
+    bids: path.hasEstimate && path.bids.registered > 0 && path.bids.entered === path.bids.registered && path.audit.pending === 0,
+    study: path.award !== null,
+    recommendation: path.award !== null && (p.statusLog?.length ?? 0) > 0
+  };
+  let seenCurrent = false;
+  const out = {} as Record<StageId, StageState>;
+  for (const id of STAGE_ORDER) {
+    if (done[id]) out[id] = 'done';
+    else if (!seenCurrent) { out[id] = 'current'; seenCurrent = true; }
+    else out[id] = 'upcoming';
+  }
+  return out;
+}
+
+export type NextStepTarget ='bids' | 'importEstimate' | 'audit' | 'recommendation' | 'print' | 'status';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
   kind: 'estimate' | 'audit' | 'bids' | 'award' | 'report';

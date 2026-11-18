@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewTenderProject } from '../src/utils/storageService';
 import { calculateBOQMetrics } from '../src/utils/calculations';
-import { bidderAuditState, nextStep, tenderPath } from '../src/utils/tenderPath';
+import { bidderAuditState, nextStep, stageStates, tenderPath } from '../src/utils/tenderPath';
 import type { Bidder, BOQItem, StatusEntry, TenderProject } from '../src/types/tender';
 
 const row = (id: string, bidderTotal: number, flags: Partial<BOQItem> = {}): Partial<BOQItem> => ({
@@ -173,4 +173,27 @@ test('اختلاف القراءتين يُعدّ فقرة فيها أخطاء م
   // فقرة فيها خطأ ضرب واختلاف قراءتين تُعدّ مرة
   const both = { ...a, items: a.items.map((it, i) => i === 0 ? { ...it, readCheck: diff, hasMathError: true } : it) };
   assert.deepEqual(bidderAuditState(both), { kind: 'pending', count: 1 });
+});
+
+test('حال المراحل: الأولى قيد العمل بلا كلفة أو مع فقرات معلّقة أو شركة بلا مبالغ', () => {
+  assert.deepEqual(stageStates(blankTender()), { bids: 'current', study: 'upcoming', recommendation: 'upcoming' });
+  assert.deepEqual(stageStates(setup()), { bids: 'current', study: 'upcoming', recommendation: 'upcoming' });
+  assert.deepEqual(stageStates(clean(setup())), { bids: 'current', study: 'upcoming', recommendation: 'upcoming' });
+  // المستلمة أكثر من المسجّلة لا تمنع اكتمال الأولى (كالخطوة التالية)
+  assert.equal(stageStates({ ...allIn(), receivedBidsCount: 4 }).bids, 'done');
+});
+
+test('حال المراحل: الدراسة قيد العمل، ثم التوصية، ثم الكل مكتمل', () => {
+  assert.deepEqual(stageStates(allIn()), { bids: 'done', study: 'current', recommendation: 'upcoming' });
+  assert.deepEqual(stageStates(chosen(allIn())), { bids: 'done', study: 'done', recommendation: 'current' });
+  const e: StatusEntry = { id: 's1', stage: 'analysis', branch: 'commercial', memoDate: '2026-11-01', recordedAt: '2026-11-01T00:00:00.000Z' };
+  assert.deepEqual(stageStates({ ...chosen(allIn()), statusLog: [e] }), { bids: 'done', study: 'done', recommendation: 'done' });
+  // موقف مسجّل بلا ترسية لا يُكمل الثالثة
+  assert.equal(stageStates({ ...allIn(), statusLog: [e] }).recommendation, 'upcoming');
+});
+
+test('حال المراحل: كل مرحلة بشرطها، فالترسية المختارة تبقى مكتملة إن عادت فقرة معلّقة', () => {
+  const p = chosen(allIn());
+  const reopened = { ...p, bidders: p.bidders.map((b, i) => (i === 1 ? { ...b, items: b.items.map((it, j) => (j === 0 ? { ...it, hasMathError: true } : it)) } : b)) };
+  assert.deepEqual(stageStates(reopened), { bids: 'current', study: 'done', recommendation: 'upcoming' });
 });
