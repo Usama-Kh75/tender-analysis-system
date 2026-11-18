@@ -213,7 +213,14 @@ export function App() {
   const { handleUpdateItemFields, handleUpdateItem, handleCorrectReading, handleReadingFromPaper, handleAcceptAsReading, handleConfirmReadCheck, handleAdoptTafqeetThousands,
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
-  const { handleStartOffer, handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
+  const { handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
+  // بدء العرض الموزون لمجهز بعينه من «الدراسة والتحليل» ثم فتح جدول فقراته؛ السياق مربوط بذلك المجهز لا بالنشط
+  const startOfferFor = (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => {
+    const bidder = currentProject.bidders.find(b => b.id === bidderId);
+    if (!bidder) return;
+    const started = createOfferHandlers(createEditContext(currentProject, bidder, setProjects)).handleStartOffer(origin);
+    if (started) handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId });
+  };
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
@@ -395,7 +402,7 @@ export function App() {
               onMarkBidderSigned={handleMarkBidderSigned}
               offerControl={hasBidAmounts(activeBidder) ? (
                 <WeightedOfferControl bidder={activeBidder} threshold={currentProject.deviationThreshold} exclusionThreshold={exclusionThresholdOf(currentProject)}
-                  onStart={handleStartOffer} onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
+                  onPause={handlePauseOffer} onAdopt={handleAdoptOffer} onUnadopt={handleUnadoptOffer} />
               ) : undefined}
             />
             <div className="mt-4">
@@ -415,6 +422,7 @@ export function App() {
               chartsOpen={chartsOpen}
               onToggleCharts={() => setChartsOpen(o => !o)}
               onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}
+              onStartWeightedOffer={startOfferFor}
             />
             {chartsOpen && (
               <ChartsView

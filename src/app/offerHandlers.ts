@@ -8,12 +8,13 @@ export function createOfferHandlers(ctx: EditContext) {
   const { currentProject, activeBidder, commitBidder, fmtNum } = ctx;
 
   // بدء العرض الموزون (سادساً/5): من أسعار العطاء بعد التصحيح، أو بالمعادلة، أو استئناف عرض موقوف بتعديلاته
-  const handleStartOffer = (origin: 'corrected' | 'formula' | 'resume') => {
+  // يرجع true إن بدأ العرض فعلاً، وfalse عند التنبيه أو إلغاء التأكيد
+  const handleStartOffer = (origin: 'corrected' | 'formula' | 'resume'): boolean => {
     const blocker = startOfferBlocker(activeBidder, exclusionThresholdOf(currentProject));
-    if (blocker) { window.alert(blocker); return; }
+    if (blocker) { window.alert(blocker); return false; }
     const prev = activeBidder.weightedOffer;
     if (origin !== 'resume' && activeBidder.items.some(i => i.offerTotal !== undefined) && !window.confirm(
-      'لهذا العطاء تعديلات عرض موزون سابقة، وستُستبدل ببداية جديدة. هل تريد المتابعة؟')) return;
+      'لهذا العطاء تعديلات عرض موزون سابقة، وستُستبدل ببداية جديدة. هل تريد المتابعة؟')) return false;
     // الأسعار الموزونة المخزَّنة قد تسبق التسوية الحالية أو تتغيّر أثناء الإيقاف: تُحسب من جديد قبل أخذها نقطة انطلاق
     const fresh = calculateBOQMetrics(activeBidder.items, currentProject.deviationThreshold).items;
     const fields = origin === 'resume' ? fresh.map(it => resumeOfferPatch(it, prev?.origin ?? 'corrected'))
@@ -32,6 +33,7 @@ export function createOfferHandlers(ctx: EditContext) {
         bidTotal
       }
     }), label, `${label} لعطاء (${activeBidder.name}) — مبلغ العطاء بعد التصحيح (${fmtNum(bidTotal)})`);
+    return true;
   };
 
   // إيقاف المرحلة لتصحيح قراءة أو غيره: تُحفظ تعديلات العرض وتعود عند الاستئناف، ويسقط الاعتماد إن وُجد

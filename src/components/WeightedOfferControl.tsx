@@ -2,13 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Scale, Play, Pause, CheckCircle2, RotateCcw, ChevronDown } from 'lucide-react';
 import type { Bidder } from '../types/tender';
 import { formatNumber } from '../utils/calculations';
-import { assessBalance, correctedBalanceRows, offerStatus, startOfferBlocker } from '../utils/weightedOffer';
+import { assessBalance, correctedBalanceRows, offerStatus } from '../utils/weightedOffer';
 
 interface Props {
   bidder: Bidder;
   threshold: number;
   exclusionThreshold?: number;
-  onStart: (origin: 'corrected' | 'formula' | 'resume') => void;
   onPause: () => void;
   onAdopt: () => void;
   onUnadopt: () => void;
@@ -17,7 +16,7 @@ interface Props {
 const MENU_WIDTH = 288;
 
 // زر بدء العرض الموزون: قائمة من خيارين، تُرسم بموضع ثابت لتعلو الشريط المثبت والجدول وتبقى داخل الشاشة
-const StartMenu: React.FC<Pick<Props, 'onStart'> & { paused: boolean; blocker: string | null }> = ({ onStart, paused, blocker }) => {
+export const StartMenu: React.FC<{ onStart: (origin: 'corrected' | 'formula' | 'resume') => void; paused: boolean; blocker: string | null }> = ({ onStart, paused, blocker }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -97,17 +96,15 @@ const StartMenu: React.FC<Pick<Props, 'onStart'> & { paused: boolean; blocker: s
   );
 };
 
-// مدخل العرض الموزون في شريط الشركة المثبت: زر بدء بقائمة، ثم سطر حي (الفرق والاعتماد والإيقاف) أثناء المرحلة.
+// سطر العرض الموزون الحي في شريط الشركة المثبت (الفرق والاعتماد والإيقاف) أثناء المرحلة فقط؛ البدء في StudyView.
 // بطاقة التوازن التفصيلية تبقى فوق الجدول في WeightedOfferBar
-export const WeightedOfferControl: React.FC<Props> = ({ bidder, threshold, exclusionThreshold = threshold, onStart, onPause, onAdopt, onUnadopt }) => {
+export const WeightedOfferControl: React.FC<Props> = ({ bidder, threshold, exclusionThreshold = threshold, onPause, onAdopt, onUnadopt }) => {
   const balance = assessBalance(correctedBalanceRows(bidder.items), threshold, exclusionThreshold);
   const offer = bidder.weightedOffer;
   if (balance.verdict === 'no-estimate') return null;
 
-  if (!offer || offer.status === 'paused') {
-    if (balance.verdict === 'excluded') return null;
-    return <StartMenu onStart={onStart} paused={offer?.status === 'paused'} blocker={startOfferBlocker(bidder, exclusionThreshold)} />;
-  }
+  // البدء والاستئناف من «الدراسة والتحليل»: الشريط هنا مع العرض الفعّال أو المعتمد فقط
+  if (!offer || offer.status === 'paused') return null;
 
   const status = offerStatus(bidder);
   if (!status) return null;

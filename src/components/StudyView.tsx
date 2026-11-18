@@ -7,8 +7,9 @@ import { rankingEffect } from '../utils/rankingEffect';
 import { evaluateBids } from '../utils/bidEvaluation';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { errorsCountText } from '../utils/arabicCount';
-import { assessBalance, correctedBalanceRows } from '../utils/weightedOffer';
+import { assessBalance, correctedBalanceRows, startOfferBlocker } from '../utils/weightedOffer';
 import { WeightedOfferBar } from './WeightedOfferBar';
+import { StartMenu } from './WeightedOfferControl';
 
 interface StudyViewProps {
   project: TenderProject;
@@ -21,6 +22,8 @@ interface StudyViewProps {
   onToggleCharts: () => void;
   /** يختار المجهز وينقل إلى جدول الفقرات في تبويب «العطاءات والتدقيق» لإعداد عرضه الموزون */
   onOpenWeightedOffer: (bidderId: string) => void;
+  /** يبدأ العرض الموزون أو يستأنفه لمجهز بعينه ثم ينقل إلى جدول فقراته */
+  onStartWeightedOffer: (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => void;
 }
 
 /** «الدراسة والتحليل»: مقارنة العطاءات تجارياً بالأرقام والانحرافات وأثر التصحيح، بلا قرار ولا توصية */
@@ -31,7 +34,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onOpenMatrix,
   chartsOpen,
   onToggleCharts,
-  onOpenWeightedOffer
+  onOpenWeightedOffer,
+  onStartWeightedOffer
 }) => {
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
@@ -377,13 +381,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
             <div key={b.id} className="space-y-2">
               <div className="text-sm font-black text-slate-800">{b.name}</div>
               <WeightedOfferBar bidder={b} threshold={project.deviationThreshold} exclusionThreshold={exclusionThreshold} />
-              <button
-                type="button"
-                onClick={() => onOpenWeightedOffer(b.id)}
-                className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
-              >
-                {b.weightedOffer ? 'فتح العرض الموزون في جدول الفقرات' : 'إعداد العرض الموزون في جدول الفقرات'}
-              </button>
+              {!b.weightedOffer || b.weightedOffer.status === 'paused' ? (
+                <StartMenu
+                  paused={b.weightedOffer?.status === 'paused'}
+                  blocker={startOfferBlocker(b, exclusionThreshold)}
+                  onStart={(o) => onStartWeightedOffer(b.id, o)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOpenWeightedOffer(b.id)}
+                  className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
+                >
+                  فتح العرض الموزون في جدول الفقرات
+                </button>
+              )}
             </div>
           ))}
         </div>
