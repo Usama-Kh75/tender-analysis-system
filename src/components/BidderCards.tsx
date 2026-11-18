@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
@@ -20,14 +20,30 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
 
-  const commitRename = (current: string) => {
-    onRename(tempName.trim() || current);
+  // بعد الحفظ أو الإلغاء يعود التركيز إلى زر تعديل الاسم (معرّف الشركة)، ولا يُنفَّذ الإنهاء مرتين (Enter ثم blur)
+  const editButtons = useRef<Record<string, HTMLButtonElement | null>>({});
+  const focusBackId = useRef<string | null>(null);
+  const finishedRef = useRef(false);
+
+  useEffect(() => {
+    if (focusBackId.current && editingId === null) {
+      editButtons.current[focusBackId.current]?.focus();
+      focusBackId.current = null;
+    }
+  }, [editingId]);
+
+  const finishRename = (id: string, current: string, save: boolean) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    const next = tempName.trim();
+    if (save && next && next !== current) onRename(next);
     setEditingId(null);
+    focusBackId.current = id;
   };
 
   // عدّاد العطاءات: أخضر حين تكتمل مبالغ كل المسجّلين. المستلمة قد تزيد على المحلَّلة بحق (العطاء غير المستوفي لا يُحلَّل)
   const bids = tenderPath(project).bids;
-  const complete = bids.entered === bids.registered;
+  const complete = bids.registered > 0 && bids.entered === bids.registered;
   const counterText = bids.expected > bids.entered && complete
     ? `المحلَّلة تجارياً: ${bids.entered} من (${bids.expected}) مستلمة`
     : `العطاءات المدخلة: ${bids.entered} من ${bids.expected}`;
@@ -40,7 +56,8 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     >
       {counterText}
     </p>
-    <div role="list" aria-label="الشركات المتقدمة" className="mb-4 bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+    <div className="mb-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div role="list" aria-label="الشركات المتقدمة" className="divide-y divide-slate-100">
       {project.bidders.map(b => {
         const active = b.id === activeBidderId;
         const state = bidderAuditState(b);
@@ -57,14 +74,15 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                   value={tempName}
                   onChange={(e) => setTempName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitRename(b.name);
-                    if (e.key === 'Escape') setEditingId(null);
+                    if (e.key === 'Enter') finishRename(b.id, b.name, true);
+                    if (e.key === 'Escape') finishRename(b.id, b.name, false);
                   }}
+                  onBlur={() => finishRename(b.id, b.name, true)}
                   className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
                   aria-label="اسم الشركة"
                   autoFocus
                 />
-                <button onClick={() => commitRename(b.name)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
+                <button onClick={() => finishRename(b.id, b.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
                   حفظ
                 </button>
               </div>
@@ -91,7 +109,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                   }`}>
                     {state.kind === 'done' ? '✓ مدقّق' : state.kind === 'pending' ? errorsCountText(state.count) : 'لم يُدخل'}
                   </span>
-                  <span className="min-w-[7rem]">
+                  <span className="sm:min-w-[7rem]">
                     {b.status === 'recommended' && (
                       <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full px-1.5">★ موصى بالترسية</span>
                     )}
@@ -99,7 +117,8 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                 </button>
                 {active && (
                   <button
-                    onClick={() => { setTempName(b.name); setEditingId(b.id); }}
+                    ref={(el) => { editButtons.current[b.id] = el; }}
+                    onClick={() => { finishedRef.current = false; setTempName(b.name); setEditingId(b.id); }}
                     className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                     title="تعديل اسم الشركة"
                     aria-label={`تعديل اسم ${b.name}`}
@@ -113,7 +132,8 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
         );
       })}
 
-      <div role="listitem">
+    </div>
+      <div className="border-t border-slate-100">
         <button
           onClick={onAdd}
           className="w-full text-right px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer transition"

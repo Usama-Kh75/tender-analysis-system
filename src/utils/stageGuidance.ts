@@ -3,7 +3,7 @@
 import type { BOQItem, TenderProject } from '../types/tender';
 import { uniqueLegalKeys, type LegalKey } from './legalTexts';
 import {
-  buildRecommendation, equalPriceBids, exclusionThresholdOf, hasBidAmounts, hasNoEstimate, isCommerciallyExcluded, offerWinner
+  buildRecommendation, equalPriceBids, exclusionThresholdOf, hasBidAmounts, hasNoEstimate, isCommerciallyExcluded
 } from './recommendation';
 import { assessBalance, correctedBalanceRows } from './weightedOffer';
 import { isCommitteeCorrected } from './bidderAuditEngine';
@@ -59,10 +59,7 @@ export function stageGuidance(project: TenderProject, tab: string): GuidanceItem
         else add('art20_3', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كانت جميع العطاءات المستلمة لا تتطابق مع شروط ومعايير المناقصة');
       }
     } else {
-      const winner = offerWinner(project);
-      if (winner && (winner.weightedOffer || weightingRequired(project, winner.items))) {
-        add('ann4_6_5', 'العرض الموزون للعطاء الفائز وحده، إذا تجاوزت فقراته غير المتوازنة بالزيادة (10%) من عدد الفقرات');
-      }
+      // ann4_6_5 لا يُضاف هنا: بطاقة التوازن في «المحضر» تعرض سادساً/5 للعطاء الفائز في الحالات نفسها
       const approval = rec.kind === 'award' && rec.primary
         ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
       if (approval?.kind === 'note') add(approval.ref, 'صلاحية قبول العطاء الزائد على الكلفة التخمينية بحسب نوع الموازنة ونسبة الزيادة');

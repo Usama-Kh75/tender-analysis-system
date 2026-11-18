@@ -13,8 +13,8 @@ interface Props {
   exclusionThreshold?: number;
 }
 
-// حكم التوازن (سادساً/5) ومرحلة العرض الموزون للعطاء النشط: بطاقة معلومات فوق الجدول. أزرار البدء والاعتماد
-// والإيقاف في شريط الشركة المثبت (WeightedOfferControl) فلا تتكرر هنا
+// حكم التوازن (سادساً/5) ومرحلة العرض الموزون للعطاء النشط: بطاقة معلومات فوق الجدول، بلا أزرار بدء في أي مكان.
+// الإيقاف والاعتماد للعرض المسجّل في شريط الشركة المثبت (WeightedOfferControl) فلا تتكرر هنا
 export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, exclusionThreshold = threshold }) => {
   const balance = assessBalance(correctedBalanceRows(bidder.items), threshold, exclusionThreshold);
   const offer = bidder.weightedOffer;
@@ -33,7 +33,7 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, exclusion
         <div className="flex items-center gap-2">
           <Scale className="w-5 h-5 shrink-0" />
           <div>
-            <div className="font-black text-sm">توازن العطاء (ضوابط رقم (4) سادساً/5): {BALANCE_VERDICT_LABEL[balance.verdict]}</div>
+            <div className="font-black text-sm">توازن العطاء (ضوابط رقم (4) سادساً/5): {BALANCE_VERDICT_LABEL[balance.verdict].replace(/ \(سادساً\/5\)$/, '')}</div>
             <div className="text-xs font-bold mt-0.5">
               الفقرات المنحرفة بالزيادة أكثر من {threshold}%: ({balance.unbalancedCount}) من ({balance.itemCount}) = {balance.unbalancedPercent.toFixed(2)}%
               {' '}— الحد {UNBALANCED_ITEMS_LIMIT_PERCENT}%
@@ -52,12 +52,6 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, exclusion
 
       {blocker && (!offer || offer.status === 'paused') && balance.verdict !== 'excluded' && (
         <div className="text-xs font-bold">{blocker}</div>
-      )}
-      {(!offer || offer.status === 'paused') && balance.verdict !== 'excluded' && !blocker && (
-        <div className="text-[11px] font-bold opacity-80">
-          {balance.verdict === 'accept-as-is' ? 'إعداد العرض الموزون اختياري بقرار اللجنة؛ النص يقبل مبلغ العطاء كما هو. ' : ''}
-          يبدأ من زر «العرض الموزون» في شريط الشركة أعلاه.
-        </div>
       )}
 
       {offer && offer.status !== 'paused' && status && (
@@ -91,7 +85,7 @@ export const WeightedOfferBar: React.FC<Props> = ({ bidder, threshold, exclusion
           )}
           {balance.verdict === 'weighting-required' && offer.origin === 'corrected' && (
             <div className="text-[11px] font-bold text-amber-900">
-              تنبيه: الفقرات غير المتوازنة تتجاوز 10%، والنص (سادساً/5) يعتمد جدول جهة التعاقد معدلاً بنسبة مبلغ العطاء (البدء بالمعادلة).
+              تنبيه: الفقرات غير المتوازنة تتجاوز 10%، والنص (سادساً/5) يعتمد جدول جهة التعاقد معدلاً بنسبة مبلغ العطاء، لا أسعار العطاء.
             </div>
           )}
         </div>

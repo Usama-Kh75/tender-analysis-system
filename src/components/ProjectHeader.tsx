@@ -45,7 +45,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 }) => {
   const states = stageStates(currentProject);
   return (
-    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs mb-6">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-xs mb-6">
       
       {/* Top Meta Bar */}
       <div className="flex items-center justify-between gap-4 mb-3 pb-3 border-b border-slate-100 flex-wrap">
@@ -126,7 +126,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 
       {/* Middle Row: Project Title (Editable) */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
-        <div className="flex-1 min-w-[280px]">
+        <div className="flex-1 min-w-0 sm:min-w-[280px]">
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
             {currentProject.title}
           </h1>
@@ -160,6 +160,8 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               key={id}
               type="button"
               role="tab"
+              id={`tab-${id}`}
+              aria-controls={`tabpanel-${id}`}
               aria-selected={on}
               tabIndex={on ? 0 : -1}
               onClick={() => onSelectTab(id)}

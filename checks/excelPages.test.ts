@@ -73,10 +73,10 @@ test('ورقة الاعتماد: مفرد العرض غير مقرّب، وغي�
   assert.equal(ws.E8.v, '-'); assert.equal(ws.F8.v, '-');   // لم تُسعَّر في العرض
 });
 
-test('الجدول المعدل وملخص الصفحات بلا أعمدة العرض الموزون ولا النسبة السعرية', () => {
+test('العطاء بعد التصحيح وملخص الصفحات بلا أعمدة العرض الموزون ولا النسبة السعرية', () => {
   const texts = (ws: any) => Object.values(ws).map((c: any) => c?.v).filter(v => typeof v === 'string') as string[];
   for (const wb of [make(true, true), make(true, false)]) {
-    for (const name of ['الجدول المعدل', 'ملخص الصفحات']) {
+    for (const name of ['العطاء بعد التصحيح', 'ملخص الصفحات']) {
       const all = texts(wb.Sheets[name]);
       assert.ok(!all.some(t => t.includes('موزون') || t.includes('النسبة السعرية')), name);
     }

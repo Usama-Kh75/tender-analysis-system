@@ -58,7 +58,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="new-project-title-heading" className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
 
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -66,7 +66,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               <FolderPlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold">مناقصة / طلبية جديدة</h2>
+              <h2 id="new-project-title-heading" className="text-base sm:text-lg font-bold">مناقصة / طلبية جديدة</h2>
               <p className="text-xs text-slate-400">يُحدد نوع العقد ونوع الموازنة أولاً لتُصاغ التوصية وفق ضوابطهما</p>
             </div>
           </div>
@@ -147,7 +147,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label htmlFor="new-project-ref" className="block text-xs font-bold text-slate-700 mb-1">رقم الطلبية أو المناقصة</label>
               <input
@@ -199,9 +199,9 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           </div>
 
           <div>
-            <label htmlFor="new-project-received" className="block text-xs font-bold text-slate-700 mb-1">عدد العطاءات المستلمة</label>
+            <label htmlFor="new-project-received-count" className="block text-xs font-bold text-slate-700 mb-1">عدد العطاءات المستلمة</label>
             <input
-              id="new-project-received"
+              id="new-project-received-count"
               type="text"
               inputMode="numeric"
               value={receivedShown}

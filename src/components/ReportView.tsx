@@ -4,9 +4,8 @@ import { TenderProject } from '../types/tender';
 import { formatCurrency, formatPercent } from '../utils/calculations';
 import { buildRecommendation, hasNoEstimate, exclusionThresholdOf, offerWinner, hasBidAmounts, isCommerciallyExcluded } from '../utils/recommendation';
 import { budgetApprovalNote } from '../utils/budgetTypes';
-import { isOfferFinal, assessBalance, correctedBalanceRows, startOfferBlocker } from '../utils/weightedOffer';
+import { isOfferFinal, assessBalance, correctedBalanceRows } from '../utils/weightedOffer';
 import { WeightedOfferBar } from './WeightedOfferBar';
-import { StartMenu } from './WeightedOfferControl';
 
 interface ReportViewProps {
   project: TenderProject;
@@ -16,8 +15,8 @@ interface ReportViewProps {
   onExportExcel: () => void;
   /** يختار المجهز وينقل إلى جدول الفقرات في تبويب «العطاءات والتدقيق» لإعداد عرضه الموزون */
   onOpenWeightedOffer: (bidderId: string) => void;
-  /** يبدأ العرض الموزون أو يستأنفه لمجهز بعينه ثم ينقل إلى جدول فقراته */
-  onStartWeightedOffer: (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => void;
+  /** يستأنف العرض الموزون الموقوف للعطاء الفائز ثم ينقل إلى جدول فقراته (لا بدء جديد في الواجهة) */
+  onResumeWeightedOffer: (bidderId: string) => void;
 }
 
 /** «المحضر»: العطاء الفائز بعد اختيار اللجنة، وعرضه الموزون، ومعاينة المحضر وطباعته */
@@ -27,7 +26,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
   onOpenPrint,
   onExportExcel,
   onOpenWeightedOffer,
-  onStartWeightedOffer
+  onResumeWeightedOffer
 }) => {
   const noEstimate = hasNoEstimate(project);
   const exclusionThreshold = exclusionThresholdOf(project);
@@ -163,12 +162,20 @@ export const ReportView: React.FC<ReportViewProps> = ({
                     العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)، وهذا العطاء ليس الفائز في التوصية الحالية{live && '، فأوقف مرحلته من جدول فقراته'}.
                   </p>
                 )}
-                {b.id === winner?.id && !live && (
-                  <StartMenu
-                    paused={b.weightedOffer?.status === 'paused'}
-                    blocker={startOfferBlocker(b, exclusionThreshold)}
-                    onStart={(o) => onStartWeightedOffer(b.id, o)}
-                  />
+                {b.id === winner?.id && !b.weightedOffer && (
+                  <p className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
+                    يلزم اعتماد الجدول الموزون لهذا العطاء (ضوابط رقم (4) سادساً/5): كل فقرة = مبلغها في الكلفة التخمينية × النسبة السعرية. الجدول محسوب تلقائياً، ويظهر في معاينة المحضر وفي ورقة «الجدول الموزون» في تصدير Excel.
+                  </p>
+                )}
+                {b.id === winner?.id && b.weightedOffer?.status === 'paused' && (
+                  <button
+                    type="button"
+                    onClick={() => onResumeWeightedOffer(b.id)}
+                    aria-label={`استئناف العرض الموزون لعطاء ${b.name}`}
+                    className="text-xs sm:text-sm font-bold px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white cursor-pointer transition"
+                  >
+                    استئناف العرض الموزون
+                  </button>
                 )}
                 {live && (
                   <button

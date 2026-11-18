@@ -15,7 +15,7 @@ import { downloadXlsx } from './xlsxPrint';
  * - «واقع الحال»: العطاء كما قدّمه المجهز بعيوبه، وكل عيب مؤشَّر ومشروح في فقرته. العيوب تُشتق من الأرقام
  *   الأصلية (المبلغ المدون، والمفرد المدون قبل أن يحل محله التفقيط)، فتبقى الفقرة التي صحّحتها اللجنة مؤشرة هنا.
  * - «أخطاء المجهز»: فقرات خطأ الضرب وتعارض التفقيط وحدها، بأرقام المجهز كما دوّنها، وعمود «قرار اللجنة» للتعبئة.
- * - «الجدول المعدل»: العطاء بعد تصحيحات اللجنة في النظام، بالانحراف وحده، والتصحيح المعتمد لكل
+ * - «العطاء بعد التصحيح»: العطاء بعد تصحيحات اللجنة في النظام، بالانحراف وحده، والتصحيح المعتمد لكل
  *   فقرة كما سُجّل في سجل التدقيق.
  * بلا أسعار موزونة (قرار المستخدم 2026-11-19): الجدول الموزون في تصدير «المحضر» وحده.
  * التنسيق كملف «مطابق للأصل»: خط Arial، ورؤوس بيضاء على أزرق داكن، وأرقام المجهز كما دوّنها بالأزرق والمحسوبة
@@ -369,7 +369,7 @@ function buildErrorsSheet(project: TenderProject, bidder: Bidder, rows: RowAnaly
 
 const adoptionRule = (row: RowAnalysis) => row.adoption ? ADOPTIONS[row.adoption.action] : 'تصحيح حسابي بقرار اللجنة';
 
-// التصحيح المعتمد للفقرة كما يظهر في الجدول المعدل
+// التصحيح المعتمد للفقرة كما يظهر في ورقة «العطاء بعد التصحيح»
 function correctionText(row: RowAnalysis): string {
   const { item, corrected, stated } = row;
   const parts: string[] = [];
@@ -444,7 +444,7 @@ function buildAdjustedSheet(project: TenderProject, bidder: Bidder, rows: RowAna
     + ' الصفوف الخضراء: صحّحتها اللجنة، والكهرمانية: بانتظار قرار اللجنة.';
 
   return buildSheet([
-    [`الجدول المعدل بعد التصحيح الحسابي: ${bidder.name}`],
+    [`العطاء بعد التصحيح الحسابي: ${bidder.name}`],
     [projectLine(project)],
     [note],
     [],
@@ -560,7 +560,7 @@ export function buildBidderAuditWorkbook(project: TenderProject, bidder: Bidder)
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, buildAsIsSheet(project, bidder, rows), AS_IS_SHEET);
   XLSX.utils.book_append_sheet(wb, buildErrorsSheet(project, bidder, rows), 'أخطاء المجهز');
-  XLSX.utils.book_append_sheet(wb, buildAdjustedSheet(project, bidder, rows), 'الجدول المعدل');
+  XLSX.utils.book_append_sheet(wb, buildAdjustedSheet(project, bidder, rows), 'العطاء بعد التصحيح');
   const pagesSheet = buildPagesSheet(project, bidder);
   if (pagesSheet) XLSX.utils.book_append_sheet(wb, pagesSheet, 'ملخص الصفحات');
   return markRtl(wb);

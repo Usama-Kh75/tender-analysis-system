@@ -78,7 +78,7 @@ export function stageStates(p: TenderProject): Record<StageId, StageState> {
   return out;
 }
 
-export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'report' | 'print';
+export type NextStepTarget = 'bids' | 'importEstimate' | 'audit' | 'study' | 'report';
 export interface NextStepAction { label: string; target: NextStepTarget; bidderId?: string }
 export interface NextStep {
   /** stageDone: سطر ختام مرحلة العطاءات والتدقيق في تبويبها، أو مرحلة الدراسة والتوصية بعد اختيار الفائز (stageStep وحده) */
@@ -179,8 +179,8 @@ export function nextStep(p: TenderProject): NextStep | null {
     const hasStatus = (p.statusLog?.length ?? 0) > 0;
     return {
       kind: 'report',
-      text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: طباعة محضر التحليل، ثم ${hasStatus ? 'تحديث' : 'تسجيل'} الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»`,
-      actions: [{ label: 'معاينة المحضر وطباعته', target: 'print' }]
+      text: `اختارت اللجنة «${path.award.name}». الخطوة التالية: معاينة المحضر وطباعته من الشريط أدناه، ثم ${hasStatus ? 'تحديث' : 'تسجيل'} الموقف عند إرساله من شارة الموقف أعلاه أو «كشف الموقف»`,
+      actions: []
     };
   }
   return null;

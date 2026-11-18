@@ -100,11 +100,9 @@ test('الدراسة والتوصية: اختيار عطاء غير الأوطأ
   assert.ok(!keys(p, 'report').includes('art10_1_h'));
 });
 
-test('المحضر: العرض الموزون للفائز، بعدم التوازن أو بعرض مسجَّل', () => {
-  assert.ok(keys(proj([unbalanced()]), 'report').includes('ann4_6_5'));
+test('المحضر: لا سادساً/5 في التعليمات، فبطاقة التوازن تعرضه للفائز', () => {
   const withOffer = withBidder(proj([900]), 0, [], { weightedOffer: { status: 'active', origin: 'corrected', startedAt: '2026-11-18', bidTotal: 900 } });
-  assert.ok(keys(withOffer, 'report').includes('ann4_6_5'));
-  assert.ok(!keys(proj([900]), 'report').includes('ann4_6_5'));
+  for (const p of [proj([unbalanced()]), withOffer, proj([900])]) assert.ok(!keys(p, 'report').includes('ann4_6_5'));
 });
 
 test('المحضر: زيادة على الكلفة تظهر معها مادة نوع الموازنة، ولا شيء بلا زيادة', () => {

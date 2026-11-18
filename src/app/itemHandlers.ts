@@ -436,7 +436,7 @@ export function createItemHandlers(ctx: EditContext) {
       'فواصل صفحات العطاء', `أُسندت فقرات عطاء (${activeBidder.name}) إلى (${count}) صفحة حسب فواصل الصفحات`);
   };
 
-  // تصدير جدول المجهز النشط: واقع الحال كما قدّمه بعيوبه، والجدول المعدل بعد تصحيحات اللجنة
+  // تصدير جدول المجهز النشط: واقع الحال كما قدّمه بعيوبه، وورقة «العطاء بعد التصحيح» بعد تصحيحات اللجنة
   const handleExportBidderAudit = () => {
     if (!hasBidAmounts(activeBidder)) {
       window.alert(`لا مبالغ في جدول (${activeBidder.name}) بعد، فلا عطاء يُصدَّر.`);
@@ -444,7 +444,7 @@ export function createItemHandlers(ctx: EditContext) {
     }
     const pending = activeBidder.items.filter(i => i.hasMathError || i.hasTextDiscrepancy).length;
     if (pending > 0 && !window.confirm(
-      `(${pending}) فقرة مؤشرة بانتظار قرار اللجنة. تظهر في الجدول المعدل بمبالغها كما دوّنها المجهز مع عبارة «بانتظار قرار اللجنة».\n\nهل تريد التصدير الآن؟`
+      `(${pending}) فقرة مؤشرة بانتظار قرار اللجنة. تظهر في ورقة «العطاء بعد التصحيح» بمبالغها كما دوّنها المجهز مع عبارة «بانتظار قرار اللجنة».\n\nهل تريد التصدير الآن؟`
     )) return;
     exportBidderAuditToExcel(currentProject, activeBidder);
   };

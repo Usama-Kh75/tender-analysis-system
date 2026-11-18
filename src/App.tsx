@@ -214,12 +214,12 @@ export function App() {
     handleUpdateStatedTotal, handleMarkUnreasonable, handleMarkBidderSigned, handleAddItem, handleDeleteItem,
     handleDuplicateItem, handleClearBidderPrices, handleExportBidderAudit, applyPageBreaks } = createItemHandlers(ctx);
   const { handlePauseOffer, handleAdoptOffer, handleUnadoptOffer, handleEditOfferUnit } = createOfferHandlers(ctx);
-  // بدء العرض الموزون للعطاء الفائز من «المحضر» ثم فتح جدول فقراته؛ السياق مربوط بذلك المجهز لا بالنشط
-  const startOfferFor = (bidderId: string, origin: 'corrected' | 'formula' | 'resume') => {
+  // استئناف العرض الموزون الموقوف للعطاء الفائز من «المحضر» ثم فتح جدول فقراته (لا بدء جديد في الواجهة)؛ السياق مربوط بذلك المجهز لا بالنشط
+  const resumeOfferFor = (bidderId: string) => {
     if (offerWinner(currentProject)?.id !== bidderId) { window.alert('العرض الموزون للعطاء الفائز وحده (ضوابط رقم (4) سادساً/5)'); return; }
     const bidder = currentProject.bidders.find(b => b.id === bidderId);
     if (!bidder) return;
-    const started = createOfferHandlers(createEditContext(currentProject, bidder, setProjects)).handleStartOffer(origin);
+    const started = createOfferHandlers(createEditContext(currentProject, bidder, setProjects)).handleStartOffer('resume');
     if (started) handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId });
   };
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
@@ -277,10 +277,8 @@ export function App() {
       scrollToTable();
     } else if (action.target === 'study') {
       setActiveTab('study');
-    } else if (action.target === 'report') {
-      setActiveTab('report');
     } else {
-      setIsPrintOpen(true);
+      setActiveTab('report');
     }
   };
 
@@ -316,6 +314,8 @@ export function App() {
           onGo={handleGo}
         />
 
+        {/* لوحة التبويب المفتوح (تُرسم لوحة واحدة فقط) مرتبطة بزرها في ProjectHeader */}
+        <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
         {activeTab === 'bids' && (
           <>
         <BidderCards
@@ -439,9 +439,10 @@ export function App() {
               onOpenPrint={() => setIsPrintOpen(true)}
               onExportExcel={() => exportTenderToExcel(currentProject, activeBidder)}
               onOpenWeightedOffer={(id) => handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId: id })}
-              onStartWeightedOffer={startOfferFor}
+              onResumeWeightedOffer={resumeOfferFor}
             />
           )}
+        </div>
         </div>
 
       </main>

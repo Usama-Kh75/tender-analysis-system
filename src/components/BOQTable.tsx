@@ -162,7 +162,7 @@ interface BOQTableProps {
   onClearBidderPrices?: () => void;
   onOpenSmartImport?: () => void;
   onOpenManualEntry?: () => void;
-  // جدول واقع الحال والجدول المعدل لهذا المجهز في ملف Excel (exportBidderAuditToExcel)
+  // جدول واقع الحال وورقة «العطاء بعد التصحيح» لهذا المجهز في ملف Excel (exportBidderAuditToExcel)
   onExportAudit?: () => void;
   onOpenCorrectionNotice?: () => void;
   // العرض الموزون للعطاء النشط: active يُعدَّل فيه المفرد، adopted للعرض فقط، none الجدول العادي
@@ -404,7 +404,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
               type="button"
               onClick={onExportAudit}
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer border border-slate-600"
-              title="ملف Excel: عطاء المجهز كما قدّمه بعيوبه مؤشرة ومشروحة، وأخطاء المجهز، والجدول المعدل بعد تصحيحات اللجنة"
+              title="ملف Excel: عطاء المجهز كما قدّمه بعيوبه مؤشرة ومشروحة، وأخطاء المجهز، وورقة «العطاء بعد التصحيح» (بعد تصحيحات اللجنة)"
             >
               <Download className="w-4 h-4 text-slate-300" />
               <span>تصدير الجدول <bdi dir="ltr">(Excel)</bdi></span>
