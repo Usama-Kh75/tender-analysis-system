@@ -9,6 +9,7 @@ import { statusBadgeText } from '../utils/orderStatus';
 import { stageStates, type NextStepAction, type StageState } from '../utils/tenderPath';
 import { itemsWithErrorsText } from '../utils/arabicCount';
 import { NextStepBar } from './NextStepBar';
+import { StageGuidance } from './StageGuidance';
 
 // ثلاثة تبويبات لمراحل المناقصة الواحدة: لكل واحد سؤال واحد يظهر تحت اسمه
 const TABS: { id: MainTab; label: string; question: string }[] = [
@@ -187,6 +188,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       </div>
 
       <NextStepBar project={currentProject} onGo={onGo} activeTab={activeTab} />
+      <StageGuidance project={currentProject} activeTab={activeTab} />
 
     </div>
   );
