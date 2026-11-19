@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, PenLine, RotateCcw } from 'lucide-react';
 import { TenderProject, Bidder, RecommendationEdit } from '../../types/tender';
@@ -47,6 +47,18 @@ const RecommendationBlocks: React.FC<{ blocks: RecommendationBlock[] }> = ({ blo
     ))}
   </>
 );
+
+// Escape يغلق المعاينة كما يغلقها زر الإغلاق (handleClose يسأل إن بقي في المحرر ما لم يُحفظ)
+const EscapeCloses: React.FC<{ onEscape: () => void }> = ({ onEscape }) => {
+  const latest = useRef(onEscape);
+  useEffect(() => { latest.current = onEscape; });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') latest.current(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  return null;
+};
 
 export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   isOpen,
@@ -167,6 +179,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // ويُطبع المحضر وحده بطوله الكامل بدل أن يُقص عند حد النافذة ويتكرر فوق الواجهة
   return createPortal(
     <div className="print-report-portal fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 print:static print:block print:bg-white print:p-0 print:backdrop-blur-none">
+      <EscapeCloses onEscape={handleClose} />
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden print:max-w-none print:max-h-none print:overflow-visible print:rounded-none print:shadow-none print:border-0 print:block">
         
         {/* Controls Bar */}

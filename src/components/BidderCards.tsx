@@ -86,7 +86,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
                   type="text"
                   value={tempName}
                   onChange={(e) => setTempName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') finishRename(b.id, b.name, true); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finishRename(b.id, b.name, true); } }}
                   className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
                   aria-label="اسم الشركة"
                   autoFocus
