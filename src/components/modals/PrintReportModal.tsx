@@ -349,7 +349,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <strong>أسباب استبعاد العطاءات:</strong>
                 {withReasons.map(b => (
                   <div key={b.id} className="mt-1.5">
-                    <p>استُبعد عطاء ({b.name}){hasBidAmounts(b) ? '' : ' قبل التحليل التجاري، فلم يُحلَّل ولم يُدرج في الجدول أعلاه،'} {b.exclusionReasons!.length > 1 ? 'للأسباب الآتية' : 'للسبب الآتي'}:</p>
+                    <p>استُبعد عطاء (<bdi>{b.name}</bdi>){hasBidAmounts(b) ? '' : ' قبل التحليل التجاري، فلم يُحلَّل ولم يُدرج في الجدول أعلاه،'} {b.exclusionReasons!.length > 1 ? 'للأسباب الآتية' : 'للسبب الآتي'}:</p>
                     <ol className="list-decimal pr-6 space-y-0.5">
                       {b.exclusionReasons!.map((r, i) => <li key={i}>{reasonLine(r, project)}</li>)}
                     </ol>

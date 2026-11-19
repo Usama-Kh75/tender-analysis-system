@@ -348,7 +348,16 @@ export const StudyView: React.FC<StudyViewProps> = ({
         )}
         {excludedEmpty.length > 0 && (
           <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 text-xs font-bold text-slate-500">
-            مستبعدة قبل التحليل التجاري: {excludedEmpty.map(b => b.name).join('، ')} (تُطبع أسبابها في المحضر).
+            مستبعدة قبل التحليل التجاري (تُطبع أسبابها في المحضر):{' '}
+            {excludedEmpty.map((b, i) => (
+              <React.Fragment key={b.id}>
+                {i > 0 && '، '}
+                <button type="button" onClick={() => onOpenExclusionReasons(b.id)} aria-label={`أسباب استبعاد ${b.name}`}
+                  className="underline decoration-dotted text-rose-700 hover:text-rose-900 cursor-pointer">
+                  <bdi>{b.name}</bdi> — الأسباب ({b.exclusionReasons?.length ?? 0})
+                </button>
+              </React.Fragment>
+            ))}
           </div>
         )}
 
