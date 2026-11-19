@@ -8,7 +8,9 @@ import { toLatinDigits } from './calculations';
 export function parseInitiativeValue(raw: string): number | undefined | null {
   const s = toLatinDigits(raw.trim()).replace(/[,،٬\s]/g, '');
   if (!s) return undefined;
-  return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
 
 // أساس المفاضلة (ضوابط رقم (5)): سجل وطباعة فقط، لا يدخل حساباً ولا ترتيباً ولا التوصية

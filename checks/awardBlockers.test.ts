@@ -15,6 +15,7 @@ test('قيمة المبادرة: فارغة بلا قيمة، والأرقام �
   assert.equal(parseInitiativeValue('abc'), null);
   assert.equal(parseInitiativeValue('-5'), null);
   assert.equal(parseInitiativeValue('12abc'), null);
+  assert.equal(parseInitiativeValue('9'.repeat(400)), null);
 });
 import { preferenceInitiativeTypes } from '../src/utils/contractTypes';
 import { createPreferenceHandlers } from '../src/app/preferenceHandlers';
