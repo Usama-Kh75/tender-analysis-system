@@ -30,7 +30,8 @@ export function analysisPath(p: TenderProject): PathStage[] {
   const { entered, registered, expected } = path.bids;
   const statusRecorded = !!p.statusLog && p.statusLog.length > 0;
   const hasBids = entered > 0;
-  const allEntered = registered > 0 && entered === registered;
+  // بعد اختيار الترسية لا يمنع مجهز بلا مبالغ اكتمال الإدخال، لأن اللجنة قررت دونه
+  const allEntered = registered > 0 && (entered === registered || path.award !== null);
 
   type Draft = { text: string; ok: boolean; actor: PathActor; date?: string };
   const stages: { title: string; drafts: Draft[] }[] = [

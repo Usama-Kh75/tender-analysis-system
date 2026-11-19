@@ -271,3 +271,27 @@ test('حال المراحل: كل مرحلة بشرطها، فالترسية ا�
   const reopened = { ...p, bidders: p.bidders.map((b, i) => (i === 1 ? { ...b, items: b.items.map((it, j) => (j === 0 ? { ...it, hasMathError: true } : it)) } : b)) };
   assert.deepEqual(stageStates(reopened), { bids: 'current', study: 'done', report: 'upcoming' });
 });
+
+// مجهز بلا مبالغ بعد اختيار الترسية: اللجنة قررت دونه فلا تبقى مرحلة العطاءات «قيد العمل»
+const withEmptyBidder = (): TenderProject => {
+  const p = setup();
+  return clean({ ...p, bidders: [p.bidders[0], p.bidders[2]] });
+};
+
+test('مجهز بلا مبالغ بعد اختيار الترسية: مرحلة العطاءات مكتملة ولا خطوة إدخال', () => {
+  const p = chosen(withEmptyBidder());
+  assert.equal(stageStates(p).bids, 'done');
+  assert.notEqual(nextStep(p)?.kind, 'bids');
+});
+
+test('مجهز بلا مبالغ قبل اختيار الترسية: السلوك القديم باقٍ', () => {
+  const p = withEmptyBidder();
+  assert.notEqual(stageStates(p).bids, 'done');
+  assert.equal(nextStep(p)!.kind, 'bids');
+});
+
+test('مجهز بلا مبالغ بعد الاختيار مع فقرات معلّقة: العطاءات ليست مكتملة', () => {
+  const p = chosen(withEmptyBidder());
+  const pending = { ...p, bidders: p.bidders.map((b, i) => (i === 0 ? { ...b, items: b.items.map((it, j) => (j === 0 ? { ...it, hasMathError: true } : it)) } : b)) };
+  assert.notEqual(stageStates(pending).bids, 'done');
+});

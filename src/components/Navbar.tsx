@@ -81,6 +81,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
+          {/* فعل الإنشاء: يُفصل عن أدوات الحفظ والاستعراض بجانب هوية النظام */}
+          <button
+            onClick={onNewProject}
+            className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-100 border border-amber-500/60 text-xs sm:text-sm font-bold px-2 sm:px-3 py-2 rounded-xl transition cursor-pointer"
+            title="إنشاء مناقصة جديدة"
+            aria-label="مناقصة جديدة"
+          >
+            <Plus className="w-4 h-4 text-amber-400" />
+            <span className="hidden xl:inline">مناقصة جديدة</span>
+          </button>
+
           </div>
 
           {/* Left Side: Clean Action Tools */}
@@ -124,17 +135,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="bg-amber-500/20 text-amber-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
                 {projectsCount}
               </span>
-            </button>
-
-            {/* تُستعمل كثيراً فلا تُخبَّأ في «⋯» */}
-            <button
-              onClick={onNewProject}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
-              title="إنشاء مناقصة جديدة"
-              aria-label="مناقصة جديدة"
-            >
-              <Plus className="w-4 h-4 text-amber-400" />
-              <span className="hidden xl:inline">مناقصة جديدة</span>
             </button>
 
             <MoreMenu

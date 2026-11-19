@@ -59,12 +59,12 @@ export type StageState = 'done' | 'current' | 'upcoming';
 const STAGE_ORDER: StageId[] = ['bids', 'study', 'report'];
 
 /** حال مراحل التبويبات الثلاثة، مستنتجة ولا تُخزَّن. كل مرحلة مكتملة بشرطها هي:
- *  الأولى بالكلفة التخمينية ومبالغ كل الشركات المسجّلة وبلا فقرات معلّقة، والثانية باختيار الترسية،
+ *  الأولى بالكلفة التخمينية ومبالغ كل الشركات المسجّلة وبلا فقرات معلّقة (وبعد اختيار الترسية لا يمنع مجهز بلا مبالغ اكتمالها، لأن اللجنة قررت دونه)، والثانية باختيار الترسية،
  *  والثالثة بخروج الطلبية من اللجنة بعد الاختيار (آخر موقف: التدقيق أو المراجعة أو الإحالة أو العقود). وأول مرحلة غير مكتملة «قيد العمل»، وما بعدها من غير المكتمل «لم تبدأ» */
 export function stageStates(p: TenderProject): Record<StageId, StageState> {
   const path = tenderPath(p);
   const done: Record<StageId, boolean> = {
-    bids: path.hasEstimate && path.bids.registered > 0 && path.bids.entered === path.bids.registered && path.audit.pending === 0,
+    bids: path.hasEstimate && path.bids.registered > 0 && (path.bids.entered === path.bids.registered || path.award !== null) && path.audit.pending === 0,
     study: path.award !== null,
     report: path.award !== null && reportLeftCommittee(p)
   };
@@ -171,7 +171,7 @@ export function nextStep(p: TenderProject): NextStep | null {
     };
   }
   const empty = p.bidders.find(b => !hasBidAmounts(b));
-  if (empty) {
+  if (empty && !path.award) {
     const action: NextStepAction = { label: 'إدخال العطاء', target: 'bids', bidderId: empty.id };
     return {
       kind: 'bids',
