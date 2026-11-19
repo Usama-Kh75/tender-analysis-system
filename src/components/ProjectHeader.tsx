@@ -36,12 +36,14 @@ interface ProjectHeaderProps {
   /** زر الموقف يفتح سجله في نافذة */
   onOpenStatus: () => void;
   onGo: (a: NextStepAction) => void;
+  /** المجهز المعروض في الجدول، يمرَّر إلى شريط «الخطوة التالية» */
+  activeBidderId?: string;
 }
 
 // بطاقة رأس المناقصة: رقم الطلبية والعنوان وبياناتها للقراءة فقط (التعديل من الإعدادات)، والخطوة التالية
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project: currentProject, onOpenSettings, onOpenStatus, onGo,
-  activeTab, onSelectTab, pendingAudit
+  activeTab, onSelectTab, pendingAudit, activeBidderId
 }) => {
   const states = stageStates(currentProject);
   return (
@@ -191,7 +193,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 
       {/* التعليمات أولاً تمهّد للخطوة التالية تحتها */}
       <StageGuidance project={currentProject} activeTab={activeTab} />
-      <NextStepBar project={currentProject} onGo={onGo} activeTab={activeTab} />
+      <NextStepBar project={currentProject} onGo={onGo} activeTab={activeTab} activeBidderId={activeBidderId} />
 
     </div>
   );

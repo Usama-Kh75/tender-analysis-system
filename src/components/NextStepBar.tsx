@@ -7,13 +7,15 @@ interface NextStepBarProps {
   onGo: (a: NextStepAction) => void;
   /** التبويب المفتوح: يُعرض نص خطوة مرحلته وأزرارها وحدها (stageStep) */
   activeTab?: string;
+  /** المجهز المعروض في الجدول (يحدد صياغة خطوة التدقيق في تبويب العطاءات) */
+  activeBidderId?: string;
 }
 
 // «الخطوة التالية» تحت عنوان المناقصة: خطوة واحدة تُستنتج من حالة المناقصة ولا يُخزَّن شيء.
 // الكهرماني لعمل معلّق (الكلفة، التدقيق، العطاءات)، والحيادي لما بعده (التوصية، المحضر).
-export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeTab }) => {
+export const NextStepBar: React.FC<NextStepBarProps> = ({ project, onGo, activeTab, activeBidderId }) => {
   // خطوة مرحلة التبويب المفتوح وحدها، بنصها وأزرارها (stageStep)
-  const step = stageStep(project, activeTab);
+  const step = stageStep(project, activeTab, activeBidderId);
   if (!step) return null;
   const pendingWork = step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids';
   const tone = pendingWork

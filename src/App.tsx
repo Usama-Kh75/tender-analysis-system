@@ -312,6 +312,7 @@ export function App() {
           onSelectTab={setActiveTab}
           pendingAudit={tenderPath(currentProject).audit.pending}
           onGo={handleGo}
+          activeBidderId={activeBidder.id}
         />
 
         {/* لوحة التبويب المفتوح (تُرسم لوحة واحدة فقط) مرتبطة بزرها في ProjectHeader */}

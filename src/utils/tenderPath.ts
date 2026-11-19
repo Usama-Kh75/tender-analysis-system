@@ -92,8 +92,9 @@ export interface NextStep {
  *  والانتقال يدوي: اللجنة قد تراجع الفقرة الأخيرة بعد إدخالها، فلا يُقفز بها وحده.
  *  الدراسة والتوصية: قبل اختيار الفائز نص بلا أزرار (جدول «قرار اللجنة» في التبويب نفسه)، وبعده سطر ختام
  *  وزر إلى المحضر (سواء سُجّل الموقف أم لا)، وما لم تكتمل الأولى null.
- *  المحضر: ما لم تكتمل الأولى سطر بلا زر؛ وقبل اختيار الفائز سطر وزر إلى الدراسة والتوصية؛ ثم المحضر والموقف */
-export function stageStep(p: TenderProject, tab?: string): NextStep | null {
+ *  المحضر: ما لم تكتمل الأولى سطر بلا زر؛ وقبل اختيار الفائز سطر وزر إلى الدراسة والتوصية؛ ثم المحضر والموقف.
+ *  activeBidderId (اختياري، لتبويب العطاءات): إن كانت خطوة التدقيق وللمجهز المعروض فقرات معلّقة فالنص بلا زر ويُلحق به الإرشاد إلى شريط الجدول، وإلا زر «الانتقال إلى «اسم المجهز»» */
+export function stageStep(p: TenderProject, tab?: string, activeBidderId?: string): NextStep | null {
   const step = nextStep(p);
   const firstStage = !!step && (step.kind === 'estimate' || step.kind === 'audit' || step.kind === 'bids');
   if (tab !== 'study' && tab !== 'report' && !firstStage) {
@@ -133,7 +134,21 @@ export function stageStep(p: TenderProject, tab?: string): NextStep | null {
       ? { ...step, text: 'الخطوة التالية: دراسة العطاءات ومقارنتها، ثم اختيار العطاء الفائز بزر «اختيار للترسية» في جدول «قرار اللجنة»', actions: [] }
       : null;
   }
-  return firstStage ? step : null;
+  if (!firstStage) return null;
+  // خطوة التدقيق في تبويب العطاءات مع المجهز المعروض: زر «عرض الفقرات» مكرَّر لأن شريط الجدول فيه «التدقيق والتصحيح الحسابي»
+  if (step.kind === 'audit' && activeBidderId) {
+    const shown = p.bidders.find(b => b.id === activeBidderId);
+    if (shown && bidderAuditState(shown).kind === 'pending') {
+      return { ...step, text: `${step.text} — افتح «التدقيق والتصحيح الحسابي» من شريط الجدول`, actions: [] };
+    }
+    // الفقرات المعلّقة في مجهز آخر: زر واحد للانتقال إليه
+    const first = step.actions[0]?.bidderId;
+    const other = first ? p.bidders.find(b => b.id === first) : undefined;
+    if (other) {
+      return { ...step, actions: [{ label: `الانتقال إلى «${other.name}»`, target: 'audit', bidderId: other.id }] };
+    }
+  }
+  return step;
 }
 
 /** الخطوة الواحدة التالية: أول شرط يتحقق، وnull حين لا شيء ينتظر. مستنتجة ولا تُخزَّن */

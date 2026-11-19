@@ -250,6 +250,22 @@ test('stageStep: خطوة التبويب المفتوح وحده', () => {
   assert.equal(stageStep(closed, 'bids')!.kind, 'stageDone');
 });
 
+test('stageStep: خطوة التدقيق بحسب المجهز المعروض في تبويب العطاءات', () => {
+  const p = setup();
+  const suffix = ' — افتح «التدقيق والتصحيح الحسابي» من شريط الجدول';
+  // المجهز المعروض فيه الفقرات المعلّقة: نص بلا أزرار مع الإرشاد إلى شريط الجدول
+  const here = stageStep(p, 'bids', p.bidders[1].id)!;
+  assert.deepEqual(here.actions, []);
+  assert.ok(here.text.endsWith(suffix));
+  // المعلّقة في مجهز آخر: زر واحد إليه، والنص بلا إلحاق
+  const other = stageStep(p, 'bids', p.bidders[0].id)!;
+  assert.deepEqual(other.actions, [{ label: 'الانتقال إلى «ب»', target: 'audit', bidderId: p.bidders[1].id }]);
+  assert.equal(other.text, nextStep(p)!.text);
+  // المحضر لا يتغير، وبلا معامل يطابق nextStep
+  assert.deepEqual(stageStep(p, 'report', p.bidders[1].id), stageStep(p, 'report'));
+  assert.deepEqual(stageStep(p, 'bids'), nextStep(p));
+});
+
 test('حال المراحل: كل مرحلة بشرطها، فالترسية المختارة تبقى مكتملة إن عادت فقرة معلّقة', () => {
   const p = chosen(allIn());
   const reopened = { ...p, bidders: p.bidders.map((b, i) => (i === 1 ? { ...b, items: b.items.map((it, j) => (j === 0 ? { ...it, hasMathError: true } : it)) } : b)) };
