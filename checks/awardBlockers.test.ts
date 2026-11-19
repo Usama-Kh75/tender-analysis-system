@@ -4,7 +4,18 @@ import assert from 'node:assert/strict';
 import { calculateBOQMetrics } from '../src/utils/calculations';
 import { createNewTenderProject } from '../src/utils/storageService';
 import { awardBlockers, needsAwardDialog } from '../src/utils/awardBlockers';
-import { hasCompletePreferenceRecord, sanitizePreferenceInitiatives } from '../src/utils/preferenceBasis';
+import { hasCompletePreferenceRecord, parseInitiativeValue, sanitizePreferenceInitiatives } from '../src/utils/preferenceBasis';
+
+test('قيمة المبادرة: فارغة بلا قيمة، والأرقام الهندية وفواصل الآلاف تُقرأ، والنص غير الرقمي يُرفض لا يصير صفراً', () => {
+  assert.equal(parseInitiativeValue('  '), undefined);
+  assert.equal(parseInitiativeValue('٢٥٠٠'), 2500);
+  assert.equal(parseInitiativeValue('1,250.5'), 1250.5);
+  assert.equal(parseInitiativeValue('١٬٠٠٠'), 1000);
+  assert.equal(parseInitiativeValue('0'), 0);
+  assert.equal(parseInitiativeValue('abc'), null);
+  assert.equal(parseInitiativeValue('-5'), null);
+  assert.equal(parseInitiativeValue('12abc'), null);
+});
 import { preferenceInitiativeTypes } from '../src/utils/contractTypes';
 import { createPreferenceHandlers } from '../src/app/preferenceHandlers';
 import type { Bidder, BOQItem, PreferenceRecord, TenderProject } from '../src/types/tender';

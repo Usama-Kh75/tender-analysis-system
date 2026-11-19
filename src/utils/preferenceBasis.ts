@@ -1,4 +1,15 @@
 import type { PreferenceItem, PreferenceRecord, TenderProject } from '../types/tender';
+import { toLatinDigits } from './calculations';
+
+/**
+ * القيمة المالية للمبادرة كما كتبتها اللجنة: فارغة = undefined، رقم صالح (أرقام عربية أو هندية، وفواصل آلاف) = الرقم،
+ * وما سوى ذلك = null فيُرفض الحفظ. parseArabicNumber يعيد صفراً لنص غير رقمي فيُطبع صفراً (مراجعة Codex)
+ */
+export function parseInitiativeValue(raw: string): number | undefined | null {
+  const s = toLatinDigits(raw.trim()).replace(/[,،٬\s]/g, '');
+  if (!s) return undefined;
+  return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+}
 
 // أساس المفاضلة (ضوابط رقم (5)): سجل وطباعة فقط، لا يدخل حساباً ولا ترتيباً ولا التوصية
 

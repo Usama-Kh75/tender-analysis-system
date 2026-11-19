@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { X, Scale, Plus, Trash2 } from 'lucide-react';
 import type { Bidder, PreferenceRecord, TenderProject } from '../../types/tender';
-import { parseArabicNumber } from '../../utils/calculations';
 import { preferenceInitiativeTypes, preferenceReference } from '../../utils/contractTypes';
-import { preferenceRecordOf } from '../../utils/preferenceBasis';
+import { parseInitiativeValue, preferenceRecordOf } from '../../utils/preferenceBasis';
 import { LEGAL_TEXTS } from '../../utils/legalTexts';
 
 interface Props {
@@ -74,18 +73,24 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
     for (const b of closeBids) {
       const d = drafts[b.id];
       if (d.answer === null) continue;
-      records.push({
-        bidderId: b.id,
-        hasInitiative: d.answer === 'yes',
-        items: d.answer === 'yes' ? d.items.map(i => {
-          const n = i.value.trim() === '' ? undefined : parseArabicNumber(i.value);
-          return {
-            type: i.type.trim(), description: i.description.trim(),
-            ...(n !== undefined && Number.isFinite(n) && n >= 0 ? { value: n } : {}),
+      const items: PreferenceRecord['items'] = [];
+      if (d.answer === 'yes') {
+        for (const [idx, i] of d.items.entries()) {
+          const description = i.description.trim();
+          const rawValue = i.value.trim();
+          // صف بلا وصف ولا قيمة صف فارغ أُضيف خطأً فيُترك؛ ما فيه شيء يُستكمل ولا يُحذف بصمت (مراجعة Codex)
+          if (!description && !rawValue) continue;
+          if (!description) { setError(`اكتب وصف المبادرة (${idx + 1}) لعطاء (${b.name}) أو احذفها`); return; }
+          const value = parseInitiativeValue(rawValue);
+          if (value === null) { setError(`القيمة المالية للمبادرة (${idx + 1}) لعطاء (${b.name}) ليست رقماً صحيحاً`); return; }
+          items.push({
+            type: i.type.trim(), description,
+            ...(value !== undefined ? { value } : {}),
             ...(i.completedOnRequest && equalIds.has(b.id) ? { completedOnRequest: true } : {})
-          };
-        }) : []
-      });
+          });
+        }
+      }
+      records.push({ bidderId: b.id, hasInitiative: d.answer === 'yes', items });
     }
     const err = onSave(records);
     if (err) { setError(err); return; }
