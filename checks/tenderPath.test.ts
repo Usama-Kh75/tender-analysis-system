@@ -290,6 +290,30 @@ test('مجهز بلا مبالغ قبل اختيار الترسية: السلو�
   assert.equal(nextStep(p)!.kind, 'bids');
 });
 
+// عطاء استبعدته اللجنة (عدم المطابقة الفنية مثلاً) لا يُرتَّب ولا يُرسى عليه، فأخطاؤه الحسابية لا تُبقي مرحلة العطاءات «قيد العمل» (جهاز قياس الغازات، أسامة 2026-11-19)
+const withDisqualifiedPending = (): TenderProject => {
+  const p = setup();
+  const winner = clean({ ...p, bidders: [p.bidders[0]] }).bidders[0];
+  return chosen({ ...p, bidders: [winner, { ...p.bidders[1], status: 'disqualified' as const }] });
+};
+
+test('مستبعد بقرار اللجنة وعليه فقرات معلّقة: لا تُعدّ في التدقيق ولا تمنع اكتمال العطاءات', () => {
+  const p = withDisqualifiedPending();
+  assert.ok(p.bidders[1].items.some(i => i.hasMathError || i.hasTextDiscrepancy), 'الفقرات المعلّقة باقية في المجهز المستبعد');
+  assert.equal(tenderPath(p).audit.pending, 0);
+  assert.equal(tenderPath(p).audit.firstBidderId, null);
+  assert.equal(stageStates(p).bids, 'done');
+  assert.notEqual(nextStep(p)?.kind, 'audit');
+});
+
+test('المستبعد تبقى حالة تدقيقه ظاهرة له وحده، ومن لم تستبعده اللجنة تُعدّ فقراته', () => {
+  const p = withDisqualifiedPending();
+  assert.equal(bidderAuditState(p.bidders[1]).kind, 'pending');
+  const notExcluded = { ...p, bidders: [p.bidders[0], { ...p.bidders[1], status: 'qualified' as const }] };
+  assert.equal(tenderPath(notExcluded).audit.pending, 3);
+  assert.equal(stageStates(notExcluded).bids, 'current');
+});
+
 test('مجهز بلا مبالغ بعد الاختيار مع فقرات معلّقة: العطاءات ليست مكتملة', () => {
   const p = chosen(withEmptyBidder());
   const pending = { ...p, bidders: p.bidders.map((b, i) => (i === 0 ? { ...b, items: b.items.map((it, j) => (j === 0 ? { ...it, hasMathError: true } : it)) } : b)) };

@@ -33,7 +33,7 @@ export interface TenderPath {
   /** entered: الشركات التي لها مبالغ؛ registered: الشركات المسجّلة في المناقصة؛
    *  expected للعرض: الأكبر من العطاءات المستلمة (إن أُدخلت) والمسجّلة، فالمستلمة قد تزيد على المحلَّلة بحق */
   bids: { entered: number; registered: number; expected: number };
-  /** pending في الشركات ذوات المبالغ وحدها؛ firstBidderId أولها بترتيب الشركات */
+  /** pending في الشركات ذوات المبالغ غير المستبعدة بقرار اللجنة؛ firstBidderId أولها بترتيب الشركات */
   audit: { pending: number; firstBidderId: string | null };
   /** من اختارته اللجنة للترسية، وnull قبل اختيارها */
   award: { name: string } | null;
@@ -41,13 +41,15 @@ export interface TenderPath {
 
 export function tenderPath(p: TenderProject): TenderPath {
   const withAmounts = p.bidders.filter(hasBidAmounts);
-  const pendingBidders = withAmounts.filter(b => pendingCount(b) > 0);
+  // العطاء الذي استبعدته اللجنة لا يُرتَّب ولا يُرسى عليه (كمانع الترسية في awardBlockers)، فأخطاؤه الحسابية لا تُعدّ هنا
+  const auditable = withAmounts.filter(b => b.status !== 'disqualified');
+  const pendingBidders = auditable.filter(b => pendingCount(b) > 0);
   const rec = buildRecommendation(p);
   return {
     hasEstimate: !hasNoEstimate(p),
     bids: { entered: withAmounts.length, registered: p.bidders.length, expected: Math.max(p.receivedBidsCount ?? 0, p.bidders.length) },
     audit: {
-      pending: withAmounts.reduce((n, b) => n + pendingCount(b), 0),
+      pending: auditable.reduce((n, b) => n + pendingCount(b), 0),
       firstBidderId: pendingBidders[0]?.id ?? null
     },
     award: rec.chosenByCommittee && rec.primary ? { name: rec.primary.name } : null

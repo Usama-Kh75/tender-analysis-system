@@ -288,7 +288,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                         <span dir="ltr">{bidder.totals.partialDeviationPercent.toFixed(2)}%</span>
                       </span>
                       <div className="text-[10px] text-slate-500 mt-0.5">
-                        ({bidder.totals.deviatedItemsCount} فقرة منحرفة)
+                        ({bidder.totals.deviatedItemsCount} فقرة منحرفة بالزيادة أو النقصان)
                       </div>
                     </td>
 
@@ -317,7 +317,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                       ) : isExcluded ? (
                         <span className="inline-flex items-center gap-1.5 bg-rose-100 text-rose-800 border border-rose-300 text-xs font-black px-3 py-1 rounded-full">
                           <XCircle className="w-4 h-4 text-rose-600" />
-                          مستبعد تجارياً
+                          {bidder.status === 'disqualified' ? 'مستبعد بقرار اللجنة' : 'مستبعد تجارياً'}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black px-3 py-1 rounded-full">
