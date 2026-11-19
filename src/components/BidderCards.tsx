@@ -82,16 +82,17 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
         <label htmlFor="bidder-select" className="text-sm font-black text-slate-700 shrink-0">المجهز:</label>
         {active && editingId === active.id ? (
           <div
-            className="flex flex-1 min-w-0 items-center gap-2"
+            className="flex flex-1 min-w-0 max-w-2xl items-center gap-2"
             onKeyDown={(e) => { if (e.key === 'Escape') finishRename(active.id, active.name, false); }}
             onBlur={(e) => leaveEdit(e, active.id, active.name)}
           >
             <input
+              id="bidder-select"
               type="text"
               value={tempName}
               onChange={(e) => setTempName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finishRename(active.id, active.name, true); } }}
-              className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 min-w-0 flex-1 sm:flex-none sm:w-56"
+              className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 min-w-0 flex-1"
               aria-label="اسم الشركة"
               autoFocus
             />
