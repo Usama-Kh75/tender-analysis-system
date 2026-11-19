@@ -182,11 +182,13 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
           })}
         </div>
 
-        {/* الخطأ في التذييل الثابت بجانب «حفظ»، فيُرى مهما كان موضع التمرير */}
-        {error && <div role="alert" className="mx-3 mt-3 rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs sm:text-sm font-bold text-rose-900">{error}</div>}
-        <div className="p-3 border-t border-slate-200 flex justify-end gap-2">
-          <button type="button" onClick={save} className={`${btn} bg-indigo-600 border-indigo-700 text-white hover:bg-indigo-700`}>حفظ</button>
-          <button type="button" onClick={requestClose} className={`${btn} bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200`}>إلغاء</button>
+        {/* الخطأ داخل التذييل الثابت فوق «حفظ»، فيُرى مهما كان موضع التمرير ويبقى الفاصل فوق التذييل كله */}
+        <div className="p-3 border-t border-slate-200 space-y-2">
+          {error && <div role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs sm:text-sm font-bold text-rose-900">{error}</div>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={save} className={`${btn} bg-indigo-600 border-indigo-700 text-white hover:bg-indigo-700`}>حفظ</button>
+            <button type="button" onClick={requestClose} className={`${btn} bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200`}>إلغاء</button>
+          </div>
         </div>
       </div>
     </div>,
