@@ -14,7 +14,7 @@ interface BidderCardsProps {
   onAdd: () => void;
 }
 
-// الشركات قائمة بعرض الصفحة: الاسم، المبلغ بعد التدقيق، حالة التدقيق (أخضر مدقّق، كهرماني فيها أخطاء، رمادي لم يُدخل)، وشارة الترسية
+// الشركات في قائمة منسدلة (الاسم — المبلغ — حالة التدقيق) وتحتها سطر ملخص للمختارة: المبلغ بعد التدقيق، الحالة (أخضر مدقّق، كهرماني فيها أخطاء، رمادي لم يُدخل)، وشارتا الترسية والاستبعاد
 export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd }) => {
   // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -56,6 +56,18 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
   const counterText = bids.expected > bids.entered && complete
     ? `المحلَّلة تجارياً: ${bids.entered} من (${bids.expected}) مستلمة`
     : `العطاءات المدخلة: ${bids.entered} من ${bids.expected}`;
+  // نص الحالة ولونها للشركة (من bidderAuditState)
+  const stateText = (b: TenderProject['bidders'][number]) => {
+    const st = bidderAuditState(b);
+    return st.kind === 'done' ? '✓ مدقّق' : st.kind === 'pending' ? errorsCountText(st.count) : 'لم يُدخل';
+  };
+  const optionText = (b: TenderProject['bidders'][number]) => {
+    const amount = hasBidAmounts(b) ? `${formatNumber(b.totals.totalBidderAmount)} ${project.currency}` : 'لم تُدخل أسعاره بعد';
+    return `${b.name}${b.status === 'disqualified' ? ' (مستبعد)' : ''} — ${amount} — ${stateText(b)}${b.status === 'recommended' ? ' — ★ موصى بالترسية' : ''}`;
+  };
+  const active = project.bidders.find(b => b.id === activeBidderId);
+  const activeState = active ? bidderAuditState(active) : null;
+
   return (
     <>
     <p
@@ -65,92 +77,81 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     >
       {counterText}
     </p>
-    <div className="mb-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-    <div role="list" aria-label="الشركات المتقدمة" className="divide-y divide-slate-100">
-      {project.bidders.map(b => {
-        const active = b.id === activeBidderId;
-        const state = bidderAuditState(b);
-        return (
+    <div className="mb-4 bg-white rounded-2xl border border-slate-200 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-black text-slate-700 shrink-0">المجهز:</span>
+        {active && editingId === active.id ? (
           <div
-            key={b.id}
-            role="listitem"
-            className={`flex items-center gap-2 px-3 py-1 transition ${active ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+            className="flex flex-1 items-center gap-2"
+            onKeyDown={(e) => { if (e.key === 'Escape') finishRename(active.id, active.name, false); }}
+            onBlur={(e) => leaveEdit(e, active.id, active.name)}
           >
-            {active && editingId === b.id ? (
-              <div
-                className="flex items-center gap-2 py-1.5"
-                onKeyDown={(e) => { if (e.key === 'Escape') finishRename(b.id, b.name, false); }}
-                onBlur={(e) => leaveEdit(e, b.id, b.name)}
-              >
-                <input
-                  type="text"
-                  value={tempName}
-                  onChange={(e) => setTempName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finishRename(b.id, b.name, true); } }}
-                  className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56"
-                  aria-label="اسم الشركة"
-                  autoFocus
-                />
-                <button onClick={() => finishRename(b.id, b.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
-                  حفظ
-                </button>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => onSelect(b.id)}
-                  aria-current={active ? 'true' : undefined}
-                  className={`grid flex-1 min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] items-center gap-3 py-2 text-right cursor-pointer border-r-4 pr-2 ${active ? 'border-blue-600' : 'border-transparent'}`}
-                >
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-sm font-black text-slate-900 truncate">{b.name}</span>
-                    {b.status === 'disqualified' && (
-                      <span className="text-[10px] font-black text-rose-800 bg-rose-50 border border-rose-300 rounded-full px-1.5 shrink-0">مستبعد</span>
-                    )}
-                  </span>
-                  <span className="text-sm font-bold text-slate-800">
-                    {hasBidAmounts(b)
-                      ? <><bdi className="font-mono">{formatNumber(b.totals.totalBidderAmount)}</bdi> <span className="text-slate-500 text-xs">{project.currency}</span></>
-                      : <span className="text-slate-500 text-xs">لم تُدخل أسعاره بعد</span>}
-                  </span>
-                  <span className={`text-xs font-bold ${
-                    state.kind === 'done' ? 'text-emerald-700' : state.kind === 'pending' ? 'text-amber-700' : 'text-slate-500'
-                  }`}>
-                    {state.kind === 'done' ? '✓ مدقّق' : state.kind === 'pending' ? errorsCountText(state.count) : 'لم يُدخل'}
-                  </span>
-                  <span className="sm:min-w-[7rem]">
-                    {b.status === 'recommended' && (
-                      <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full px-1.5">★ موصى بالترسية</span>
-                    )}
-                  </span>
-                </button>
-                {active && (
-                  <button
-                    ref={(el) => { editButtons.current[b.id] = el; }}
-                    onClick={() => { finishedRef.current = false; setTempName(b.name); setEditingId(b.id); }}
-                    className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                    title="تعديل اسم الشركة"
-                    aria-label={`تعديل اسم ${b.name}`}
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </>
-            )}
+            <input
+              type="text"
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finishRename(active.id, active.name, true); } }}
+              className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56 max-w-full"
+              aria-label="اسم الشركة"
+              autoFocus
+            />
+            <button onClick={() => finishRename(active.id, active.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
+              حفظ
+            </button>
           </div>
-        );
-      })}
-
-    </div>
-      <div className="border-t border-slate-100">
+        ) : (
+          <>
+            <select
+              value={activeBidderId}
+              onChange={(e) => onSelect(e.target.value)}
+              aria-label="اختيار الشركة المتقدمة"
+              className="flex-1 min-w-0 max-w-2xl bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+            >
+              {project.bidders.map(b => (
+                <option key={b.id} value={b.id}>{optionText(b)}</option>
+              ))}
+            </select>
+            {active && (
+              <button
+                ref={(el) => { editButtons.current[active.id] = el; }}
+                onClick={() => { finishedRef.current = false; setTempName(active.name); setEditingId(active.id); }}
+                className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                title="تعديل اسم الشركة"
+                aria-label={`تعديل اسم ${active.name}`}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </>
+        )}
         <button
-          onClick={onAdd}
-          className="w-full text-right px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer transition"
+          onClick={() => onAdd()}
+          className="shrink-0 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer transition"
           title="إضافة شركة / مقاول جديد للمناقصة"
         >
           + مجهز
         </button>
       </div>
+      {active && activeState && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span className="font-bold text-slate-800">
+            {hasBidAmounts(active)
+              ? <><bdi className="font-mono">{formatNumber(active.totals.totalBidderAmount)}</bdi> <span className="text-slate-500 text-xs">{project.currency}</span></>
+              : <span className="text-slate-500 text-xs">لم تُدخل أسعاره بعد</span>}
+          </span>
+          <span className={`text-xs font-bold ${
+            activeState.kind === 'done' ? 'text-emerald-700' : activeState.kind === 'pending' ? 'text-amber-700' : 'text-slate-500'
+          }`}>
+            {stateText(active)}
+          </span>
+          {active.status === 'recommended' && (
+            <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full px-1.5">★ موصى بالترسية</span>
+          )}
+          {active.status === 'disqualified' && (
+            <span className="text-[10px] font-black text-rose-800 bg-rose-50 border border-rose-300 rounded-full px-1.5">مستبعد</span>
+          )}
+        </div>
+      )}
     </div>
     </>
   );
