@@ -5,6 +5,7 @@ import { TenderProject, Bidder, RecommendationEdit } from '../../types/tender';
 import { formatNumber, formatPercent, formatCurrency } from '../../utils/calculations';
 import { equalPriceBids, hasBidAmounts, isCommerciallyExcluded, PREFERENCE_BAND_PERCENT } from '../../utils/recommendation';
 import { contractTypeInfo } from '../../utils/contractTypes';
+import { preferenceRecordOf } from '../../utils/preferenceBasis';
 import { budgetTypeInfo } from '../../utils/budgetTypes';
 import { offerStatus, isOfferEdited, BALANCE_VERDICT_LABEL, UNBALANCED_ITEMS_LIMIT_PERCENT } from '../../utils/weightedOffer';
 import { summarizePages } from '../../utils/pageSummary';
@@ -572,6 +573,53 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 📌 <strong>ملاحظة ({pref.clause} — معايير المفاضلة):</strong> العطاءات ({rec.closeBids.map(b => b.name).join('، ')}) {rec.exactTie ? 'متساوية في مبالغها' : `متقاربة لغاية (${PREFERENCE_BAND_PERCENT}%) من الكلفة التخمينية`}، فيجب أن تستند المفاضلة بينها إلى معايير المفاضلة المحوّلة لقيمة مالية (مثل: {pref.examples})، وأن تُثبت نتيجتها في التقرير.
               </div>
             )}
+
+            {/* أساس المفاضلة (ضوابط رقم (5)): يُطبع ما سجّلته اللجنة لكل عطاء متقارب، تلقائياً كقائمة النصوص الرسمية.
+                لا يرتّب النظام به ولا يحسب مبلغاً مقارناً */}
+            {rec.kind !== 'no-estimate' && rec.closeBids.length > 1 && (project.preferenceInitiatives?.length ?? 0) > 0 && (() => {
+              const equalIds = new Set(equalPriceBids(rec.closeBids).map(b => b.id));
+              const noRecord = rec.closeBids.filter(b => !preferenceRecordOf(project, b.id));
+              const noValue = rec.closeBids.flatMap(b => (preferenceRecordOf(project, b.id)?.items ?? [])
+                .filter(i => i.value === undefined).map(i => `${i.type} لعطاء (${b.name})`));
+              return (
+                <>
+                  <div className="mt-2 text-[11px] leading-relaxed">
+                    <strong>أساس المفاضلة ({pref.clause}):</strong>
+                    <ul className="list-disc pr-5">
+                      {rec.closeBids.map(b => {
+                        const r = preferenceRecordOf(project, b.id);
+                        if (!r) return null;
+                        return (
+                          <li key={b.id}>
+                            <bdi>{b.name}</bdi>:{' '}
+                            {r.hasInitiative && r.items.length > 0
+                              ? r.items.map((i, k) => (
+                                <React.Fragment key={k}>
+                                  {k > 0 && '؛ '}
+                                  {i.type}: {i.description}
+                                  {i.value !== undefined && ` — القيمة المالية: ${formatCurrency(i.value, project.currency)}`}
+                                  {i.completedOnRequest && equalIds.has(b.id) && ' (مستكمَلة بطلب اللجنة)'}
+                                </React.Fragment>
+                              ))
+                              : 'لم يقدّم مبادرات'}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                  {noRecord.length > 0 && (
+                    <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
+                      💡 {noRecord.map(b => `لم يُسجَّل أساس المفاضلة لعطاء (${b.name})`).join('؛ ')}. (هذه الملاحظة لا تظهر في الطباعة)
+                    </div>
+                  )}
+                  {noValue.length > 0 && (
+                    <div className="no-print mt-2 p-2.5 bg-sky-50 border border-sky-300 rounded-lg text-sky-900 font-bold text-[11px]">
+                      💡 لم تُذكر القيمة المالية لمبادرة: {noValue.join('؛ ')} — المعايير تُحوَّل لقيمة مالية لأغراض المفاضلة. (هذه الملاحظة لا تظهر في الطباعة)
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {rec.kind !== 'no-estimate' && <>
               <ThresholdBasisSentence exclusion={exclusion} item={threshold} basis={project.thresholdBasis} />

@@ -154,7 +154,7 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
   };
 
   // Update Bidder Status
-  const handleUpdateBidderStatus = (bidderId: string, status: Bidder['status']) => {
+  const handleUpdateBidderStatus = (bidderId: string, status: Bidder['status'], reason?: string) => {
     // التوصية بالإحالة لعطاء واحد: اختيار مجهز للترسية يلغي اختيار أي مجهز سابق،
     // وإلا بقي أكثر من «موصى به» وصارت التوصية في المحضر ملتبسة
     const displaced = status === 'recommended'
@@ -183,6 +183,8 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       `تم تعديل حالة المجهز (${targetBidder?.name}) إلى (${status})`
         + (displaced.length ? ` — وأُلغي اختيار (${displaced.map(b => b.name).join('، ')}) للترسية` : '')
         + selectionSignatureNote
+        // مبرر اختيار غير الأوطأ: في سجل التدقيق وحده، لا يُطبع (المادة 10/أولاً/هـ)
+        + (status === 'recommended' && reason?.trim() ? ` — مبرر اختيار غير الأوطأ (المادة 10/أولاً/هـ): ${reason.trim()}` : '')
     );
 
     saveProject(updatedProj);

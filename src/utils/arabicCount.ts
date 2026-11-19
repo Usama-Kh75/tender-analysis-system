@@ -4,5 +4,6 @@ const count = (n: number, one: string, two: string, few: string, many: string): 
 
 export const itemsCountText = (n: number): string => count(n, 'فقرة واحدة', 'فقرتان', 'فقرات', 'فقرة');
 export const errorsCountText = (n: number): string => count(n, 'خطأ واحد', 'خطآن', 'أخطاء', 'خطأ');
+export const initiativesCountText = (n: number): string => count(n, 'مبادرة واحدة', 'مبادرتان', 'مبادرات', 'مبادرة');
 /** «N فقرات فيها أخطاء» */
 export const itemsWithErrorsText = (n: number): string => `${itemsCountText(n)} فيها أخطاء`;

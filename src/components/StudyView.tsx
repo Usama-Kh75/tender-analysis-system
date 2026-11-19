@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle2, XCircle, Building2, FileCheck, Award } from 'lucide-react';
-import { TenderProject, Bidder } from '../types/tender';
+import { TenderProject, Bidder, PreferenceRecord } from '../types/tender';
 import { formatNumber, formatCurrency, formatPercent } from '../utils/calculations';
 import { buildRecommendation, equalPriceBids, hasBidAmounts, hasNoEstimate, eligibilityCounts, exclusionThresholdOf, PREFERENCE_BAND_PERCENT } from '../utils/recommendation';
 import { preferenceReference } from '../utils/contractTypes';
@@ -12,15 +12,18 @@ import { evaluateBids } from '../utils/bidEvaluation';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { errorsCountText } from '../utils/arabicCount';
 import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
-import { UnanalysedBidsModal } from './modals/UnanalysedBidsModal';
+import { awardBlockers, needsAwardDialog } from '../utils/awardBlockers';
+import { hasCompletePreferenceRecord } from '../utils/preferenceBasis';
+import { AwardBlockersModal } from './modals/AwardBlockersModal';
+import { PreferenceBasisModal } from './modals/PreferenceBasisModal';
 
 interface StudyViewProps {
   project: TenderProject;
   onOpenExclusionReasons: (id: string) => void;
   onSelectBidder: (id: string) => void;
-  onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
+  onUpdateBidderStatus: (id: string, status: Bidder['status'], reason?: string) => void;
   /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات فيها أخطاء */
-  onOpenAudit: () => void;
+  onOpenAudit: (bidderId?: string) => void;
   /** ينتقل إلى تبويب العطاءات على المجهز لإدخال عطائه */
   onEnterBid: (id: string) => void;
   onDeleteBidder: (id: string) => void;
@@ -28,6 +31,10 @@ interface StudyViewProps {
   onOpenMatrix: () => void;
   chartsOpen: boolean;
   onToggleCharts: () => void;
+  /** يحفظ أساس المفاضلة؛ يعيد رسالة خطأ عربية أو null */
+  onSavePreferenceInitiatives: (records: PreferenceRecord[]) => string | null;
+  /** إدخال لم يُحفظ في نوافذ الدراسة (يمنع التحديث) */
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 /** «الدراسة والتوصية»: مقارنة العطاءات تجارياً، وتوصية اللجنة، وقرار الترسية (اختيار الفائز) */
@@ -41,13 +48,16 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onDeleteBidder,
   onOpenMatrix,
   chartsOpen,
-  onToggleCharts
+  onToggleCharts,
+  onSavePreferenceInitiatives,
+  onDirtyChange
 }) => {
   // الترسية المؤجَّلة بانتظار موقف الشركات غير المحسومة
   const [pendingAwardId, setPendingAwardId] = React.useState<string | null>(null);
-  const unresolved = unresolvedEmptyBidders(project);
+  // نافذة أساس المفاضلة (من زرها أو من نافذة الموانع)
+  const [prefOpen, setPrefOpen] = React.useState(false);
   const chooseAward = (id: string) => {
-    if (unresolvedEmptyBidders(project).length > 0) { setPendingAwardId(id); return; }
+    if (needsAwardDialog(awardBlockers(project, id))) { setPendingAwardId(id); return; }
     onSelectBidder(id);
     onUpdateBidderStatus(id, 'recommended');
   };
@@ -57,7 +67,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
   const exclusionThreshold = exclusionThresholdOf(project);
   const counts = eligibilityCounts(project);
   // شركات بلا مبالغ بعد لا تُعد عروضاً (انظر hasBidAmounts)
-  const emptyBidders = unresolved;
+  const emptyBidders = unresolvedEmptyBidders(project);
   const excludedEmpty = project.bidders.filter(b => !hasBidAmounts(b) && b.status === 'disqualified');
   const sortedBidders = evaluateBids(project);
   // التوصية من المحرك المشترك مع المحضر المطبوع (utils/recommendation.ts)
@@ -161,7 +171,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         return pending > 0 ? (
           <button
             type="button"
-            onClick={onOpenAudit}
+            onClick={() => onOpenAudit()}
             className="w-full flex flex-wrap items-center justify-between gap-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm font-black cursor-pointer transition no-print"
           >
             <span>فقرات فيها أخطاء لم تُعالج: <bdi className="font-mono">{pending}</bdi></span>
@@ -352,7 +362,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             {excludedEmpty.map((b, i) => (
               <React.Fragment key={b.id}>
                 {i > 0 && '، '}
-                <button type="button" onClick={() => onOpenExclusionReasons(b.id)} aria-label={`أسباب استبعاد ${b.name}`}
+                <button type="button" onClick={() => onOpenExclusionReasons(b.id)}
                   className="underline decoration-dotted text-rose-700 hover:text-rose-900 cursor-pointer">
                   <bdi>{b.name}</bdi> — الأسباب ({b.exclusionReasons?.length ?? 0})
                 </button>
@@ -434,6 +444,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   📌 الأسعار متساوية لأصغر فئة نقدية: تُخاطَب الشركات ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتها لغرض المفاضلة إن لم تقدّمها ابتداءً، وتصبح المبادرات جزءاً من العطاء، ويُستقطع مبلغ ما لا يُلتزم به عند التنفيذ حسب الأسعار السائدة ({preferenceReference(project.contractType).clause}).
                   {' '}وإن نصّت شروط المناقصة على جواز إرسائها على أكثر من متقدم وتساوت الشروط أيضاً، فللجنة أن توصي بإرسائها عليها مجزّأة (المادة 15/رابعاً/أ).
                 </div>
+              )}
+              {rec.closeBids.length > 1 && (
+                <button type="button" onClick={() => setPrefOpen(true)}
+                  className="mt-1.5 text-xs font-black px-3 py-1.5 rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 cursor-pointer no-print">
+                  أساس المفاضلة ({rec.closeBids.filter(b => hasCompletePreferenceRecord(project, b.id)).length} من {rec.closeBids.length})
+                </button>
               )}
               {savedEdit && (
                 <div className="text-xs font-bold text-indigo-800 mt-1">
@@ -569,14 +585,30 @@ export const StudyView: React.FC<StudyViewProps> = ({
         );
       })()}
 
-      {pendingAward && unresolved.length > 0 && (
-        <UnanalysedBidsModal
+      {pendingAward && (
+        <AwardBlockersModal
           chosenName={pendingAward.name}
-          bidders={unresolved}
+          currency={project.currency}
+          blockers={awardBlockers(project, pendingAward.id)}
           onClose={() => setPendingAwardId(null)}
+          onDirtyChange={onDirtyChange}
+          onApply={(reason) => { setPendingAwardId(null); onSelectBidder(pendingAward.id); onUpdateBidderStatus(pendingAward.id, 'recommended', reason); }}
+          onOpenAudit={(id) => { setPendingAwardId(null); onOpenAudit(id); }}
+          onOpenPreference={() => { setPendingAwardId(null); setPrefOpen(true); }}
           onExcluded={(id) => { setPendingAwardId(null); onUpdateBidderStatus(id, 'disqualified'); onOpenExclusionReasons(id); }}
           onEnterBid={(id) => { setPendingAwardId(null); onEnterBid(id); }}
           onDelete={(id) => { setPendingAwardId(null); onDeleteBidder(id); }}
+        />
+      )}
+
+      {prefOpen && rec.closeBids.length > 1 && (
+        <PreferenceBasisModal
+          project={project}
+          closeBids={rec.closeBids}
+          equalBids={equalPriceBids(rec.closeBids)}
+          onSave={onSavePreferenceInitiatives}
+          onClose={() => setPrefOpen(false)}
+          onDirtyChange={onDirtyChange}
         />
       )}
 

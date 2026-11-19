@@ -58,3 +58,14 @@ export function preferenceReference(type?: string): { clause: string; examples: 
     examples: 'مدة العقد، أو مدة الصيانة، أو الضمان، أو خدمات ما بعد البيع، أو المبادرات الأخرى'
   };
 }
+
+export const OTHER_INITIATIVE = 'مبادرة أخرى';
+
+/** أنواع المبادرات المعروضة في «أساس المفاضلة»، منقولة من أمثلة ضوابط رقم (5) بحسب النوع، تليها «مبادرة أخرى» */
+export function preferenceInitiativeTypes(type?: string): string[] {
+  const list = type === 'works' ? ['مدة العقد', 'مدة الصيانة']
+    : type === 'supply' ? ['خدمات ما بعد البيع الإضافية', 'مدة الصيانة', 'مدة الضمان']
+    : type === 'services' ? ['مدة العقد', 'تقديم الخدمات لمدة إضافية خارج مدة العقد']
+    : ['مدة العقد', 'مدة الصيانة', 'مدة الضمان', 'خدمات ما بعد البيع'];
+  return [...list, OTHER_INITIATIVE];
+}

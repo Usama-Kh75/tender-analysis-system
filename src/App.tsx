@@ -33,6 +33,7 @@ import { CorrectionNoticeModal } from './components/modals/CorrectionNoticeModal
 import { CommitteeNameModal } from './components/modals/CommitteeNameModal';
 import { ExclusionReasonsModal } from './components/modals/ExclusionReasonsModal';
 import { createExclusionHandlers } from './app/exclusionHandlers';
+import { createPreferenceHandlers } from './app/preferenceHandlers';
 import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -91,6 +92,8 @@ export function App() {
   // أرقام مكتوبة في «إدخال يدوي» لم تُحفظ بعد (يمنع التحديث)
   const [isManualDirty, setIsManualDirty] = useState(false);
   const [isRecEditing, setIsRecEditing] = useState(false);
+  // نوافذ الدراسة (أساس المفاضلة، موانع الترسية) فيها إدخال لم يُحفظ (يمنع التحديث)
+  const [isStudyDirty, setIsStudyDirty] = useState(false);
   const [chartsOpen, setChartsOpen] = useState(false);
   // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
   const [auditProjectId, setAuditProjectId] = useState<string | null>(null);
@@ -114,6 +117,7 @@ export function App() {
     : isPageBreaksOpen ? 'فواصل الصفحات'
     : isPrintOpen && isRecEditing ? 'صياغة التوصية'
     : exclusionBidderId ? 'أسباب الاستبعاد'
+    : isStudyDirty ? 'أساس المفاضلة أو مبرر الترسية'
     : null;
 
   const currentProject = projects.find(p => p.id === activeProjectId) || projects[0];
@@ -227,6 +231,7 @@ export function App() {
     handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
   const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
+  const { handleSavePreferenceInitiatives } = createPreferenceHandlers(currentProject, ctx.saveProject);
   const exclusionBidder = exclusionBidderId ? currentProject.bidders.find(b => b.id === exclusionBidderId) : undefined;
   const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(currentProject, ctx.saveProject);
   const orderHandlers = createStatusOrderHandlers(statusOrders, setStatusOrders);
@@ -420,7 +425,9 @@ export function App() {
               onOpenExclusionReasons={setExclusionBidderId}
               onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
-              onOpenAudit={() => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: tenderPath(currentProject).audit.firstBidderId ?? undefined })}
+              onOpenAudit={(id) => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: id ?? tenderPath(currentProject).audit.firstBidderId ?? undefined })}
+              onSavePreferenceInitiatives={handleSavePreferenceInitiatives}
+              onDirtyChange={setIsStudyDirty}
               onEnterBid={(id) => handleGo({ label: 'إدخال العطاء', target: 'bids', bidderId: id })}
               onDeleteBidder={handleDeleteBidder}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}

@@ -90,6 +90,19 @@ export interface Bidder {
   exclusionReasons?: ExclusionReason[];
 }
 
+export interface PreferenceItem {
+  type: string;                       // تسمية النوع (من preferenceInitiativeTypes أو «مبادرة أخرى»)
+  description: string;
+  value?: number;                     // القيمة المالية، اختيارية
+  completedOnRequest?: boolean;       // استُكملت بطلب اللجنة بعد فتح العطاءات (عند التساوي لأصغر فئة نقدية)
+}
+
+export interface PreferenceRecord {
+  bidderId: string;
+  hasInitiative: boolean;
+  items: PreferenceItem[];
+}
+
 export type ExclusionGround =
   | 'technical' | 'qualification' | 'conditions' | 'incomplete' | 'bidBond' | 'bondInvalid' | 'legalDocs'
   | 'blacklist' | 'derivedDiscount' | 'erasures' | 'refusedCorrection' | 'duplicateManager' | 'duplicatePartner' | 'other';
@@ -198,6 +211,8 @@ export interface TenderProject {
   thresholdBasis?: string;            // سند الحد المعتمد إن اختلف أحد الحدّين عن نص التعليمات (20%)
   recommendationEdit?: RecommendationEdit;
   technicalOpinion?: TechnicalOpinion;
+  // أساس المفاضلة بين العطاءات المتساوية أو المتقاربة (ضوابط رقم (5)): سجل وطباعة فقط، لا يدخل حساباً ولا ترتيباً
+  preferenceInitiatives?: PreferenceRecord[];
   activeBidderId: string;
   bidders: Bidder[];
   auditLogs: AuditLogEntry[];
