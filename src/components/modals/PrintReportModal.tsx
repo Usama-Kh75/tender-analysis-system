@@ -13,7 +13,7 @@ import { tenderDetailParts } from '../../utils/tenderDetails';
 import { localDate } from '../../utils/localDate';
 import { recommendationPieces, recommendationEditChanges, savedRecommendationEdit, type RecommendationBlock } from '../../utils/recommendationText';
 import { LegalTextsList, ThresholdBasisSentence } from '../LegalTexts';
-import { excludedBidders, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
+import { reasonedExclusions, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -110,7 +110,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // تسلسلها في أوليات المناقصة (سجل التدقيق وقيد الاختيار). قرار المستخدم 2026-10-21
   const adopted = rec.kind === 'award' && rec.chosenByCommittee;
   // أسباب استبعاد العطاءات بقرار اللجنة، ونصوصها الرسمية، وتذكيرات ما ينقص
-  const excluded = excludedBidders(project);
+  const excluded = reasonedExclusions(project);
   const withReasons = excluded.filter(b => (b.exclusionReasons?.length ?? 0) > 0);
   const withoutReasons = excluded.filter(b => (b.exclusionReasons?.length ?? 0) === 0);
   const exclusionKeys = exclusionLegalKeys(project);
@@ -349,7 +349,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 <strong>أسباب استبعاد العطاءات:</strong>
                 {withReasons.map(b => (
                   <div key={b.id} className="mt-1.5">
-                    <p>استُبعد عطاء ({b.name}) {b.exclusionReasons!.length > 1 ? 'للأسباب الآتية' : 'للسبب الآتي'}:</p>
+                    <p>استُبعد عطاء ({b.name}){hasBidAmounts(b) ? '' : ' قبل التحليل التجاري، فلم يُحلَّل ولم يُدرج في الجدول أعلاه،'} {b.exclusionReasons!.length > 1 ? 'للأسباب الآتية' : 'للسبب الآتي'}:</p>
                     <ol className="list-decimal pr-6 space-y-0.5">
                       {b.exclusionReasons!.map((r, i) => <li key={i}>{reasonLine(r, project)}</li>)}
                     </ol>

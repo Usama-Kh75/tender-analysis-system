@@ -421,6 +421,8 @@ export function App() {
               onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
               onOpenAudit={() => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: tenderPath(currentProject).audit.firstBidderId ?? undefined })}
+              onEnterBid={(id) => handleGo({ label: 'إدخال العطاء', target: 'bids', bidderId: id })}
+              onDeleteBidder={handleDeleteBidder}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
               chartsOpen={chartsOpen}
               onToggleCharts={() => setChartsOpen(o => !o)}

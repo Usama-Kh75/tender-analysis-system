@@ -11,6 +11,8 @@ import { rankingEffect } from '../utils/rankingEffect';
 import { evaluateBids } from '../utils/bidEvaluation';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { errorsCountText } from '../utils/arabicCount';
+import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
+import { UnanalysedBidsModal } from './modals/UnanalysedBidsModal';
 
 interface StudyViewProps {
   project: TenderProject;
@@ -19,6 +21,9 @@ interface StudyViewProps {
   onUpdateBidderStatus: (id: string, status: Bidder['status']) => void;
   /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات فيها أخطاء */
   onOpenAudit: () => void;
+  /** ينتقل إلى تبويب العطاءات على المجهز لإدخال عطائه */
+  onEnterBid: (id: string) => void;
+  onDeleteBidder: (id: string) => void;
   // مقارنة المجهزين والرسوم: زرّان في شريط الدراسة
   onOpenMatrix: () => void;
   chartsOpen: boolean;
@@ -32,16 +37,28 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onSelectBidder,
   onUpdateBidderStatus,
   onOpenAudit,
+  onEnterBid,
+  onDeleteBidder,
   onOpenMatrix,
   chartsOpen,
   onToggleCharts
 }) => {
+  // الترسية المؤجَّلة بانتظار موقف الشركات غير المحسومة
+  const [pendingAwardId, setPendingAwardId] = React.useState<string | null>(null);
+  const unresolved = unresolvedEmptyBidders(project);
+  const chooseAward = (id: string) => {
+    if (unresolvedEmptyBidders(project).length > 0) { setPendingAwardId(id); return; }
+    onSelectBidder(id);
+    onUpdateBidderStatus(id, 'recommended');
+  };
+  const pendingAward = pendingAwardId ? project.bidders.find(b => b.id === pendingAwardId) : undefined;
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
   const noEstimate = hasNoEstimate(project);
   const exclusionThreshold = exclusionThresholdOf(project);
   const counts = eligibilityCounts(project);
   // شركات بلا مبالغ بعد لا تُعد عروضاً (انظر hasBidAmounts)
-  const emptyBidders = project.bidders.filter(b => !hasBidAmounts(b));
+  const emptyBidders = unresolved;
+  const excludedEmpty = project.bidders.filter(b => !hasBidAmounts(b) && b.status === 'disqualified');
   const sortedBidders = evaluateBids(project);
   // التوصية من المحرك المشترك مع المحضر المطبوع (utils/recommendation.ts)
   const rec = buildRecommendation(project);
@@ -329,6 +346,11 @@ export const StudyView: React.FC<StudyViewProps> = ({
             يمكن حذفها من «مقارنة المجهزين» إن أُضيفت خطأً.
           </div>
         )}
+        {excludedEmpty.length > 0 && (
+          <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 text-xs font-bold text-slate-500">
+            مستبعدة قبل التحليل التجاري: {excludedEmpty.map(b => b.name).join('، ')} (تُطبع أسبابها في المحضر).
+          </div>
+        )}
 
       </div>
 
@@ -415,10 +437,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
 
           {rec.kind === 'award' && rec.primary && rec.primary.status !== 'recommended' && (
             <button
-              onClick={() => {
-                onSelectBidder(rec.primary!.id);
-                onUpdateBidderStatus(rec.primary!.id, 'recommended');
-              }}
+              onClick={() => chooseAward(rec.primary!.id)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-5 py-2.5 rounded-xl shadow-md transition transform active:scale-95 cursor-pointer"
             >
               اعتماد الترسية على هذا العطاء
@@ -469,8 +488,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
                           aria-label={bidder.status === 'recommended' ? `${bidder.name}: مُوصى به` : `اختيار ${bidder.name} للترسية`}
                           onClick={() => {
                             if (bidder.status === 'recommended') return;
-                            onSelectBidder(bidder.id);
-                            onUpdateBidderStatus(bidder.id, 'recommended');
+                            chooseAward(bidder.id);
                           }}
                           className={`w-full text-xs font-black px-3 py-1.5 rounded-xl transition cursor-pointer ${
                             bidder.status === 'recommended'
@@ -541,6 +559,17 @@ export const StudyView: React.FC<StudyViewProps> = ({
           </div>
         );
       })()}
+
+      {pendingAward && unresolved.length > 0 && (
+        <UnanalysedBidsModal
+          chosenName={pendingAward.name}
+          bidders={unresolved}
+          onClose={() => setPendingAwardId(null)}
+          onExcluded={(id) => { setPendingAwardId(null); onUpdateBidderStatus(id, 'disqualified'); onOpenExclusionReasons(id); }}
+          onEnterBid={(id) => { setPendingAwardId(null); onEnterBid(id); }}
+          onDelete={(id) => { setPendingAwardId(null); onDeleteBidder(id); }}
+        />
+      )}
 
     </div>
   );

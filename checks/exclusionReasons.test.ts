@@ -8,7 +8,7 @@ import { recommendationPieces } from '../src/utils/recommendationText';
 import { LEGAL_TEXTS } from '../src/utils/legalTexts';
 import {
   EXCLUSION_GROUNDS, INCOMPLETE_ITEMS, allExcludedHaveReasons, exclusionLabels, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource,
-  opinionClause, reasonLine, sanitizeExclusionFields, validateReasons
+  opinionClause, reasonLine, sanitizeExclusionFields, validateReasons, excludedBidders, reasonedExclusions, unresolvedEmptyBidders
 } from '../src/utils/exclusionReasons';
 import type { Bidder, ExclusionReason, TenderProject } from '../src/types/tender';
 
@@ -62,8 +62,10 @@ test('exclusionLegalKeys: الترتيب وعدم التكرار وart13_2 وا�
     mkBidder('C', 'C', 0, [{ ground: 'blacklist' }]),
     mkBidder('D', 'D', 1000, [{ ground: 'refusedCorrection' }], 'pending')
   ], { technicalOpinion: opinion });
-  assert.deepEqual(exclusionLegalKeys(p), ['ann4_6_1', 'ann4_6_6', 'art13_2', 'ann4_7_2']);
-  assert.deepEqual(exclusionLegalKeys({ ...p, technicalOpinion: undefined }), ['ann4_6_1', 'ann4_6_6', 'ann4_7_2']);
+  const blacklistKey = exclusionLegalKeys(mkProject([mkBidder('C', 'C', 0, [{ ground: 'blacklist' }])]))[0];
+  assert.ok(blacklistKey);
+  assert.deepEqual(exclusionLegalKeys(p), ['ann4_6_1', 'ann4_6_6', 'art13_2', 'ann4_7_2', blacklistKey]);
+  assert.deepEqual(exclusionLegalKeys({ ...p, technicalOpinion: undefined }), ['ann4_6_1', 'ann4_6_6', 'ann4_7_2', blacklistKey]);
   assert.equal(exclusionLabels(p.bidders[0]), 'عدم إرفاق التأمينات الأولية، عدم المطابقة الفنية، سبب آخر');
   assert.equal(exclusionLegalLabels(p.bidders[0]), `${LEGAL_TEXTS.ann4_6_1.label}، ${LEGAL_TEXTS.ann4_6_6.label}`);
   assert.equal(exclusionLabels(p.bidders[3]), '');
@@ -86,6 +88,30 @@ test('needsOpinionSource', () => {
   assert.equal(needsOpinionSource(p), true);
   assert.equal(needsOpinionSource({ ...p, technicalOpinion: opinion }), false);
   assert.equal(needsOpinionSource(mkProject([mkBidder('A', 'A', 1000, [{ ground: 'bidBond' }])])), false);
+});
+
+test('unresolvedEmptyBidders و reasonedExclusions: المستبعد بلا مبالغ', () => {
+  const p = mkProject([
+    mkBidder('A', 'A', 1000, undefined, 'pending'),
+    mkBidder('B', 'B', 0, undefined, 'pending'),
+    mkBidder('C', 'C', 0, [{ ground: 'technical' }]),
+    mkBidder('D', 'D', 1000, [{ ground: 'bidBond' }])
+  ]);
+  assert.deepEqual(unresolvedEmptyBidders(p).map(b => b.id), ['B']);
+  assert.deepEqual(reasonedExclusions(p).map(b => b.id), ['C', 'D']);
+  assert.deepEqual(excludedBidders(p).map(b => b.id), ['D']);
+  assert.equal(unresolvedEmptyBidders(mkProject([mkBidder('A', 'A', 1000, undefined, 'pending')])).length, 0);
+});
+
+test('مستبعد بلا مبالغ: سبب فني بلا مصدر رأي يُنبَّه إليه، وإعادة الإعلان لا تتغير', () => {
+  const p = mkProject([mkBidder('A', 'A', 1000, undefined, 'pending'), mkBidder('C', 'C', 0, [{ ground: 'technical' }])]);
+  assert.equal(needsOpinionSource(p), true);
+  assert.equal(needsOpinionSource({ ...p, technicalOpinion: opinion }), false);
+  // allExcludedHaveReasons تخص العطاءات المحلَّلة وحدها: لا مستبعد بمبالغ هنا
+  assert.equal(allExcludedHaveReasons(p), false);
+  const q = mkProject([mkBidder('A', 'A', 1000, [{ ground: 'technical' }]), mkBidder('C', 'C', 0, [{ ground: 'bidBond' }])]);
+  const r = mkProject([mkBidder('A', 'A', 1000, [{ ground: 'technical' }])]);
+  assert.equal(allExcludedHaveReasons(q), allExcludedHaveReasons(r));
 });
 
 test('التنظيف عند التحميل', () => {

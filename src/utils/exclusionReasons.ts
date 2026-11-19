@@ -151,11 +151,19 @@ const reasonsOf = (bidder: Bidder): ExclusionReason[] =>
 export const excludedBidders = (project: TenderProject): Bidder[] =>
   project.bidders.filter(b => b.status === 'disqualified' && hasBidAmounts(b));
 
+/** كل عطاء مستبعد بقرار اللجنة، بمبالغ أو بلا (تُطبع أسبابه في كتلة «أسباب استبعاد العطاءات») */
+export const reasonedExclusions = (project: TenderProject): Bidder[] =>
+  project.bidders.filter(b => b.status === 'disqualified');
+
+/** شركات مسجَّلة بلا مبالغ ولم تُستبعد: لجنة الترسية تُسأل عن موقفها قبل الاختيار */
+export const unresolvedEmptyBidders = (project: TenderProject): Bidder[] =>
+  project.bidders.filter(b => !hasBidAmounts(b) && b.status !== 'disqualified');
+
 /** مفاتيح النصوص الرسمية لأسباب كل العطاءات المستبعدة، بترتيب ورودها وبلا تكرار؛ art13_2 بعد سبب فني له مصدر رأي */
 export function exclusionLegalKeys(project: TenderProject): LegalKey[] {
   const hasSource = !!project.technicalOpinion?.source?.trim();
   const keys: (LegalKey | undefined)[] = [];
-  for (const b of excludedBidders(project)) {
+  for (const b of reasonedExclusions(project)) {
     for (const r of reasonsOf(b)) {
       keys.push(reasonLegalKey(r));
       if (r.ground === 'technical' && hasSource) keys.push('art13_2');
@@ -194,7 +202,7 @@ export function validateReasons(reasons: ExclusionReason[]): string | null {
 /** يوجد سبب فني لعطاء مستبعد ومصدر الرأي الفني فارغ */
 export function needsOpinionSource(project: TenderProject): boolean {
   return !project.technicalOpinion?.source?.trim()
-    && excludedBidders(project).some(b => reasonsOf(b).some(r => r.ground === 'technical'));
+    && reasonedExclusions(project).some(b => reasonsOf(b).some(r => r.ground === 'technical'));
 }
 
 /**
