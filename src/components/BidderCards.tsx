@@ -79,10 +79,10 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     </p>
     <div className="mb-4 bg-white rounded-2xl border border-slate-200 px-3 py-2">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-black text-slate-700 shrink-0">المجهز:</span>
+        <label htmlFor="bidder-select" className="text-sm font-black text-slate-700 shrink-0">المجهز:</label>
         {active && editingId === active.id ? (
           <div
-            className="flex flex-1 items-center gap-2"
+            className="flex flex-1 min-w-0 items-center gap-2"
             onKeyDown={(e) => { if (e.key === 'Escape') finishRename(active.id, active.name, false); }}
             onBlur={(e) => leaveEdit(e, active.id, active.name)}
           >
@@ -91,20 +91,21 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
               value={tempName}
               onChange={(e) => setTempName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); finishRename(active.id, active.name, true); } }}
-              className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 w-56 max-w-full"
+              className="bg-white border border-blue-400 rounded-lg px-2 py-1 text-sm font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20 min-w-0 flex-1 sm:flex-none sm:w-56"
               aria-label="اسم الشركة"
               autoFocus
             />
-            <button onClick={() => finishRename(active.id, active.name, true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
+            <button onClick={() => finishRename(active.id, active.name, true)} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg cursor-pointer">
               حفظ
             </button>
           </div>
         ) : (
           <>
             <select
+              id="bidder-select"
               value={activeBidderId}
               onChange={(e) => onSelect(e.target.value)}
-              aria-label="اختيار الشركة المتقدمة"
+              aria-label="المجهز: اختيار الشركة المتقدمة"
               className="flex-1 min-w-0 max-w-2xl bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
             >
               {project.bidders.map(b => (
@@ -115,7 +116,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
               <button
                 ref={(el) => { editButtons.current[active.id] = el; }}
                 onClick={() => { finishedRef.current = false; setTempName(active.name); setEditingId(active.id); }}
-                className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                className="shrink-0 p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                 title="تعديل اسم الشركة"
                 aria-label={`تعديل اسم ${active.name}`}
               >
