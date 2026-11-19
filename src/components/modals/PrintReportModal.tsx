@@ -48,7 +48,7 @@ const RecommendationBlocks: React.FC<{ blocks: RecommendationBlock[] }> = ({ blo
   </>
 );
 
-// Escape يغلق المعاينة كما يغلقها زر الإغلاق (handleClose يسأل إن بقي في المحرر ما لم يُحفظ)
+// Escape يغلق المحرر إن كان مفتوحاً وإلا المعاينة (كلاهما يسأل إن بقي في المحرر ما لم يُحفظ)
 const EscapeCloses: React.FC<{ onEscape: () => void }> = ({ onEscape }) => {
   const latest = useRef(onEscape);
   useEffect(() => { latest.current = onEscape; });
@@ -160,6 +160,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     setDraft(next);
   };
 
+  // Escape: والمحرر مفتوح يغلق المحرر وحده (كزر «إلغاء»)، وإلا أغلق المعاينة
+  const handleEscape = () => (editing ? discardDraft(null) : handleClose());
+
   const subjectLabel = {
     award: 'للعطاء الموصى به',
     tie: 'لأوطأ العطاءات المتقاربة',
@@ -179,7 +182,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // ويُطبع المحضر وحده بطوله الكامل بدل أن يُقص عند حد النافذة ويتكرر فوق الواجهة
   return createPortal(
     <div className="print-report-portal fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 print:static print:block print:bg-white print:p-0 print:backdrop-blur-none">
-      <EscapeCloses onEscape={handleClose} />
+      <EscapeCloses onEscape={handleEscape} />
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden print:max-w-none print:max-h-none print:overflow-visible print:rounded-none print:shadow-none print:border-0 print:block">
         
         {/* Controls Bar */}
