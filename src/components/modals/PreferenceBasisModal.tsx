@@ -64,7 +64,8 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
     return () => { if (prev && prev.isConnected) prev.focus(); };
   }, []);
 
-  const patch = (id: string, fn: (d: Draft) => Draft) => setDrafts(s => ({ ...s, [id]: fn(s[id]) }));
+  // أي تعديل يُسقط رسالة الخطأ السابقة، فلا تبقى أمام اللجنة وهي تصحّح الحقل
+  const patch = (id: string, fn: (d: Draft) => Draft) => { setError(null); setDrafts(s => ({ ...s, [id]: fn(s[id]) })); };
   const setItem = (id: string, idx: number, p: Partial<DraftItem>) =>
     patch(id, d => ({ ...d, items: d.items.map((it, i) => i === idx ? { ...it, ...p } : it) }));
 
@@ -141,7 +142,7 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
                   </label>
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input type="radio" name={`init-${b.id}`} checked={d.answer === 'no'}
-                      onChange={() => patch(b.id, x => ({ ...x, answer: 'no' }))} />
+                      onChange={() => patch(b.id, x => ({ ...x, answer: 'no', items: [] }))} />
                     لا
                   </label>
                 </div>
@@ -161,7 +162,7 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
                           onChange={e => setItem(b.id, idx, { value: e.target.value })} />
                         <button type="button" aria-label={`حذف المبادرة ${idx + 1} لعطاء ${b.name}`} title="حذف المبادرة"
                           onClick={() => patch(b.id, x => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
-                          className="p-2 text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                          className="justify-self-end w-fit p-2 text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"><Trash2 className="w-4 h-4" /></button>
                         {equal && (
                           <label className="sm:col-span-4 flex items-center gap-1.5 text-xs font-bold text-amber-900 cursor-pointer">
                             <input type="checkbox" checked={it.completedOnRequest} onChange={e => setItem(b.id, idx, { completedOnRequest: e.target.checked })} />
@@ -179,9 +180,10 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
               </fieldset>
             );
           })}
-          {error && <div role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs sm:text-sm font-bold text-rose-900">{error}</div>}
         </div>
 
+        {/* الخطأ في التذييل الثابت بجانب «حفظ»، فيُرى مهما كان موضع التمرير */}
+        {error && <div role="alert" className="mx-3 mt-3 rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs sm:text-sm font-bold text-rose-900">{error}</div>}
         <div className="p-3 border-t border-slate-200 flex justify-end gap-2">
           <button type="button" onClick={save} className={`${btn} bg-indigo-600 border-indigo-700 text-white hover:bg-indigo-700`}>حفظ</button>
           <button type="button" onClick={requestClose} className={`${btn} bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200`}>إلغاء</button>
