@@ -1,6 +1,6 @@
 import type { StatusBranch, StatusEntry, StatusOrder, StatusStage, TenderProject } from '../types/tender';
 import { announcementLabel } from './tenderDetails';
-import { compareOrderNumbers } from './orderNumber';
+import { compareOrderNumbers, formatOrderNumber } from './orderNumber';
 
 /**
  * موقف الطلبية: سجل وعرض فقط، لا يدخل في أي حساب أو توصية.
@@ -130,6 +130,8 @@ export interface StatusSheetRow {
   memoNo: string;
   date: string;
   note: string;
+  /** سجلات أقدم بالرقم نفسه (الأحدث أولاً): تُعرض أسطراً رمادية تحت الإجراء، ولا يُغيَّر فيها شيء. */
+  previous: { kind: 'tender' | 'order'; id: string; text: string }[];
 }
 
 export type StatusSortKey = 'number' | 'stage' | 'referral';
@@ -156,16 +158,49 @@ export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[]
     const i = order.indexOf(s.stage);
     return i === -1 ? order.length : i;
   };
-  const sorted = sources.sort((a, b) => {
+  // الأحدث أولاً: مرة الإعلان الأعلى، ثم وقت تسجيل آخر موقف، ثم updatedAt (والتعادل يبقى بترتيب الإدخال)
+  const newestFirst = (a: SheetSource, b: SheetSource): number => {
+    const an = a.item.announcementNo ?? 0, bn = b.item.announcementNo ?? 0;
+    if (an !== bn) return bn - an;
+    const ar = a.item.statusLog?.at(-1)?.recordedAt ?? '', br = b.item.statusLog?.at(-1)?.recordedAt ?? '';
+    if (ar !== br) return ar < br ? 1 : -1;
+    const au = a.item.updatedAt ?? '', bu = b.item.updatedAt ?? '';
+    if (au !== bu) return au < bu ? 1 : -1;
+    return 0;
+  };
+  // صف واحد لكل رقم طلبية؛ الرقم الفارغ لا يُدمج أبداً
+  const groups = new Map<string, SheetSource[]>();
+  const merged: { primary: SheetSource; older: SheetSource[] }[] = [];
+  for (const src of sources) {
+    const key = formatOrderNumber(src.item.referenceNumber ?? '');
+    const g = key ? groups.get(key) : undefined;
+    if (g) { g.push(src); continue; }
+    const list = [src];
+    if (key) groups.set(key, list);
+    merged.push({ primary: src, older: list });
+  }
+  for (const m of merged) {
+    const list = [...m.older].sort(newestFirst);
+    m.primary = list[0];
+    m.older = list.slice(1);
+  }
+  const previousLine = (src: SheetSource): string => {
+    const label = announcementLabel(src.item.announcementNo);
+    const s = src.item.statusLog?.at(-1);
+    const status = s ? (statusLine(s) || 'غير محدد') : 'لم يُسجَّل موقف';
+    return `${label ? `السابق (${label})` : 'السابق'}: ${status}`;
+  };
+  const sorted = merged.sort((a, b) => {
     if (sortBy !== 'number') {
-      const d = stageRank(a.item) - stageRank(b.item);
+      const d = stageRank(a.primary.item) - stageRank(b.primary.item);
       if (d) return d;
     }
-    return compareOrderNumbers(a.item.referenceNumber ?? '', b.item.referenceNumber ?? '');
+    return compareOrderNumbers(a.primary.item.referenceNumber ?? '', b.primary.item.referenceNumber ?? '');
   });
-  return sorted.map(({ kind, item: p }, i) => {
+  return sorted.map(({ primary: { kind, item: p }, older }, i) => {
     const s = p.statusLog?.at(-1);
     return {
+      previous: older.map(o => ({ kind: o.kind, id: o.item.id, text: previousLine(o) })),
       no: i + 1,
       kind,
       id: p.id,

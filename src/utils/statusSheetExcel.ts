@@ -60,7 +60,8 @@ export function buildStatusSheetWorkbook(rows: StatusSheetRow[], asOf: string, c
     ...(name ? [[name]] : []),
     [statusSheetTitle(asOf)],
     cols.map(c => c.header),
-    ...rows.map(r => cols.map(c => r[c.key]))
+    // الإجراء يتبعه سطر لكل سجل سابق بالرقم نفسه
+    ...rows.map(r => cols.map(c => c.key === 'action' ? [r.action, ...(r.previous ?? []).map(p => p.text)].filter(t => t !== '').join('\n') : r[c.key]))
   ];
   const signRow = aoa.length + 1;
   const pad = Array<string>(cols.length - 2).fill('');

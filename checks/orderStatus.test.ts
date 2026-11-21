@@ -338,3 +338,48 @@ test('نص زر الموقف', () => {
   // مدخل نصه فارغ (مرحلة «أخرى» بلا نص)
   assert.equal(statusBadgeText([entry({ stage: 'other', customText: '' })]), 'الموقف: غير محدد');
 });
+
+test('رقم طلبية مشترك: صف واحد بموقف الأحدث وأسطر «السابق» تحته', () => {
+  const old = tender('9009/26/11', { announcementNo: 1, statusLog: [entry({ stage: 'readvertise' })] });
+  const cur = tender('11 / 26 / 9009', { announcementNo: 2, statusLog: [entry({ stage: 'analysis' })] });
+  const rows = statusSheetRows([old, cur]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, cur.id);
+  assert.equal(rows[0].action, 'قيد التحليل');
+  assert.deepEqual(rows[0].previous, [{ kind: 'tender', id: old.id, text: 'السابق (الإعلان الأول): إعادة إعلان' }]);
+  assert.deepEqual(rows[0].no, 1);
+});
+
+test('رقم مشترك بين مناقصة وطلبية بإعلان متساوٍ: الأحدث تسجيلاً أساسي', () => {
+  const t = tender('5 / 26 / 9001', { announcementNo: 1, statusLog: [entry({ stage: 'audit', recordedAt: '2026-10-01T00:00:00.000Z' })] });
+  const o = { id: 'o1', referenceNumber: '5 / 26 / 9001', title: 'ط', announcementNo: 1, createdAt: 'x', updatedAt: 'x', statusLog: [entry({ stage: 'referred', recordedAt: '2026-11-01T00:00:00.000Z' })] };
+  const rows = statusSheetRows([t], [o]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].kind, 'order');
+  assert.equal(rows[0].previous[0].kind, 'tender');
+  assert.equal(rows[0].previous[0].text, 'السابق (الإعلان الأول): لدى قسم الرقابة والتدقيق الداخلي');
+});
+
+test('الأرقام الفارغة لا تُدمج، وسجل بلا statusLog في «السابق» يُكتب «لم يُسجَّل موقف»', () => {
+  assert.equal(statusSheetRows([tender(''), tender('')]).length, 2);
+  const a = tender('7 / 26 / 9001', { announcementNo: 2, statusLog: [entry({ stage: 'analysis' })] });
+  const b = { ...tender('7 / 26 / 9001'), statusLog: undefined } as unknown as TenderProject;
+  const rows = statusSheetRows([b, a]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].previous[0].text, 'السابق: لم يُسجَّل موقف');
+  assert.deepEqual(statusSheetRows([tender('8')])[0].previous, []);
+});
+
+test('الترتيب بالإجراء يعتمد الصف الأساسي، وExcel يلحق أسطر السابق بخلية الإجراء', () => {
+  const x = tender('1 / 26 / 9001', { announcementNo: 2, statusLog: [entry({ stage: 'audit' })] });
+  const xOld = tender('1 / 26 / 9001', { announcementNo: 1, statusLog: [entry({ stage: 'analysis' })] });
+  const y = tender('2 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] });
+  const rows = statusSheetRows([x, xOld, y], [], 'stage');
+  assert.deepEqual(rows.map(r => r.id), [y.id, x.id]);
+  const ws = buildStatusSheetWorkbook(rows, '2026-11-21').Sheets['موقف الطلبيات'];
+  const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
+  const col = data[1].indexOf('الإجراء');
+  const c = ws[XLSX.utils.encode_cell({ r: 3, c: col })];
+  assert.equal(c.v, 'لدى قسم الرقابة والتدقيق الداخلي\nالسابق (الإعلان الأول): قيد التحليل');
+  assert.equal(c.s.alignment.wrapText, true);
+});

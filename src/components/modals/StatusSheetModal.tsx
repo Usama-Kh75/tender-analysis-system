@@ -178,6 +178,9 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                     {cols.map(c => (
                       <td key={c.key} className={`${c.align === 'center' ? `${cell} text-center` : cell}${c.key === 'referenceNumber' ? ' whitespace-nowrap' : c.key === 'action' || c.key === 'note' ? ' whitespace-pre-line' : ''}`}>
                         {c.key === 'no' || c.key === 'announcement' ? r[c.key] : c.align === 'center' ? <bdi>{r[c.key]}</bdi> : r[c.key]}
+                        {c.key === 'action' && r.previous.map(p => (
+                          <span key={`${p.kind}-${p.id}`} className="block text-[11px] text-slate-500 mt-1">{p.text}</span>
+                        ))}
                       </td>
                     ))}
                     <td className={`${cell} text-center no-print`}>
@@ -187,6 +190,15 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                         aria-label={`تعديل الطلبية ${r.referenceNumber || r.title}`}
                         className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer"
                       >تعديل</button>
+                      {r.previous.map(p => (
+                        <button
+                          key={`${p.kind}-${p.id}`}
+                          type="button"
+                          onClick={() => setEditing({ kind: p.kind, id: p.id })}
+                          aria-label={`تعديل السابق: ${p.text}`}
+                          className="block mx-auto mt-1 px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                        >تعديل السابق</button>
+                      ))}
                     </td>
                   </tr>
                 ))}
