@@ -64,14 +64,16 @@ export function createStatusOrderHandlers(orders: StatusOrder[], setOrders: (f: 
     withLog(id, log => applyStatusDelete(log, statusId) ?? { error: 'الموقف غير موجود' });
   };
 
-  // رفع تذكير «السابق» من كشف الموقف أو إعادته: علم على السجل لا يحذف شيئاً (بلا سجل تدقيق للطلبيات)
+  // رفع تذكير «السابق» من كشف الموقف أو إعادته: علم على السجل لا يحذف شيئاً (بلا سجل تدقيق للطلبيات).
+  // بلا updatedAt (لا touch): هو الفيصل الأخير في اختيار السجل الأحدث (statusSheetRows)، فتغييره بالرفع قد يقدّم السجل القديم (مراجعة Codex)
   const handleSetHiddenAsPrevious = (id: string, hidden: boolean): string | null => {
     if (!orders.some(o => o.id === id)) return 'الطلبية غير موجودة';
-    touch(id, o => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== id) return o;
       const { hiddenAsPrevious: _drop, ...rest } = o;
       void _drop;
       return hidden ? { ...rest, hiddenAsPrevious: true } : rest;
-    });
+    }));
     return null;
   };
 

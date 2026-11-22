@@ -54,13 +54,13 @@ test('خلية الإجراء في Excel بلا أسطر السابق', () => {
   assert.equal(ws[XLSX.utils.encode_cell({ r: 2, c: col })].v, rows[0].action);
 });
 
-test('معالج المناقصة: يضع العلم ويزيله مع updatedAt وقيد تدقيق واحد', () => {
+test('معالج المناقصة: يضع العلم ويزيله بقيد تدقيق واحد ولا يغيّر updatedAt', () => {
   const p = tender('7');
   let saved: TenderProject | undefined;
   const h = createStatusHandlers(p, x => { saved = x; });
   assert.equal(h.handleSetHiddenAsPrevious(true), null);
   assert.equal(saved!.hiddenAsPrevious, true);
-  assert.notEqual(saved!.updatedAt, p.updatedAt);
+  assert.equal(saved!.updatedAt, p.updatedAt);
   assert.equal(saved!.auditLogs.length, p.auditLogs.length + 1);
   const hidden = saved!;
   saved = undefined;
@@ -69,12 +69,12 @@ test('معالج المناقصة: يضع العلم ويزيله مع updatedAt
   assert.equal(saved!.auditLogs.length, hidden.auditLogs.length + 1);
 });
 
-test('معالج الطلبية: يضع العلم ويزيله مع updatedAt', () => {
+test('معالج الطلبية: يضع العلم ويزيله ولا يغيّر updatedAt', () => {
   let orders = [order('8')];
   const h = () => createStatusOrderHandlers(orders, f => { orders = f(orders); });
   assert.equal(h().handleSetHiddenAsPrevious('o1', true), null);
   assert.equal(orders[0].hiddenAsPrevious, true);
-  assert.notEqual(orders[0].updatedAt, '2026-10-01T00:00:00.000Z');
+  assert.equal(orders[0].updatedAt, '2026-10-01T00:00:00.000Z');
   h().handleSetHiddenAsPrevious('o1', false);
   assert.equal('hiddenAsPrevious' in orders[0], false);
   assert.match(h().handleSetHiddenAsPrevious('zz', true) ?? '', /[؀-ۿ]/);
@@ -93,4 +93,18 @@ test('التنظيف عند التحميل: غير true يُحذف بلا تغي
   assert.equal(out[0].hiddenAsPrevious, true);
   assert.equal('hiddenAsPrevious' in out[1], false);
   assert.equal(out[1].updatedAt, '2026-01-01T00:00:00.000Z');
+});
+
+test('الرفع والإعادة لا يقدّمان السجل القديم عند تعادل الإعلان ووقت الموقف (مراجعة Codex)', () => {
+  let orders = [order('9', { id: 'new' }), order('9', { id: 'old' })];
+  const h = () => createStatusOrderHandlers(orders, f => { orders = f(orders); });
+  const primary = () => statusSheetRows([], orders)[0].id;
+  const before = primary();
+  const older = before === 'new' ? 'old' : 'new';
+  h().handleSetHiddenAsPrevious(older, true);
+  assert.equal(primary(), before);
+  assert.deepEqual(statusSheetRows([], orders)[0].hiddenPreviousIds, [{ kind: 'order', id: older }]);
+  h().handleSetHiddenAsPrevious(older, false);
+  assert.equal(primary(), before);
+  assert.equal(statusSheetRows([], orders)[0].previous.length, 1);
 });
