@@ -302,6 +302,7 @@ export function App() {
         projectsCount={projects.length}
         onNewProject={() => setIsNewProjectOpen(true)}
         onOpenProjectsBrowser={() => setIsProjectsOpen(true)}
+        onOpenStatusSheet={() => setIsStatusSheetOpen(true)}
         onOpenAuditTrail={() => setIsAuditOpen(true)}
         unsavedCount={unsaved.length}
         lastBackupAt={lastBackupTime(backupMarks)}

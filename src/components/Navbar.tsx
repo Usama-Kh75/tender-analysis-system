@@ -7,7 +7,8 @@ import {
   UserCheck,
   DownloadCloud,
   ShieldCheck,
-  Pencil
+  Pencil,
+  ClipboardList
 } from 'lucide-react';
 import { canInstallApp, installApp, subscribeInstall } from '../pwa';
 import { MoreMenu } from './MoreMenu';
@@ -17,6 +18,7 @@ interface NavbarProps {
   projectsCount: number;
   onNewProject: () => void;
   onOpenProjectsBrowser: () => void;
+  onOpenStatusSheet: () => void;
   onOpenAuditTrail: () => void;
   unsavedCount: number;
   lastBackupAt?: string;
@@ -29,6 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   projectsCount,
   onNewProject,
   onOpenProjectsBrowser,
+  onOpenStatusSheet,
   onOpenAuditTrail,
   unsavedCount,
   lastBackupAt,
@@ -135,6 +138,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="bg-amber-500/20 text-amber-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
                 {projectsCount}
               </span>
+            </button>
+
+            {/* كشف الموقف في الشريط الدائم (أسامة 2026-11-22): كان داخل نافذة «المناقصات» وحدها */}
+            <button
+              type="button"
+              onClick={onOpenStatusSheet}
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs sm:text-sm font-medium px-2 sm:px-3 py-2 rounded-xl border border-slate-800 transition cursor-pointer"
+              title="كشف رسمي بموقف كل طلبية: أين هي الآن ومنذ متى وبأي مذكرة"
+              aria-label="كشف الموقف"
+            >
+              <ClipboardList className="w-4 h-4 text-amber-400" />
+              <span className="hidden xl:inline">كشف الموقف</span>
             </button>
 
             <MoreMenu
