@@ -425,6 +425,7 @@ export function App() {
               onOpenExclusionReasons={setExclusionBidderId}
               onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
+              onOpenStatus={() => setIsStatusOpen(true)}
               onOpenAudit={(id) => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: id ?? tenderPath(currentProject).audit.firstBidderId ?? undefined })}
               onSavePreferenceInitiatives={handleSavePreferenceInitiatives}
               onDirtyChange={setIsStudyDirty}

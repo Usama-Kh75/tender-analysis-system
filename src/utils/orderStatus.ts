@@ -1,6 +1,7 @@
 import type { StatusBranch, StatusEntry, StatusOrder, StatusStage, TenderProject } from '../types/tender';
 import { announcementLabel } from './tenderDetails';
 import { compareOrderNumbers, formatOrderNumber } from './orderNumber';
+import { statusLag } from './statusLag';
 
 /**
  * موقف الطلبية: سجل وعرض فقط، لا يدخل في أي حساب أو توصية.
@@ -132,6 +133,8 @@ export interface StatusSheetRow {
   note: string;
   /** سجلات أقدم بالرقم نفسه (الأحدث أولاً): تُعرض أسطراً رمادية تحت الإجراء، ولا يُغيَّر فيها شيء. */
   previous: { kind: 'tender' | 'order'; id: string; text: string }[];
+  /** تنبيه عرض فقط (لا يُطبع ولا يُصدَّر): الموقف متأخر عن عمل اللجنة في النظام؛ للمناقصات وحدها (utils/statusLag.ts). */
+  lag?: string;
 }
 
 export type StatusSortKey = 'number' | 'stage' | 'referral';
@@ -211,7 +214,8 @@ export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[]
       action: s ? statusText(s) : '',
       memoNo: s?.memoNo ?? '',
       date: s ? formatSheetDate(s.memoDate) : '',
-      note: s?.note ?? ''
+      note: s?.note ?? '',
+      lag: kind === 'tender' ? statusLag(p as TenderProject)?.text : undefined
     };
   });
 }

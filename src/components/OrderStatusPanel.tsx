@@ -173,7 +173,7 @@ export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onA
                 <input
                   id="status-custom" type="text" value={customText} onChange={(e) => setCustomText(e.target.value)} className={fieldClass}
                   list={stage === 'referred' ? 'status-referred-suggestions' : undefined}
-                  placeholder={stage === 'other' || stage === 'referred' ? undefined : 'مثل: على تقديم الأعمال المماثلة'}
+                  placeholder={stage === 'other' || stage === 'referred' ? undefined : 'مثل: على تقديم الأعمال المماثلة أو المبادرات'}
                 />
                 {stage === 'referred' && (
                   <datalist id="status-referred-suggestions">

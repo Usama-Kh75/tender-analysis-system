@@ -10,6 +10,8 @@ import { isOfferFinal } from '../utils/weightedOffer';
 import { rankingEffect } from '../utils/rankingEffect';
 import { evaluateBids } from '../utils/bidEvaluation';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
+import { isPreAwardStatus } from '../utils/statusLag';
+import { statusBadgeText } from '../utils/orderStatus';
 import { errorsCountText } from '../utils/arabicCount';
 import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
 import { awardBlockers, needsAwardDialog } from '../utils/awardBlockers';
@@ -22,6 +24,8 @@ interface StudyViewProps {
   onOpenExclusionReasons: (id: string) => void;
   onSelectBidder: (id: string) => void;
   onUpdateBidderStatus: (id: string, status: Bidder['status'], reason?: string) => void;
+  /** يفتح نافذة الموقف (نموذج مدخل جديد بتاريخ اليوم) */
+  onOpenStatus: () => void;
   /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات فيها أخطاء */
   onOpenAudit: (bidderId?: string) => void;
   /** ينتقل إلى تبويب العطاءات على المجهز لإدخال عطائه */
@@ -43,6 +47,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
   onOpenExclusionReasons,
   onSelectBidder,
   onUpdateBidderStatus,
+  onOpenStatus,
   onOpenAudit,
   onEnterBid,
   onDeleteBidder,
@@ -56,10 +61,18 @@ export const StudyView: React.FC<StudyViewProps> = ({
   const [pendingAwardId, setPendingAwardId] = React.useState<string | null>(null);
   // نافذة أساس المفاضلة (من زرها أو من نافذة الموانع)
   const [prefOpen, setPrefOpen] = React.useState(false);
+  // بعد الترسية: إن بقي الموقف المسجَّل قبلها (أو لم يُسجَّل) تُسأل اللجنة عن تسجيل الجديد؛ لا يُكتب موقف تلقائياً
+  const askRecordStatus = () => {
+    if (!isPreAwardStatus(project)) return;
+    const had = project.statusLog?.length ? `الموقف المسجَّل للطلبية: «${statusBadgeText(project.statusLog).replace(/^الموقف: /, '')}».` : 'لم يُسجَّل موقف للطلبية.';
+    // بعد أن يُرسَل تحديث الحالة وتُغلق النافذة، فلا تقطع نقل التركيز
+    setTimeout(() => { if (window.confirm(`${had} اختارت اللجنة الترسية الآن، فهل تسجّل الموقف الجديد؟`)) onOpenStatus(); }, 0);
+  };
   const chooseAward = (id: string) => {
     if (needsAwardDialog(awardBlockers(project, id))) { setPendingAwardId(id); return; }
     onSelectBidder(id);
     onUpdateBidderStatus(id, 'recommended');
+    askRecordStatus();
   };
   const pendingAward = pendingAwardId ? project.bidders.find(b => b.id === pendingAwardId) : undefined;
   const estimatedTotal = project.bidders[0]?.totals.totalEstimatedAmount || 0;
@@ -592,7 +605,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
           blockers={awardBlockers(project, pendingAward.id)}
           onClose={() => setPendingAwardId(null)}
           onDirtyChange={onDirtyChange}
-          onApply={(reason) => { setPendingAwardId(null); onSelectBidder(pendingAward.id); onUpdateBidderStatus(pendingAward.id, 'recommended', reason); }}
+          onApply={(reason) => { setPendingAwardId(null); onSelectBidder(pendingAward.id); onUpdateBidderStatus(pendingAward.id, 'recommended', reason); askRecordStatus(); }}
           onOpenAudit={(id) => { setPendingAwardId(null); onOpenAudit(id); }}
           onOpenPreference={() => { setPendingAwardId(null); setPrefOpen(true); }}
           onExcluded={(id) => { setPendingAwardId(null); onUpdateBidderStatus(id, 'disqualified'); onOpenExclusionReasons(id); }}

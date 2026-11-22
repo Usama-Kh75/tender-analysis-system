@@ -6,6 +6,7 @@ import { contractTypeInfo } from '../utils/contractTypes';
 import { budgetTypeInfo } from '../utils/budgetTypes';
 import { announcementLabel, bidCountsLabel, tenderDetailParts } from '../utils/tenderDetails';
 import { statusBadgeText } from '../utils/orderStatus';
+import { statusLag } from '../utils/statusLag';
 import { stageStates, type NextStepAction, type StageState } from '../utils/tenderPath';
 import { itemsWithErrorsText } from '../utils/arabicCount';
 import { NextStepBar } from './NextStepBar';
@@ -46,6 +47,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   activeTab, onSelectTab, pendingAudit, activeBidderId
 }) => {
   const states = stageStates(currentProject);
+  const lag = statusLag(currentProject);
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-xs mb-6">
       
@@ -106,10 +108,14 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             type="button"
             aria-haspopup="dialog"
             onClick={onOpenStatus}
-            title="سجل موقف الطلبية"
-            className="bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold px-3.5 py-1 rounded-full border border-blue-200 cursor-pointer transition"
+            title={lag ? lag.text : 'سجل موقف الطلبية'}
+            className={lag
+              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold px-3.5 py-1 rounded-full border border-amber-300 cursor-pointer transition'
+              : 'bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold px-3.5 py-1 rounded-full border border-blue-200 cursor-pointer transition'}
           >
+            {lag && <span aria-hidden="true">⚠ </span>}
             {statusBadgeText(currentProject.statusLog)}
+            {lag && <span className="sr-only"> — {lag.text}</span>}
           </button>
           <button
             onClick={onOpenSettings}

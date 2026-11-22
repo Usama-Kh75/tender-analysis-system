@@ -181,6 +181,9 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                         {c.key === 'action' && r.previous.map(p => (
                           <span key={`${p.kind}-${p.id}`} className="block text-[11px] text-slate-500 mt-1">{p.text}</span>
                         ))}
+                        {c.key === 'action' && r.lag && (
+                          <span className="block text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-1 no-print print:hidden">⚠ {r.lag}</span>
+                        )}
                       </td>
                     ))}
                     <td className={`${cell} text-center no-print`}>
