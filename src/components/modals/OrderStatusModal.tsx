@@ -4,6 +4,7 @@ import type { StatusBranch, StatusEntry, StatusStage } from '../../types/tender'
 import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, statusLine, statusText } from '../../utils/orderStatus';
 import { localDate } from '../../utils/localDate';
 import type { StatusInput } from '../../app/statusHandlers';
+import { WINNER_DETAIL_STAGES } from '../../utils/statusPreset';
 
 interface OrderStatusModalProps {
   isOpen: boolean;
@@ -13,6 +14,8 @@ interface OrderStatusModalProps {
   statusLog: StatusEntry[];
   // أسماء مقترحة للجهة المحال إليها (مجهزو المناقصة)؛ فارغة لطلبية بلا تحليل
   suggestions?: string[];
+  // اسم العطاء الذي اختارته اللجنة (إن وُجد): يملأ تفصيل «قيد الإحالة» و«تمت الإحالة» حين يكون فارغاً
+  winnerName?: string | null;
   // قسم بيانات يظهر فوق نموذج الموقف (المحرر في كشف الموقف)
   detailsSlot?: React.ReactNode;
   // يخفي نموذج الموقف وسجله (طلبية جديدة لم تُحفظ بياناتها بعد)
@@ -31,7 +34,7 @@ const labelClass = 'block text-xs font-bold text-slate-700 mb-1';
 // نافذة موقف الطلبية: إضافة موقف جديد، وسجل المواقف (الأحدث أولاً) مع تعديل وحذف
 export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
   isOpen, onClose, title = 'موقف الطلبية', subtitle = 'أين الطلبية الآن وبأي مذكرة، والأخير في السجل هو الموقف الحالي',
-  statusLog, suggestions = [], detailsSlot, statusHidden, statusHiddenNote, stacked, onAdd, onEdit, onDelete
+  statusLog, suggestions = [], winnerName, detailsSlot, statusHidden, statusHiddenNote, stacked, onAdd, onEdit, onDelete
 }) => {
   const [stage, setStage] = useState<StatusStage>('analysis');
   const [branch, setBranch] = useState<StatusBranch | ''>('');
@@ -76,6 +79,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({
     setError(null);
     // التفصيل النصي يبقى عند تبديل الإجراء
     if (branch && !branchesOf(next).includes(branch)) setBranch('');
+    if (winnerName && (WINNER_DETAIL_STAGES as readonly string[]).includes(next) && !customText.trim()) setCustomText(winnerName);
   };
 
   const handleSubmit = (e: React.FormEvent) => {

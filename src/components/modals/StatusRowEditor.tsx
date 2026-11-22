@@ -4,6 +4,7 @@ import { ANNOUNCEMENT_ORDER, announcementLabel } from '../../utils/tenderDetails
 import type { createStatusHandlers } from '../../app/statusHandlers';
 import type { createStatusOrderHandlers } from '../../app/statusOrderHandlers';
 import { OrderStatusModal } from './OrderStatusModal';
+import { chosenWinnerName } from '../../utils/statusPreset';
 
 interface StatusRowEditorProps {
   // tender: مناقصة محفوظة (العنوان والرقم للقراءة فقط)، order: طلبية بلا تحليل، new: طلبية جديدة لم تُحفظ بعد
@@ -103,7 +104,7 @@ export const StatusRowEditor: React.FC<StatusRowEditorProps> = ({ mode, project,
       <OrderStatusModal
         isOpen stacked onClose={onClose}
         title="تعديل موقف الطلبية" subtitle={[project!.referenceNumber, project!.title].filter(Boolean).join(' — ')}
-        statusLog={project!.statusLog ?? []} suggestions={[...new Set(project!.bidders.map(b => b.name.trim()).filter(Boolean))]} detailsSlot={detailsSection}
+        statusLog={project!.statusLog ?? []} suggestions={[...new Set(project!.bidders.map(b => b.name.trim()).filter(Boolean))]} winnerName={chosenWinnerName(project!)} detailsSlot={detailsSection}
         onAdd={tenderHandlers!.handleAddStatus} onEdit={tenderHandlers!.handleEditStatus} onDelete={tenderHandlers!.handleDeleteStatus}
       />
     );

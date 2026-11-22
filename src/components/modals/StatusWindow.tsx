@@ -3,6 +3,7 @@ import { MapPin, X } from 'lucide-react';
 import type { TenderProject } from '../../types/tender';
 import type { StatusInput } from '../../app/statusHandlers';
 import { OrderStatusPanel } from '../OrderStatusPanel';
+import type { StatusFormPreset } from '../../utils/statusPreset';
 
 interface StatusWindowProps {
   isOpen: boolean;
@@ -14,12 +15,13 @@ interface StatusWindowProps {
   onOpenSheet: () => void;
   // نموذج فيه إدخال لم يُحفظ: يمنع «حفظ والتحديث» (blockingWork في App)
   onDirtyChange: (dirty: boolean) => void;
+  preset?: StatusFormPreset;
 }
 
 // نافذة سجل موقف الطلبية: تفتح من زر الموقف في رأس المناقصة (كان تبويباً). تلفّ OrderStatusPanel القائمة بلا تغيير في سلوكها.
 // الإغلاق بالزر وEscape وبفتح «كشف الموقف» يمرّ كله بدالة واحدة تسأل قبل ضياع كتابة لم تُحفظ
 export const StatusWindow: React.FC<StatusWindowProps> = ({
-  isOpen, onClose, project, onAdd, onEdit, onDelete, onOpenSheet, onDirtyChange
+  isOpen, onClose, project, onAdd, onEdit, onDelete, onOpenSheet, onDirtyChange, preset
 }) => {
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
@@ -73,7 +75,8 @@ export const StatusWindow: React.FC<StatusWindowProps> = ({
         </div>
         <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
           <OrderStatusPanel
-            key={project.id}
+            key={`${project.id}:${preset?.seq ?? 0}`}
+            preset={preset}
             project={project}
             onAdd={onAdd}
             onEdit={onEdit}

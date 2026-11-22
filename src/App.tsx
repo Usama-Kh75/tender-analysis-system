@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { unitPriceOutliers } from './utils/unitOutliers';
 import { lastBackupTime } from './utils/backupStatus';
 import { isSaveBlocked } from './utils/storageService';
+import { chosenWinnerName } from './utils/statusPreset';
+import { localDate } from './utils/localDate';
 import { hasBidAmounts, exclusionThresholdOf, offerWinner } from './utils/recommendation';
 import { tenderPath, type NextStepAction } from './utils/tenderPath';
 import { exportTenderToExcel } from './utils/excelService';
@@ -82,6 +84,8 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   // نافذة الموقف (تفتح من زر الموقف في رأس المناقصة)
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  // نموذج الموقف المعبّأ بعد اختيار الترسية؛ يُمسح بإغلاق النافذة
+  const [statusPresetSeq, setStatusPresetSeq] = useState(0);
   // نموذج نافذة الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
   const [isStatusDirty, setIsStatusDirty] = useState(false);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
@@ -438,7 +442,7 @@ export function App() {
               onOpenExclusionReasons={setExclusionBidderId}
               onSelectBidder={handlePickBidder}
               onUpdateBidderStatus={handleUpdateBidderStatus}
-              onOpenStatus={() => setIsStatusOpen(true)}
+              onOpenStatus={(opts) => { if (opts?.award) setStatusPresetSeq(n => n + 1); setIsStatusOpen(true); }}
               onOpenAudit={(id) => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: id ?? tenderPath(currentProject).audit.firstBidderId ?? undefined })}
               onSavePreferenceInitiatives={handleSavePreferenceInitiatives}
               onDirtyChange={setIsStudyDirty}
@@ -499,7 +503,8 @@ export function App() {
       )}
       <StatusWindow
         isOpen={isStatusOpen}
-        onClose={() => setIsStatusOpen(false)}
+        onClose={() => { setIsStatusOpen(false); setStatusPresetSeq(0); }}
+        preset={statusPresetSeq > 0 && chosenWinnerName(currentProject) ? { seq: statusPresetSeq, stage: 'referralPending', customText: chosenWinnerName(currentProject)!, memoDate: localDate() } : undefined}
         project={currentProject}
         onAdd={handleAddStatus}
         onEdit={handleEditStatus}

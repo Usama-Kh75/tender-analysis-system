@@ -5,6 +5,7 @@ import { branchesOf, BRANCH_LABELS, STAGE_LABELS, STAGE_ORDER, formatSheetDate, 
 import { localDate } from '../utils/localDate';
 import { analysisPath } from '../utils/analysisPath';
 import type { StatusInput } from '../app/statusHandlers';
+import { chosenWinnerName, WINNER_DETAIL_STAGES, type StatusFormPreset } from '../utils/statusPreset';
 
 interface OrderStatusPanelProps {
   project: TenderProject;
@@ -14,6 +15,8 @@ interface OrderStatusPanelProps {
   onOpenSheet: () => void;
   // نموذج فيه إدخال لم يُحفظ: يمنع «حفظ والتحديث» (blockingWork في App)
   onDirtyChange: (dirty: boolean) => void;
+  // قيم ابتدائية للنموذج (بعد اختيار الترسية)؛ لا يُحفظ شيء قبل «إضافة الموقف»
+  preset?: StatusFormPreset;
 }
 
 const fieldClass = 'w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none';
@@ -21,12 +24,18 @@ const labelClass = 'block text-xs font-bold text-slate-700 mb-1';
 
 // تبويب موقف الطلبية: إضافة موقف جديد، وسجل المواقف (الأحدث أولاً) مع تعديل وحذف.
 // يُنشأ بـkey=معرّف المناقصة فيبدأ نموذجه فارغاً لكل مناقصة
-export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onAdd, onEdit, onDelete, onOpenSheet, onDirtyChange }) => {
-  const [stage, setStage] = useState<StatusStage>('analysis');
+export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onAdd, onEdit, onDelete, onOpenSheet, onDirtyChange, preset }) => {
+  // القيم التي يقارَن بها «لم يُحفظ»: المسبقة إن وُجدت، وبعد إضافة ناجحة الفارغة
+  const [base, setBase] = useState(() => ({
+    stage: (preset?.stage ?? 'analysis') as StatusStage,
+    customText: preset?.customText ?? '',
+    memoDate: preset?.memoDate ?? localDate()
+  }));
+  const [stage, setStage] = useState<StatusStage>(base.stage);
   const [branch, setBranch] = useState<StatusBranch | ''>('');
-  const [customText, setCustomText] = useState('');
+  const [customText, setCustomText] = useState(base.customText);
   const [memoNo, setMemoNo] = useState('');
-  const [memoDate, setMemoDate] = useState(localDate());
+  const [memoDate, setMemoDate] = useState(base.memoDate);
   const [note, setNote] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +43,7 @@ export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onA
   const stageRef = useRef<HTMLSelectElement>(null);
 
   // النموذج «متسخ» إن اختلف حقل عن قيمته الابتدائية أو كان تعديلاً جارياً
-  const dirty = editingId !== null || stage !== 'analysis' || branch !== '' || customText !== '' || memoNo !== '' || memoDate !== localDate() || note !== '';
+  const dirty = editingId !== null || stage !== base.stage || branch !== '' || customText !== base.customText || memoNo !== '' || memoDate !== base.memoDate || note !== '';
   useEffect(() => {
     onDirtyChange(dirty);
     return () => onDirtyChange(false);
@@ -49,6 +58,7 @@ export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onA
   const suggestions = project.bidders.map(b => b.name).filter(Boolean);
 
   const reset = () => {
+    setBase({ stage: 'analysis', customText: '', memoDate: localDate() });
     setStage('analysis');
     setBranch('');
     setCustomText('');
@@ -63,6 +73,11 @@ export const OrderStatusPanel: React.FC<OrderStatusPanelProps> = ({ project, onA
     setStage(next);
     setError(null);
     if (branch && !branchesOf(next).includes(branch)) setBranch('');
+    // اسم الفائز يملأ التفصيل الفارغ فقط، ولا يستبدل ما كتبه المستخدم
+    if ((WINNER_DETAIL_STAGES as readonly string[]).includes(next) && !customText.trim()) {
+      const winner = chosenWinnerName(project);
+      if (winner) setCustomText(winner);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {

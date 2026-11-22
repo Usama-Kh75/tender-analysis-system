@@ -26,7 +26,7 @@ interface StudyViewProps {
   onSelectBidder: (id: string) => void;
   onUpdateBidderStatus: (id: string, status: Bidder['status'], reason?: string) => void;
   /** يفتح نافذة الموقف (نموذج مدخل جديد بتاريخ اليوم) */
-  onOpenStatus: () => void;
+  onOpenStatus: (opts?: { award?: boolean }) => void;
   /** يفتح عرض التدقيق في تبويب «العطاءات والتدقيق» عند أول مجهز فيه فقرات فيها أخطاء */
   onOpenAudit: (bidderId?: string) => void;
   /** ينتقل إلى تبويب العطاءات على المجهز لإدخال عطائه */
@@ -67,7 +67,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
     if (!isPreAwardStatus(project)) return;
     const had = project.statusLog?.length ? `الموقف المسجَّل للطلبية: «${statusBadgeText(project.statusLog).replace(/^الموقف: /, '')}».` : 'لم يُسجَّل موقف للطلبية.';
     // بعد أن يُرسَل تحديث الحالة وتُغلق النافذة، فلا تقطع نقل التركيز
-    setTimeout(() => { if (window.confirm(`${had} اختارت اللجنة الترسية الآن، فهل تسجّل الموقف الجديد؟`)) onOpenStatus(); }, 0);
+    setTimeout(() => { if (window.confirm(`${had} اختارت اللجنة الترسية الآن، فهل تسجّل الموقف الجديد؟`)) onOpenStatus({ award: true }); }, 0);
   };
   const chooseAward = (id: string) => {
     if (needsAwardDialog(awardBlockers(project, id))) { setPendingAwardId(id); return; }
