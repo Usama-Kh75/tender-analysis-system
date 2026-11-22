@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Hourglass, X } from 'lucide-react';
 import type { Bidder, TenderProject } from '../../types/tender';
 import { toLatinDigits } from '../../utils/calculations';
-import { bidExpiry } from '../../utils/bidValidity';
+import { bidExpiry, isValidityDays, MAX_VALIDITY_DAYS } from '../../utils/bidValidity';
 import { formatSheetDate } from '../../utils/orderStatus';
 
 interface BidValidityModalProps {
@@ -22,8 +22,8 @@ export const BidValidityModal: React.FC<BidValidityModalProps> = ({ project, bid
 
   const daysText = toLatinDigits(days.trim());
   const daysNum = daysText === '' ? undefined : Number(daysText);
-  const daysError = daysNum !== undefined && (!/^\d+$/.test(daysText) || !Number.isInteger(daysNum) || daysNum <= 0)
-    ? 'أدخل عدداً صحيحاً موجباً من الأيام' : null;
+  const daysError = daysNum !== undefined && (!/^\d+$/.test(daysText) || !isValidityDays(daysNum))
+    ? `أدخل عدداً صحيحاً موجباً من الأيام لا يزيد على ${MAX_VALIDITY_DAYS}` : null;
   const dirty = daysText !== (bidder.validityDays ? String(bidder.validityDays) : '') || extended !== (bidder.validityExtendedTo ?? '');
 
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);

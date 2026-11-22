@@ -30,7 +30,9 @@ const dayNo = (iso: string): number => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 
 const fromDayNo = (n: number): string => new Date(n * DAY_MS).toISOString().slice(0, 10);
 export const addDays = (iso: string, days: number): string => fromDayNo(dayNo(iso) + days);
 
-export const isValidityDays = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;
+/** أطول مدة نفاذية تُقبل (عشر سنوات): حد معقول يمنع تاريخاً خارج مجال Date يُسقط الحساب */
+export const MAX_VALIDITY_DAYS = 3650;
+export const isValidityDays = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= MAX_VALIDITY_DAYS;
 
 /** آخر يوم تنفذ فيه نفاذية العطاء: التمديد إن وُجد، وإلا تاريخ الغلق + المدة */
 export function bidExpiry(project: TenderProject, bidder: Bidder): string | null {

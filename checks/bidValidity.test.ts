@@ -105,3 +105,12 @@ test('صف كشف الموقف يحمل تنبيه النفاذية للمناق
   const orderRows = statusSheetRows([], [{ id: 'o1', referenceNumber: '5 / 26 / 1', title: 'طلبية', statusLog: [] } as never]);
   assert.equal(orderRows[0].validity, undefined);
 });
+
+test('مدة مفرطة (أكثر من 3650 يوماً) لا تُقبل ولا تُسقط الحساب (مراجعة Codex)', () => {
+  const p = mk([mkBidder('A', 1000, { validityDays: 999_999_999 }), mkBidder('B', 1000, { validityDays: 3650 })], { closingDate: '2026-01-01' });
+  assert.equal(bidExpiry(p, p.bidders[0]), null);
+  assert.equal(bidExpiry(p, p.bidders[1]), addDays('2026-01-01', 3650));
+  assert.doesNotThrow(() => validityAlert(p, '2026-11-22'));
+  assert.equal(sanitizeBidValidity(p).bidders[0].validityDays, undefined);
+  assert.equal(sanitizeBidValidity(p).bidders[1].validityDays, 3650);
+});
