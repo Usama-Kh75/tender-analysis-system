@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.32.0',
+    date: '2026-11-22',
+    notes: [
+      'تسجيل تاريخ غلق المناقصة ومدة نفاذية كل عطاء وتمديدها، وتنبيه قبل انتهاء النفاذية بموعد تقديم تقرير اللجنة (المادة 13/أولاً).'
+    ]
+  },
+  {
     version: '1.31.0',
     date: '2026-11-19',
     notes: [
