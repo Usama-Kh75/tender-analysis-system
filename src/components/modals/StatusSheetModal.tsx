@@ -212,18 +212,18 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                       >تعديل</button>
                       {/* زرّا كل سطر سابق معاً: تعديله ورفع تذكيره */}
                       {r.previous.map(p => (
-                        <div key={`${p.kind}-${p.id}`} className="flex items-center justify-center gap-1 mt-1">
+                        <div key={`${p.kind}-${p.id}`} className="flex items-center justify-center gap-1.5 mt-1">
                           <button
                             type="button"
                             onClick={() => setEditing({ kind: p.kind, id: p.id })}
-                            aria-label={`تعديل السابق: ${p.text}`}
-                            className="px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                            aria-label={`تعديل ${p.text}`}
+                            className="px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap"
                           >تعديل السابق</button>
                           <button
                             type="button"
                             onClick={() => hidePrevious(p.kind, p.id)}
                             aria-label={`رفع التذكير: ${p.text}`}
-                            className="px-2 py-0.5 text-[11px] font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"
+                            className="px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer whitespace-nowrap"
                           >رفع</button>
                         </div>
                       ))}
