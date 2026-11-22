@@ -150,7 +150,8 @@ test('المفاتيح الجديدة: نصها يطابق officialText في JSO
   const map: [LegalKey, string, string][] = [
     ['art10_1_n', 'article-10.json', 'أولاً / ن'], ['art10_1_t', 'article-10.json', 'أولاً / ط'], ['art10_1_h', 'article-10.json', 'أولاً / هـ'],
     ['ann4_5_b1', 'annex-04.json', 'خامساً / ب / 1'], ['ann4_5_b2', 'annex-04.json', 'خامساً / ب / 2'],
-    ['ann4_5_b3', 'annex-04.json', 'خامساً / ب / 3'], ['ann4_5_b6', 'annex-04.json', 'خامساً / ب / 6']
+    ['ann4_5_b3', 'annex-04.json', 'خامساً / ب / 3'], ['ann4_5_b6', 'annex-04.json', 'خامساً / ب / 6'],
+    ['ann4_11_3', 'annex-04.json', 'أحد عشر / 3'], ['ann4_11_9', 'annex-04.json', 'أحد عشر / 9']
   ];
   for (const [key, file, clause] of map) {
     const c = JSON.parse(fs.readFileSync(dir + file, 'utf8')).clauses.find((x: { clause: string }) => x.clause === clause);

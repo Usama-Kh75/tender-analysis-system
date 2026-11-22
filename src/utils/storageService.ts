@@ -7,6 +7,7 @@ import { exclusionThresholdOf } from './recommendation';
 import { recommendationEditsExport } from './recommendationText';
 import { sanitizeExclusionFields } from './exclusionReasons';
 import { sanitizePreferenceInitiatives } from './preferenceBasis';
+import { sanitizeBidValidity } from './bidValidity';
 import { sanitizeStatusLog, formatSheetDate } from './orderStatus';
 
 const STORAGE_KEY = 'antigravity_tenders_projects_v2';
@@ -99,6 +100,7 @@ export function createNewTenderProject(opts: {
   announcementNo?: number;
   receivedAt?: string;
   receivedBidsCount?: number;
+  closingDate?: string;
   bidderNames: string[];
 }): TenderProject {
   const now = Date.now();
@@ -129,6 +131,7 @@ export function createNewTenderProject(opts: {
     referenceNumber: opts.referenceNumber,
     announcementNo: opts.announcementNo,
     ...(opts.receivedBidsCount ? { receivedBidsCount: opts.receivedBidsCount } : {}),
+    ...(formatSheetDate(opts.closingDate) ? { closingDate: opts.closingDate } : {}),
     ...(receivedAt ? {
       receivedAt,
       statusLog: [{ id: `status-${now}`, stage: 'analysis' as const, memoDate: receivedAt, recordedAt: new Date().toISOString() }]
@@ -380,7 +383,7 @@ const normalizeReferenceNumber = (project: TenderProject): TenderProject => {
 };
 
 const normalizeLoadedProject = (project: TenderProject) =>
-  normalizeReferenceNumber(defaultLegacyBudgetType(sanitizePreferenceInitiatives(sanitizeExclusionFields(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(uniqueItemIds(latinizeItemNumbers(project)))))))))));
+  normalizeReferenceNumber(defaultLegacyBudgetType(sanitizeBidValidity(sanitizePreferenceInitiatives(sanitizeExclusionFields(sanitizeStatusFields(refreshWeightedPrices(refreshDeviationPrecision(recheckStoredFlags(reconcileProjectSharedFields(uniqueItemIds(latinizeItemNumbers(project))))))))))));
 
 // نسخ من نص مخزَّن لم يُقرأ كمشاريع: لا يُكتب فوق شيء قبل حفظه هنا، وتُعرض للمستخدم لينزّله
 const RECOVERY_KEY = 'antigravity_tenders_recovery_v1';

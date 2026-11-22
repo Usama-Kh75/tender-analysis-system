@@ -21,6 +21,7 @@ import { ReportView } from './components/ReportView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
 import { BidderCards } from './components/BidderCards';
+import { BidValidityModal } from './components/modals/BidValidityModal';
 import { initialAuditFilter, type AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
 
@@ -104,6 +105,9 @@ export function App() {
   const [auditFocusItemId, setAuditFocusItemId] = useState<string | undefined>(undefined);
   // العطاء الذي تُسجَّل أسباب استبعاده في نافذة «أسباب الاستبعاد»؛ null = مغلقة
   const [exclusionBidderId, setExclusionBidderId] = useState<string | null>(null);
+  // نافذة نفاذية العطاء (المجهز المعني) وفيها إدخال لم يُحفظ (يمنع التحديث)
+  const [validityBidderId, setValidityBidderId] = useState<string | null>(null);
+  const [isValidityDirty, setIsValidityDirty] = useState(false);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
@@ -116,6 +120,7 @@ export function App() {
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
     : isPrintOpen && isRecEditing ? 'صياغة التوصية'
+    : validityBidderId && isValidityDirty ? 'نفاذية العطاء'
     : exclusionBidderId ? 'أسباب الاستبعاد'
     : isStudyDirty ? 'أساس المفاضلة أو مبرر الترسية'
     : null;
@@ -228,7 +233,7 @@ export function App() {
   };
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
-    handleSaveSettings, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
+    handleSaveSettings, handleSaveBidValidity, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
   const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
   const { handleSavePreferenceInitiatives } = createPreferenceHandlers(currentProject, ctx.saveProject);
@@ -330,6 +335,7 @@ export function App() {
           onSelect={handlePickBidder}
           onRename={handleUpdateBidderName}
           onAdd={handleAddNewBidder}
+          onEditValidity={setValidityBidderId}
         />
 
         {/* Dynamic KPI Cards */}
@@ -462,6 +468,16 @@ export function App() {
       <AppFooter onOpenWhatsNew={() => setIsWhatsNewOpen(true)} />
 
       {/* Modals */}
+      {validityBidderId && currentProject.bidders.some(b => b.id === validityBidderId) && (
+        <BidValidityModal
+          key={`${currentProject.id}:${validityBidderId}`}
+          project={currentProject}
+          bidder={currentProject.bidders.find(b => b.id === validityBidderId)!}
+          onSave={handleSaveBidValidity}
+          onClose={() => { setValidityBidderId(null); setIsValidityDirty(false); }}
+          onDirtyChange={setIsValidityDirty}
+        />
+      )}
       <StatusWindow
         isOpen={isStatusOpen}
         onClose={() => setIsStatusOpen(false)}

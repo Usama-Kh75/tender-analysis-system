@@ -12,7 +12,7 @@ import type { StatusStage } from '../types/tender';
  *  المحضر منتهٍ حين يكون آخر موقف خروج الطلبية من اللجنة بعد اختيار الفائز. «معادة من التدقيق» رجوع إلى اللجنة،
  *  و«إجراء آخر» مجهول المعنى، فكلاهما يُبقي خطوة المحضر */
 const REPORT_DONE_STAGES: ReadonlySet<StatusStage> = new Set<StatusStage>(['audit', 'reviewCommittee', 'referralPending', 'referred', 'sentToContracts']);
-const reportLeftCommittee = (p: TenderProject): boolean => {
+export const reportLeftCommittee = (p: TenderProject): boolean => {
   const s = currentStatus(p)?.stage;
   return !!s && REPORT_DONE_STAGES.has(s as StatusStage);
 };

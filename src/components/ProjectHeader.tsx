@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Settings } from 'lucide-react';
 import type { MainTab } from '../resume';
 import { TenderProject } from '../types/tender';
@@ -9,6 +9,9 @@ import { statusBadgeText } from '../utils/orderStatus';
 import { statusLag } from '../utils/statusLag';
 import { stageStates, type NextStepAction, type StageState } from '../utils/tenderPath';
 import { itemsWithErrorsText } from '../utils/arabicCount';
+import { validityAlert, validityMissing } from '../utils/bidValidity';
+import { localDate } from '../utils/localDate';
+import { LEGAL_TEXTS } from '../utils/legalTexts';
 import { NextStepBar } from './NextStepBar';
 import { StageGuidance } from './StageGuidance';
 
@@ -48,6 +51,9 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 }) => {
   const states = stageStates(currentProject);
   const lag = statusLag(currentProject);
+  const validity = validityAlert(currentProject, localDate());
+  const missing = validity ? 0 : validityMissing(currentProject);
+  const [legalOpen, setLegalOpen] = useState(false);
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-xs mb-6">
       
@@ -131,6 +137,35 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           تاريخ آخر تحديث: {new Date(currentProject.updatedAt).toLocaleDateString('ar-EG')}
         </div>
       </div>
+
+      {/* نفاذية العطاءات: تنبيه عرض فقط، لا يُطبع ولا يدخل المحضر */}
+      {validity && (
+        <div
+          role="status"
+          className={`no-print print:hidden mb-3 rounded-xl border px-3 py-2 text-xs font-bold ${validity.level === 'warn' ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-rose-50 border-rose-300 text-rose-900'}`}
+        >
+          <span aria-hidden="true">⏳ </span>{validity.text}{' '}
+          <button
+            type="button"
+            aria-expanded={legalOpen}
+            aria-controls="validity-legal-texts"
+            onClick={() => setLegalOpen(o => !o)}
+            className="underline cursor-pointer rounded whitespace-nowrap"
+          >
+            {legalOpen ? 'إخفاء النص' : 'النص الرسمي'}
+          </button>
+          <div id="validity-legal-texts" hidden={!legalOpen} className="mt-1.5 space-y-1 font-normal text-slate-700">
+            {validity.legalKeys.map(k => (
+              <blockquote key={k} className="rounded-lg border border-slate-200 bg-white px-3 py-2 leading-relaxed">
+                <span className="font-bold">{LEGAL_TEXTS[k].label}: </span>«{LEGAL_TEXTS[k].text}» (ص {LEGAL_TEXTS[k].page})
+              </blockquote>
+            ))}
+          </div>
+        </div>
+      )}
+      {!validity && missing > 0 && (
+        <p className="no-print print:hidden mb-3 text-[11px] text-slate-500">لم تُدخل نفاذية {missing === 1 ? 'عطاء واحد' : `${missing} عطاءات`} (زر «نفاذية العطاء» في تبويب العطاءات)</p>
+      )}
 
       {/* Middle Row: Project Title (Editable) */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-1">

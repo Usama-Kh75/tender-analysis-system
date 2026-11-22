@@ -239,11 +239,28 @@ ${exclusionLock}`);
         // الاختيارية: جزء لكل حقل تغيّرت قيمته، و«غير محدد» عند المسح
         + detailChange('الإعلان', announcementLabel(currentProject.announcementNo), announcementLabel(updated.announcementNo))
         + detailChange('تاريخ الاستلام', formatSheetDate(currentProject.receivedAt) || undefined, formatSheetDate(updated.receivedAt) || undefined)
+        + detailChange('تاريخ غلق المناقصة', formatSheetDate(currentProject.closingDate) || undefined, formatSheetDate(updated.closingDate) || undefined)
         + detailChange('أسلوب الدعوة', invitationTypeInfo(currentProject.invitationType)?.label, invitationTypeInfo(updated.invitationType)?.label)
         + detailChange('الجهة المستفيدة', currentProject.beneficiaryEntity?.trim() || undefined, updated.beneficiaryEntity?.trim() || undefined)
         + detailChange('عدد العطاءات المستلمة', receivedBidsCountOf(currentProject)?.toString(), receivedBidsCountOf({ ...currentProject, receivedBidsCount: updated.receivedBidsCount })?.toString(), true)
     );
 
+    saveProject(updatedProj);
+  };
+
+  // نفاذية عطاء (المادة 13/أولاً): مدة بالأيام وتمديد، عرض فقط، بقيد واحد في السجل
+  const handleSaveBidValidity = (bidderId: string, v: { validityDays?: number; validityExtendedTo?: string }) => {
+    const target = currentProject.bidders.find(b => b.id === bidderId);
+    if (!target) return;
+    if (target.validityDays === v.validityDays && target.validityExtendedTo === v.validityExtendedTo) return;
+    const show = (d?: number, e?: string) => `${d ? `${d} يوماً` : 'بلا مدة'}${e ? `، ممدَّدة لغاية ${formatSheetDate(e)}` : ''}`;
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: currentProject.bidders.map(b => b.id === bidderId ? { ...b, validityDays: v.validityDays, validityExtendedTo: v.validityExtendedTo } : b),
+      updatedAt: new Date().toISOString()
+    };
+    updatedProj = addAuditLog(updatedProj, 'تعديل نفاذية العطاء',
+      `نفاذية عطاء (${target.name}): ${show(target.validityDays, target.validityExtendedTo)} ← ${show(v.validityDays, v.validityExtendedTo)}`);
     saveProject(updatedProj);
   };
 
@@ -255,6 +272,6 @@ ${exclusionLock}`);
 
   return {
     handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleResetAllBidders,
-    handleUpdateBidderStatus, handleSaveSettings, selectBidder
+    handleUpdateBidderStatus, handleSaveSettings, handleSaveBidValidity, selectBidder
   };
 }

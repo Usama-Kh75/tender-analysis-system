@@ -49,6 +49,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
 
   const [announcementNo, setAnnouncementNo] = useState<number | ''>(announcementLabel(project.announcementNo) ? project.announcementNo! : '');
   const [receivedAt, setReceivedAt] = useState(project.receivedAt ?? '');
+  const [closingDate, setClosingDate] = useState(project.closingDate ?? '');
   const [invitationType, setInvitationType] = useState<InvitationType | ''>(invitationTypeInfo(project.invitationType) ? project.invitationType! : '');
   const [beneficiaryEntity, setBeneficiaryEntity] = useState(project.beneficiaryEntity ?? '');
   const [receivedBidsCount, setReceivedBidsCount] = useState(String(receivedBidsCountOf(project) ?? ''));
@@ -95,6 +96,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       // الاختيارية تُمسح صراحةً حين تُفرَّغ
       announcementNo: announcementNo || undefined,
       receivedAt: receivedAt || undefined,
+      closingDate: closingDate || undefined,
       invitationType: invitationType || undefined,
       beneficiaryEntity: beneficiaryEntity.trim() || undefined,
       receivedBidsCount: received
@@ -205,6 +207,18 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                 onChange={(e) => setReceivedAt(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
+            </div>
+            <div>
+              <label htmlFor="settings-closing" className="block text-xs font-bold text-slate-700 mb-1">تاريخ غلق المناقصة</label>
+              <input
+                id="settings-closing"
+                type="date"
+                value={closingDate}
+                onChange={(e) => setClosingDate(e.target.value)}
+                aria-describedby="settings-closing-help"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <p id="settings-closing-help" className="text-[11px] text-slate-500 mt-1">تبدأ منه مدة نفاذية كل عطاء (اختياري).</p>
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">العملة المعتمدة</label>

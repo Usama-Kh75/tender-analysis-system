@@ -2,6 +2,13 @@ import type { StatusBranch, StatusEntry, StatusOrder, StatusStage, TenderProject
 import { announcementLabel } from './tenderDetails';
 import { compareOrderNumbers, formatOrderNumber } from './orderNumber';
 import { statusLag } from './statusLag';
+import { validityAlert } from './bidValidity';
+import { localDate } from './localDate';
+
+const sheetValidity = (p: TenderProject) => {
+  const a = validityAlert(p, localDate());
+  return a ? { level: a.level, text: a.text } : undefined;
+};
 
 /**
  * موقف الطلبية: سجل وعرض فقط، لا يدخل في أي حساب أو توصية.
@@ -135,6 +142,8 @@ export interface StatusSheetRow {
   previous: { kind: 'tender' | 'order'; id: string; text: string }[];
   /** تنبيه عرض فقط (لا يُطبع ولا يُصدَّر): الموقف متأخر عن عمل اللجنة في النظام؛ للمناقصات وحدها (utils/statusLag.ts). */
   lag?: string;
+  /** تنبيه نفاذية العطاءات (عرض فقط، لا يُطبع ولا يُصدَّر) */
+  validity?: { level: 'warn' | 'late' | 'expired'; text: string };
 }
 
 export type StatusSortKey = 'number' | 'stage' | 'referral';
@@ -215,7 +224,8 @@ export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[]
       memoNo: s?.memoNo ?? '',
       date: s ? formatSheetDate(s.memoDate) : '',
       note: s?.note ?? '',
-      lag: kind === 'tender' ? statusLag(p as TenderProject)?.text : undefined
+      lag: kind === 'tender' ? statusLag(p as TenderProject)?.text : undefined,
+      validity: kind === 'tender' ? sheetValidity(p as TenderProject) : undefined
     };
   });
 }

@@ -88,6 +88,9 @@ export interface Bidder {
   // أسباب استبعاد العطاء كله (status 'disqualified')، بنود التعليمات التي استندت إليها اللجنة (utils/exclusionReasons.ts).
   // تبقى محفوظة إن تغيّرت الحالة، ولا تُعرض ولا تُطبع إلا والعطاء مستبعد
   exclusionReasons?: ExclusionReason[];
+  // نفاذية العطاء (المادة 13/أولاً): مدة بالأيام من تاريخ غلق المناقصة، وتمديد إن طُلب من المجهز. عرض فقط (utils/bidValidity.ts)
+  validityDays?: number;
+  validityExtendedTo?: string;        // YYYY-MM-DD
 }
 
 export interface PreferenceItem {
@@ -202,6 +205,7 @@ export interface TenderProject {
   receivedBidsCount?: number;         // العطاءات المستلمة، وقد تزيد على المحلَّلة تجارياً
   beneficiaryEntity?: string;
   receivedAt?: string;                // تاريخ استلام الطلبية YYYY-MM-DD
+  closingDate?: string;               // تاريخ غلق المناقصة YYYY-MM-DD، تبدأ منه نفاذية العطاءات (utils/bidValidity.ts)
   statusLog?: StatusEntry[];          // موقف الطلبية؛ الحالي هو آخر عنصر
   committeeChairman: string;          // رئيس لجنة التحليل
   committeeMembers: string[];         // أعضاء اللجنة

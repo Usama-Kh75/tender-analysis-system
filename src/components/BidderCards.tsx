@@ -5,6 +5,8 @@ import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { hasBidAmounts } from '../utils/recommendation';
 import { errorsCountText } from '../utils/arabicCount';
 import { formatNumber } from '../utils/calculations';
+import { bidExpiry } from '../utils/bidValidity';
+import { formatSheetDate } from '../utils/orderStatus';
 
 interface BidderCardsProps {
   project: TenderProject;
@@ -12,10 +14,12 @@ interface BidderCardsProps {
   onSelect: (id: string) => void;
   onRename: (name: string) => void;
   onAdd: () => void;
+  /** فتح نافذة نفاذية العطاء للمجهز */
+  onEditValidity: (bidderId: string) => void;
 }
 
 // الشركات في قائمة منسدلة (الاسم — المبلغ — حالة التدقيق) وتحتها سطر ملخص للمختارة: المبلغ بعد التدقيق، الحالة (أخضر مدقّق، كهرماني فيها أخطاء، رمادي لم يُدخل)، وشارتا الترسية والاستبعاد
-export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd }) => {
+export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd, onEditValidity }) => {
   // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
@@ -126,6 +130,16 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
             )}
           </>
         )}
+        {active && (
+          <button
+            type="button"
+            onClick={() => onEditValidity(active.id)}
+            className="shrink-0 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer transition"
+            title="مدة نفاذية العطاء وتمديدها (المادة 13/أولاً)"
+          >
+            نفاذية العطاء
+          </button>
+        )}
         <button
           onClick={() => onAdd()}
           className="shrink-0 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer transition"
@@ -146,6 +160,11 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
           }`}>
             {stateText(active)}
           </span>
+          {active && bidExpiry(project, active) && (
+            <span className="text-xs font-bold text-slate-600">
+              {active.validityExtendedTo ? 'ممدَّد لغاية' : 'نافذ لغاية'} <bdi className="font-mono">{formatSheetDate(bidExpiry(project, active)!)}</bdi>
+            </span>
+          )}
           {active.status === 'recommended' && (
             <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full px-1.5">★ موصى بالترسية</span>
           )}

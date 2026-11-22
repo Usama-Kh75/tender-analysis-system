@@ -10,7 +10,7 @@ import { toLatinDigits } from '../../utils/calculations';
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { title: string; referenceNumber: string; announcementNo: number; receivedAt: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[]; receivedBidsCount?: number }) => void;
+  onCreate: (data: { title: string; referenceNumber: string; announcementNo: number; receivedAt: string; closingDate?: string; contractType: ContractType; budgetType: BudgetType; bidderNames: string[]; receivedBidsCount?: number }) => void;
 }
 
 // نوع العقد يُختار قبل إدخال أي بيانات، لأن التوصية (معايير المفاضلة) تتبعه
@@ -19,6 +19,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const [referenceNumber, setReferenceNumber] = useState('');
   const [announcementNo, setAnnouncementNo] = useState(1);
   const [receivedAt, setReceivedAt] = useState(localDate());
+  const [closingDate, setClosingDate] = useState('');
   const [contractType, setContractType] = useState<ContractType | null>(null);
   const [budgetType, setBudgetType] = useState<BudgetType | null>(null);
   const [bidderNamesText, setBidderNamesText] = useState('');
@@ -42,6 +43,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     setReferenceNumber('');
     setAnnouncementNo(1);
     setReceivedAt(localDate());
+    setClosingDate('');
     setContractType(null);
     setBudgetType(null);
     setBidderNamesText('');
@@ -52,7 +54,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !contractType || !budgetType || receivedError) return;
-    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), announcementNo, receivedAt, contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/), receivedBidsCount: received });
+    onCreate({ title: title.trim(), referenceNumber: referenceNumber.trim(), announcementNo, receivedAt, closingDate: closingDate || undefined, contractType, budgetType, bidderNames: bidderNamesText.split(/\r?\n/), receivedBidsCount: received });
     close();
   };
 
@@ -177,6 +179,16 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                 value={receivedAt}
                 onChange={(e) => setReceivedAt(e.target.value)}
                 required
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="new-project-closing" className="block text-xs font-bold text-slate-700 mb-1">تاريخ غلق المناقصة (اختياري)</label>
+              <input
+                id="new-project-closing"
+                type="date"
+                value={closingDate}
+                onChange={(e) => setClosingDate(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
