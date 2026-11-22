@@ -9,7 +9,8 @@ import type { PreferenceRecord, TenderProject } from '../types/tender';
  */
 export function createPreferenceHandlers(project: TenderProject, saveProject: (p: TenderProject) => void) {
   /** يعيد رسالة خطأ عربية، أو null عند الحفظ (أو عدم التغيير) */
-  const handleSavePreferenceInitiatives = (records: PreferenceRecord[]): string | null => {
+  // source 'bid': إدخال أولي من تبويب العطاءات (إجراء مستقل لا يحسبه تنبيه تأخر الموقف)؛ 'study': من «الدراسة والتوصية»
+  const handleSavePreferenceInitiatives = (records: PreferenceRecord[], source: 'study' | 'bid' = 'study'): string | null => {
     const clean: PreferenceRecord[] = [];
     for (const raw of records) {
       const r = cleanPreferenceRecord(raw);
@@ -30,7 +31,7 @@ export function createPreferenceHandlers(project: TenderProject, saveProject: (p
     }).join('؛ ');
     saveProject(addAuditLog(
       { ...project, preferenceInitiatives: next, updatedAt: new Date().toISOString() },
-      'تسجيل أساس المفاضلة',
+      source === 'bid' ? 'تسجيل مبادرات العطاء' : 'تسجيل أساس المفاضلة',
       details,
       { oldValue: project.preferenceInitiatives ?? [], newValue: next }
     ));

@@ -50,6 +50,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const [announcementNo, setAnnouncementNo] = useState<number | ''>(announcementLabel(project.announcementNo) ? project.announcementNo! : '');
   const [receivedAt, setReceivedAt] = useState(project.receivedAt ?? '');
   const [closingDate, setClosingDate] = useState(project.closingDate ?? '');
+  const [splitAllowed, setSplitAllowed] = useState(project.splitAllowed === true);
   const [invitationType, setInvitationType] = useState<InvitationType | ''>(invitationTypeInfo(project.invitationType) ? project.invitationType! : '');
   const [beneficiaryEntity, setBeneficiaryEntity] = useState(project.beneficiaryEntity ?? '');
   const [receivedBidsCount, setReceivedBidsCount] = useState(String(receivedBidsCountOf(project) ?? ''));
@@ -97,6 +98,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       announcementNo: announcementNo || undefined,
       receivedAt: receivedAt || undefined,
       closingDate: closingDate || undefined,
+      splitAllowed: splitAllowed ? true : undefined,
       invitationType: invitationType || undefined,
       beneficiaryEntity: beneficiaryEntity.trim() || undefined,
       receivedBidsCount: received
@@ -230,6 +232,11 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
               />
             </div>
           </div>
+
+          <label className="flex items-start gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+            <input type="checkbox" checked={splitAllowed} onChange={(e) => setSplitAllowed(e.target.checked)} className="mt-0.5" />
+            شروط المناقصة تجيز الإرساء على أكثر من متقدم أو تجزئة الكميات (المادة 15/رابعاً)
+          </label>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">الجهة المعلنة / الوزارة / الدائرة</label>

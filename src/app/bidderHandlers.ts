@@ -240,6 +240,8 @@ ${exclusionLock}`);
         + detailChange('الإعلان', announcementLabel(currentProject.announcementNo), announcementLabel(updated.announcementNo))
         + detailChange('تاريخ الاستلام', formatSheetDate(currentProject.receivedAt) || undefined, formatSheetDate(updated.receivedAt) || undefined)
         + detailChange('تاريخ غلق المناقصة', formatSheetDate(currentProject.closingDate) || undefined, formatSheetDate(updated.closingDate) || undefined)
+        + ((currentProject.splitAllowed === true) !== (updated.splitAllowed === true)
+          ? ` — الإرساء على أكثر من متقدم أو التجزئة: ${updated.splitAllowed === true ? 'تجيزه شروط المناقصة' : 'غير مسجَّل'}` : '')
         + detailChange('أسلوب الدعوة', invitationTypeInfo(currentProject.invitationType)?.label, invitationTypeInfo(updated.invitationType)?.label)
         + detailChange('الجهة المستفيدة', currentProject.beneficiaryEntity?.trim() || undefined, updated.beneficiaryEntity?.trim() || undefined)
         + detailChange('عدد العطاءات المستلمة', receivedBidsCountOf(currentProject)?.toString(), receivedBidsCountOf({ ...currentProject, receivedBidsCount: updated.receivedBidsCount })?.toString(), true)

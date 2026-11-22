@@ -121,6 +121,18 @@ test('معالج أساس المفاضلة يحفظ بسجل واحد ويرفض
   assert.equal(saved!.auditLogs.filter(l => l.action === 'تسجيل أساس المفاضلة').length, 1);
 });
 
+test('معالج المبادرات من تبويب العطاءات: إجراء مستقل وتبقى سجلات غيره', () => {
+  const p = mkProject([mkBidder('A', 900), mkBidder('B', 905)]);
+  const base: TenderProject = { ...p, preferenceInitiatives: [{ bidderId: 'B', hasInitiative: true, items: [{ type: 'مدة الصيانة', description: 'سنتان', completedOnRequest: true }] }] };
+  let saved: TenderProject | undefined;
+  const h = createPreferenceHandlers(base, x => { saved = x; });
+  assert.equal(h.handleSavePreferenceInitiatives([{ bidderId: 'A', hasInitiative: false, items: [] }], 'bid'), null);
+  assert.equal(saved!.auditLogs.filter(l => l.action === 'تسجيل مبادرات العطاء').length, 1);
+  assert.equal(saved!.auditLogs.filter(l => l.action === 'تسجيل أساس المفاضلة').length, 0);
+  assert.equal(saved!.preferenceInitiatives!.length, 2);
+  assert.equal(saved!.preferenceInitiatives!.find(r => r.bidderId === 'B')!.items[0].completedOnRequest, true);
+});
+
 test('تنظيف أساس المفاضلة عند التحميل', () => {
   const p = mkProject([mkBidder('A', 900)]);
   assert.equal(sanitizePreferenceInitiatives(p), p);

@@ -206,6 +206,7 @@ export interface TenderProject {
   beneficiaryEntity?: string;
   receivedAt?: string;                // تاريخ استلام الطلبية YYYY-MM-DD
   closingDate?: string;               // تاريخ غلق المناقصة YYYY-MM-DD، تبدأ منه نفاذية العطاءات (utils/bidValidity.ts)
+  splitAllowed?: boolean;             // شروط المناقصة تجيز الإرساء على أكثر من متقدم أو تجزئة الكميات (15/رابعاً، الملحق 1/د)؛ عرض فقط، true أو غائب
   statusLog?: StatusEntry[];          // موقف الطلبية؛ الحالي هو آخر عنصر
   committeeChairman: string;          // رئيس لجنة التحليل
   committeeMembers: string[];         // أعضاء اللجنة

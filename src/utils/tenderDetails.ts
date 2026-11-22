@@ -69,3 +69,11 @@ export function bidCountsLabel(project: TenderProject): string | null {
   if (received && received > analyzed) parts.push(`${received - analyzed} لم تُحلَّل لنقص جوهري`);
   return parts.length ? `العطاءات: ${parts.join(' · ')}` : null;
 }
+
+/** عند التحميل: splitAllowed لا يبقى إلا إن كان true تماماً (بلا تغيير updatedAt ولا قيد سجل) */
+export const sanitizeSplitAllowed = (project: TenderProject): TenderProject => {
+  if (project.splitAllowed === undefined || project.splitAllowed === true) return project;
+  const { splitAllowed: _drop, ...rest } = project;
+  void _drop;
+  return rest as TenderProject;
+};

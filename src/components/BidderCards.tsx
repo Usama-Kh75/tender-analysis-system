@@ -3,8 +3,9 @@ import { Pencil } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
 import { bidderAuditState, tenderPath } from '../utils/tenderPath';
 import { hasBidAmounts } from '../utils/recommendation';
-import { errorsCountText } from '../utils/arabicCount';
+import { errorsCountText, initiativesCountText } from '../utils/arabicCount';
 import { formatNumber } from '../utils/calculations';
+import { preferenceRecordOf } from '../utils/preferenceBasis';
 import { bidExpiry } from '../utils/bidValidity';
 import { formatSheetDate } from '../utils/orderStatus';
 
@@ -16,10 +17,12 @@ interface BidderCardsProps {
   onAdd: () => void;
   /** فتح نافذة نفاذية العطاء للمجهز */
   onEditValidity: (bidderId: string) => void;
+  /** فتح نافذة المبادرات المقدَّمة مع العطاء (ضوابط رقم (5)) */
+  onEditInitiatives: (bidderId: string) => void;
 }
 
 // الشركات في قائمة منسدلة (الاسم — المبلغ — حالة التدقيق) وتحتها سطر ملخص للمختارة: المبلغ بعد التدقيق، الحالة (أخضر مدقّق، كهرماني فيها أخطاء، رمادي لم يُدخل)، وشارتا الترسية والاستبعاد
-export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd, onEditValidity }) => {
+export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd, onEditValidity, onEditInitiatives }) => {
   // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
@@ -140,6 +143,16 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
             نفاذية العطاء
           </button>
         )}
+        {active && (
+          <button
+            type="button"
+            onClick={() => onEditInitiatives(active.id)}
+            className="shrink-0 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer transition"
+            title="المبادرات المقدَّمة مع العطاء (ضوابط رقم (5))"
+          >
+            المبادرات
+          </button>
+        )}
         <button
           onClick={() => onAdd()}
           className="shrink-0 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg cursor-pointer transition"
@@ -165,6 +178,14 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
               {active.validityExtendedTo ? 'ممدَّد لغاية' : 'نافذ لغاية'} <bdi className="font-mono">{formatSheetDate(bidExpiry(project, active)!)}</bdi>
             </span>
           )}
+          {(() => {
+            const rec = preferenceRecordOf(project, active.id);
+            return rec && (
+              <span className="text-xs font-bold text-slate-600">
+                {rec.hasInitiative ? `المبادرات: ${initiativesCountText(rec.items.length)}` : 'لم يقدّم مبادرات'}
+              </span>
+            );
+          })()}
           {active.status === 'recommended' && (
             <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-full px-1.5">★ موصى بالترسية</span>
           )}

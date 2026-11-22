@@ -54,6 +54,11 @@ test('أساس المفاضلة بعد «بانتظار إجابة الشركا�
   assert.equal(statusLag(mk([entry('awaitingBidders', 6)], [pref(5)], false)), null);
 });
 
+test('مبادرات سُجّلت من تبويب العطاءات لا تنبّه، وأساس المفاضلة ينبّه', () => {
+  assert.equal(statusLag(mk([entry('awaitingBidders', 1)], [log('تسجيل مبادرات العطاء', 'x', 5)], false)), null);
+  assert.equal(statusLag(mk([entry('awaitingBidders', 1)], [log('تسجيل أساس المفاضلة', 'x', 5)], false))?.kind, 'preference');
+});
+
 test('لا ترسية ولا مفاضلة: لا تنبيه', () => {
   assert.equal(statusLag(mk([entry('awaitingBidders', 1)], [], false)), null);
 });

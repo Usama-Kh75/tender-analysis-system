@@ -15,7 +15,8 @@ import { statusBadgeText } from '../utils/orderStatus';
 import { errorsCountText } from '../utils/arabicCount';
 import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
 import { awardBlockers, needsAwardDialog } from '../utils/awardBlockers';
-import { hasCompletePreferenceRecord } from '../utils/preferenceBasis';
+import { LEGAL_TEXTS } from '../utils/legalTexts';
+import { hasCompletePreferenceRecord, preferenceRecordOf } from '../utils/preferenceBasis';
 import { AwardBlockersModal } from './modals/AwardBlockersModal';
 import { PreferenceBasisModal } from './modals/PreferenceBasisModal';
 
@@ -455,7 +456,22 @@ export const StudyView: React.FC<StudyViewProps> = ({
               {rec.kind === 'tie' && equalPriceBids(rec.closeBids).length > 1 && (
                 <div className="text-xs font-bold text-amber-800 mt-1 leading-relaxed">
                   📌 الأسعار متساوية لأصغر فئة نقدية: تُخاطَب الشركات ({equalPriceBids(rec.closeBids).map(b => b.name).join('، ')}) لتقديم مبادراتها لغرض المفاضلة إن لم تقدّمها ابتداءً، وتصبح المبادرات جزءاً من العطاء، ويُستقطع مبلغ ما لا يُلتزم به عند التنفيذ حسب الأسعار السائدة ({preferenceReference(project.contractType).clause}).
-                  {' '}وإن نصّت شروط المناقصة على جواز إرسائها على أكثر من متقدم وتساوت الشروط أيضاً، فللجنة أن توصي بإرسائها عليها مجزّأة (المادة 15/رابعاً/أ).
+                  {' '}{project.splitAllowed === true
+                    ? 'وشروط المناقصة تجيز إرساءها على أكثر من متقدم: فإن تساوت الشروط أيضاً فللجنة أن توصي بإرسائها عليها مجزّأة (المادة 15/رابعاً/أ).'
+                    : 'وإن نصّت شروط المناقصة على جواز إرسائها على أكثر من متقدم وتساوت الشروط أيضاً، فللجنة أن توصي بإرسائها عليها مجزّأة (المادة 15/رابعاً/أ).'}
+                </div>
+              )}
+              {project.splitAllowed === true && !noEstimate && (
+                <div className="text-xs font-bold text-indigo-900 mt-1.5 leading-relaxed no-print">
+                  شروط المناقصة تجيز الإرساء على أكثر من متقدم: عند تساوي الأسعار والشروط (المادة 15/رابعاً/أ)، أو بتجزئة الكميات بين مقدمي العطاءات وفق أقل الأسعار مع إعلام الوزارة (المادة 15/رابعاً/ب، والملحق 1/د). النظام يرسي على مجهز واحد، فإن قررت اللجنة التجزئة تُثبتها في صياغة التوصية.
+                  <details className="mt-1 font-normal">
+                    <summary className="cursor-pointer font-bold underline">النص الرسمي</summary>
+                    {(['art15_4a', 'art15_4b', 'ann1_d'] as const).map(k => (
+                      <blockquote key={k} className="mt-1 rounded-lg border border-indigo-100 bg-white px-3 py-2 leading-relaxed text-slate-700">
+                        <span className="font-bold">{LEGAL_TEXTS[k].label}:</span> «{LEGAL_TEXTS[k].text}» (ص {LEGAL_TEXTS[k].page})
+                      </blockquote>
+                    ))}
+                  </details>
                 </div>
               )}
               {rec.closeBids.length > 1 && (
@@ -463,6 +479,24 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   className="mt-1.5 text-xs font-black px-3 py-1.5 rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 cursor-pointer no-print">
                   أساس المفاضلة ({rec.closeBids.filter(b => hasCompletePreferenceRecord(project, b.id)).length} من {rec.closeBids.length})
                 </button>
+              )}
+              {rec.closeBids.length > 1 && (
+                <ul className="mt-1.5 space-y-0.5 text-xs no-print">
+                  {rec.closeBids.map(b => {
+                    const r = preferenceRecordOf(project, b.id);
+                    return (
+                      <li key={b.id} className="leading-relaxed">
+                        <bdi className="font-black text-slate-900">{b.name}</bdi>
+                        {': '}
+                        {!r ? <span className="font-bold text-amber-700">لم يُسجَّل بعد</span>
+                          : !r.hasInitiative ? <span className="text-slate-500">لم تقدّم مبادرات</span>
+                          : <span className="text-slate-700">
+                              {r.items.map(i => `${i.type}: ${i.description}${i.value !== undefined ? ` (${formatCurrency(i.value, project.currency)})` : ''}${i.completedOnRequest ? ' — مستكمَلة بطلب اللجنة' : ''}`).join('؛ ')}
+                            </span>}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
               {savedEdit && (
                 <div className="text-xs font-bold text-indigo-800 mt-1">

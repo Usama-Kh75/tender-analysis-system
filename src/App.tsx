@@ -21,6 +21,7 @@ import { ReportView } from './components/ReportView';
 import { StartScreen } from './components/StartScreen';
 import { ProjectHeader } from './components/ProjectHeader';
 import { BidderCards } from './components/BidderCards';
+import { PreferenceBasisModal } from './components/modals/PreferenceBasisModal';
 import { BidValidityModal } from './components/modals/BidValidityModal';
 import { initialAuditFilter, type AuditFilter } from './utils/tableFilters';
 import { AppFooter } from './components/AppFooter';
@@ -108,6 +109,9 @@ export function App() {
   // نافذة نفاذية العطاء (المجهز المعني) وفيها إدخال لم يُحفظ (يمنع التحديث)
   const [validityBidderId, setValidityBidderId] = useState<string | null>(null);
   const [isValidityDirty, setIsValidityDirty] = useState(false);
+  // نافذة المبادرات المقدَّمة مع العطاء (المجهز المعني) وفيها إدخال لم يُحفظ
+  const [initiativesBidderId, setInitiativesBidderId] = useState<string | null>(null);
+  const [isInitiativesDirty, setIsInitiativesDirty] = useState(false);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
@@ -121,6 +125,7 @@ export function App() {
     : isPageBreaksOpen ? 'فواصل الصفحات'
     : isPrintOpen && isRecEditing ? 'صياغة التوصية'
     : validityBidderId && isValidityDirty ? 'نفاذية العطاء'
+    : initiativesBidderId && isInitiativesDirty ? 'المبادرات'
     : exclusionBidderId ? 'أسباب الاستبعاد'
     : isStudyDirty ? 'أساس المفاضلة أو مبرر الترسية'
     : null;
@@ -337,6 +342,7 @@ export function App() {
           onRename={handleUpdateBidderName}
           onAdd={handleAddNewBidder}
           onEditValidity={setValidityBidderId}
+          onEditInitiatives={setInitiativesBidderId}
         />
 
         {/* Dynamic KPI Cards */}
@@ -477,6 +483,18 @@ export function App() {
           onSave={handleSaveBidValidity}
           onClose={() => { setValidityBidderId(null); setIsValidityDirty(false); }}
           onDirtyChange={setIsValidityDirty}
+        />
+      )}
+      {initiativesBidderId && currentProject.bidders.some(b => b.id === initiativesBidderId) && (
+        <PreferenceBasisModal
+          key={`${currentProject.id}:${initiativesBidderId}`}
+          mode="bid"
+          project={currentProject}
+          closeBids={currentProject.bidders.filter(b => b.id === initiativesBidderId)}
+          equalBids={[]}
+          onSave={(records) => handleSavePreferenceInitiatives(records, 'bid')}
+          onClose={() => { setInitiativesBidderId(null); setIsInitiativesDirty(false); }}
+          onDirtyChange={setIsInitiativesDirty}
         />
       )}
       <StatusWindow

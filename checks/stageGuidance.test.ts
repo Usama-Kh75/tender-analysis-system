@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { createNewTenderProject } from '../src/utils/storageService';
 import { calculateBOQMetrics } from '../src/utils/calculations';
 import { stageGuidance } from '../src/utils/stageGuidance';
+import { sanitizeSplitAllowed } from '../src/utils/tenderDetails';
 import { LEGAL_TEXTS, type LegalKey } from '../src/utils/legalTexts';
 import type { Bidder, BOQItem, TenderProject } from '../src/types/tender';
 
@@ -158,4 +159,28 @@ test('المفاتيح الجديدة: نصها يطابق officialText في JSO
     assert.equal(LEGAL_TEXTS[key].text, c.officialText.replace(/\s+/g, ' ').trim(), key);
     assert.equal(LEGAL_TEXTS[key].page, c.printedPage, key);
   }
+  // 15/رابعاً/ب: مقدمة البند ثم ب (كما art15_4a)
+  const art = JSON.parse(fs.readFileSync(dir + 'article-15.json', 'utf8')).clauses as { clause: string; officialText: string; printedPage: string }[];
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const intro = art.find(x => x.clause === 'رابعاً')!, b = art.find(x => x.clause === 'رابعاً / ب')!;
+  assert.equal(LEGAL_TEXTS.art15_4b.text, `${norm(intro.officialText)} ${norm(b.officialText)}`);
+  assert.equal(LEGAL_TEXTS.art15_4b.page, b.printedPage);
+  // الملحق 1/د: البند ثم فروعه الثلاثة بأرقامها، فلا يقف النص عند «اتخاذ ما يأتي:»
+  const ann = JSON.parse(fs.readFileSync(dir + 'annex-01.json', 'utf8')).clauses as { clause: string; officialText: string; printedPage: string }[];
+  const d = (c: string) => norm(ann.find(x => x.clause === c)!.officialText);
+  assert.equal(LEGAL_TEXTS.ann1_d.text, `${d('د')} (1) ${d('د / 1')} (2) ${d('د / 2')} (3) ${d('د / 3')}`);
+  assert.equal(LEGAL_TEXTS.ann1_d.page, ann.find(x => x.clause === 'د')!.printedPage);
+});
+
+test('splitAllowed عند التحميل: true يبقى، وغيره يسقط بلا تغيير updatedAt', () => {
+  const p = proj([900]);
+  const kept = sanitizeSplitAllowed({ ...p, splitAllowed: true });
+  assert.equal(kept.splitAllowed, true);
+  for (const v of [false, 'true', 1, null] as unknown[]) {
+    const q = { ...p, updatedAt: '2026-01-01T00:00:00.000Z', splitAllowed: v as boolean };
+    const r = sanitizeSplitAllowed(q);
+    assert.equal('splitAllowed' in r, false);
+    assert.equal(r.updatedAt, q.updatedAt);
+  }
+  assert.equal(sanitizeSplitAllowed(p), p);
 });

@@ -16,6 +16,8 @@ interface Props {
   onSave: (records: PreferenceRecord[]) => string | null;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
+  /** 'bid': مبادرات قدّمها المجهز مع عطائه (من تبويب العطاءات)؛ 'study': أساس المفاضلة في الدراسة (الافتراضي) */
+  mode?: 'bid' | 'study';
 }
 
 interface DraftItem { type: string; description: string; value: string; completedOnRequest: boolean }
@@ -30,7 +32,8 @@ const toDraft = (r: PreferenceRecord | undefined): Draft => !r ? { answer: null,
 };
 
 // أساس المفاضلة (ضوابط رقم (5)): هل لكل عطاء متقارب مبادرة؟ نوعها ووصفها وقيمتها. سجل وطباعة، ولا يرتّب النظام بها
-export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equalBids, onSave, onClose, onDirtyChange }) => {
+export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equalBids, onSave, onClose, onDirtyChange, mode = 'study' }) => {
+  const bidMode = mode === 'bid';
   const pref = preferenceReference(project.contractType);
   const types = useMemo(() => preferenceInitiativeTypes(project.contractType), [project.contractType]);
   const initial = useMemo(() => {
@@ -87,7 +90,7 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
           items.push({
             type: i.type.trim(), description,
             ...(value !== undefined ? { value } : {}),
-            ...(i.completedOnRequest && equalIds.has(b.id) ? { completedOnRequest: true } : {})
+            ...(i.completedOnRequest && (bidMode || equalIds.has(b.id)) ? { completedOnRequest: true } : {})
           });
         }
       }
@@ -109,7 +112,7 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-lg"><Scale className="w-5 h-5" /></div>
-            <h2 id="pref-basis-title" className="text-base sm:text-lg font-bold">أساس المفاضلة ({pref.clause})</h2>
+            <h2 id="pref-basis-title" className="text-base sm:text-lg font-bold">{bidMode ? `المبادرات المقدَّمة مع العطاء (${pref.clause})` : `أساس المفاضلة (${pref.clause})`}</h2>
           </div>
           <button ref={closeRef} type="button" onClick={requestClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
             <X className="w-5 h-5" />
@@ -118,7 +121,9 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
 
         <div className="p-4 overflow-y-auto space-y-3">
           <p className="text-xs sm:text-sm font-semibold text-slate-700 leading-relaxed">
-            المفاضلة قرار اللجنة؛ النظام يثبت أساسها ولا يرتّب بها ({pref.clause}: معايير المفاضلة تُحوَّل لقيمة مالية لأغراض المفاضلة، مثل {pref.examples}).
+            {bidMode
+              ? 'تُسجَّل هنا المبادرات التي قدّمها المجهز مع عطائه ابتداءً، وتُقرأ مع أوراقه. أما استكمالها بطلب اللجنة (للأسعار المتساوية لأصغر فئة نقدية) فيُسجَّل من «أساس المفاضلة» في «الدراسة والتوصية».'
+              : `المفاضلة قرار اللجنة؛ النظام يثبت أساسها ولا يرتّب بها (${pref.clause}: معايير المفاضلة تُحوَّل لقيمة مالية لأغراض المفاضلة، مثل ${pref.examples}).`}
           </p>
           {legal && (
             <details className="text-xs text-indigo-900">
@@ -133,8 +138,8 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
             return (
               <fieldset key={b.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
                 <legend className="font-black text-slate-900 text-sm px-1"><bdi>{b.name}</bdi></legend>
-                <div className="flex items-center gap-4 text-sm font-bold text-slate-800" role="radiogroup" aria-label={`هل توجد مبادرة لدى ${b.name}؟`}>
-                  <span>هل توجد مبادرة؟</span>
+                <div className="flex items-center gap-4 text-sm font-bold text-slate-800" role="radiogroup" aria-label={bidMode ? `هل قدّم ${b.name} مبادرات مع عطائه؟` : `هل توجد مبادرة لدى ${b.name}؟`}>
+                  <span>{bidMode ? 'هل قدّم مبادرات مع عطائه؟' : 'هل توجد مبادرة؟'}</span>
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input type="radio" name={`init-${b.id}`} checked={d.answer === 'yes'}
                       onChange={() => patch(b.id, x => ({ ...x, answer: 'yes', items: x.items.length ? x.items : [{ type: types[0], description: '', value: '', completedOnRequest: false }] }))} />
@@ -163,7 +168,10 @@ export const PreferenceBasisModal: React.FC<Props> = ({ project, closeBids, equa
                         <button type="button" aria-label={`حذف المبادرة ${idx + 1} لعطاء ${b.name}`} title="حذف المبادرة"
                           onClick={() => patch(b.id, x => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
                           className="justify-self-end w-fit p-2 text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                        {equal && (
+                        {bidMode && it.completedOnRequest && (
+                          <div className="sm:col-span-4 text-xs font-bold text-amber-900">مستكمَلة بطلب اللجنة</div>
+                        )}
+                        {!bidMode && equal && (
                           <label className="sm:col-span-4 flex items-center gap-1.5 text-xs font-bold text-amber-900 cursor-pointer">
                             <input type="checkbox" checked={it.completedOnRequest} onChange={e => setItem(b.id, idx, { completedOnRequest: e.target.checked })} />
                             مستكمَلة بطلب اللجنة بعد فتح العطاءات
