@@ -18,7 +18,7 @@ interface BidValidityModalProps {
 export const BidValidityModal: React.FC<BidValidityModalProps> = ({ project, bidder, onSave, onClose, onDirtyChange }) => {
   const [days, setDays] = useState(bidder.validityDays ? String(bidder.validityDays) : '');
   const [extended, setExtended] = useState(bidder.validityExtendedTo ?? '');
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const daysRef = useRef<HTMLInputElement>(null);
 
   const daysText = toLatinDigits(days.trim());
   const daysNum = daysText === '' ? undefined : Number(daysText);
@@ -31,7 +31,7 @@ export const BidValidityModal: React.FC<BidValidityModalProps> = ({ project, bid
 
   useEffect(() => {
     const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeRef.current?.focus();
+    daysRef.current?.focus();
     return () => { if (prev && prev.isConnected) prev.focus(); };
   }, []);
 
@@ -53,13 +53,13 @@ export const BidValidityModal: React.FC<BidValidityModalProps> = ({ project, bid
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="bid-validity-title">
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+      <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg"><Hourglass className="w-5 h-5" /></div>
             <h2 id="bid-validity-title" className="text-base font-bold">نفاذية العطاء: {bidder.name}</h2>
           </div>
-          <button type="button" ref={closeRef} onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
+          <button type="button" onClick={onClose} aria-label="إغلاق" className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -68,6 +68,7 @@ export const BidValidityModal: React.FC<BidValidityModalProps> = ({ project, bid
             <label htmlFor="bid-validity-days" className="block text-xs font-bold text-slate-700 mb-1">مدة نفاذية العطاء (يوماً)</label>
             <input
               id="bid-validity-days"
+              ref={daysRef}
               type="text"
               inputMode="numeric"
               value={days}
