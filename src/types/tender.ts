@@ -188,6 +188,7 @@ export interface StatusOrder {
   announcementNo?: number;
   receivedAt?: string;
   statusLog: StatusEntry[];
+  hiddenAsPrevious?: true;            // رفع تذكير «السابق» من كشف الموقف؛ لا يُحذف السجل
   createdAt: string;
   updatedAt: string;
 }
@@ -206,6 +207,7 @@ export interface TenderProject {
   beneficiaryEntity?: string;
   receivedAt?: string;                // تاريخ استلام الطلبية YYYY-MM-DD
   closingDate?: string;               // تاريخ غلق المناقصة YYYY-MM-DD، تبدأ منه نفاذية العطاءات (utils/bidValidity.ts)
+  hiddenAsPrevious?: true;            // رفع تذكير «السابق» من كشف الموقف؛ لا يُحذف السجل
   splitAllowed?: boolean;             // شروط المناقصة تجيز الإرساء على أكثر من متقدم أو تجزئة الكميات (15/رابعاً، الملحق 1/د)؛ عرض فقط، true أو غائب
   statusLog?: StatusEntry[];          // موقف الطلبية؛ الحالي هو آخر عنصر
   committeeChairman: string;          // رئيس لجنة التحليل

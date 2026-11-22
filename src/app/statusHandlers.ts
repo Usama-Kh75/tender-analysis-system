@@ -108,5 +108,19 @@ export function createStatusHandlers(project: TenderProject, saveProject: (p: Te
     return null;
   };
 
-  return { handleAddStatus, handleEditStatus, handleDeleteStatus, handleSaveDetails };
+  // رفع تذكير «السابق» من كشف الموقف أو إعادته: علم على السجل لا يحذف شيئاً
+  const handleSetHiddenAsPrevious = (hidden: boolean): string | null => {
+    if ((project.hiddenAsPrevious === true) === hidden) return null;
+    const { hiddenAsPrevious: _drop, ...rest } = project;
+    void _drop;
+    const next: TenderProject = hidden ? { ...rest, hiddenAsPrevious: true } : rest;
+    saveProject(addAuditLog(
+      { ...next, updatedAt: new Date().toISOString() },
+      hidden ? 'رفع تذكير الموقف السابق من كشف الموقف' : 'إعادة إظهار الموقف السابق في كشف الموقف',
+      hidden ? 'رُفع سطر «السابق» لهذه الطلبية من كشف الموقف ولم يُحذف السجل' : 'أُعيد إظهار سطر «السابق» لهذه الطلبية في كشف الموقف'
+    ));
+    return null;
+  };
+
+  return { handleAddStatus, handleEditStatus, handleDeleteStatus, handleSaveDetails, handleSetHiddenAsPrevious };
 }

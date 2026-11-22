@@ -60,6 +60,20 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
   };
   const stateColSpan = cols.filter(c => c.key === 'action' || c.key === 'memoNo' || c.key === 'date').length;
   const canOutput = rows.length > 0;
+  const hiddenIds = rows.flatMap(r => r.hiddenPreviousIds);
+  const setHidden = (kind: 'tender' | 'order', id: string, hidden: boolean) => {
+    if (kind === 'tender') {
+      const p = projects.find(x => x.id === id);
+      if (p) makeTenderHandlers(p).handleSetHiddenAsPrevious(hidden);
+    } else orderHandlers.handleSetHiddenAsPrevious(id, hidden);
+  };
+  const hidePrevious = (kind: 'tender' | 'order', id: string) => {
+    if (window.confirm('يُرفع التذكير من الكشف، ولا يُحذف السجل. متابعة؟')) setHidden(kind, id, true);
+  };
+  const restoreHidden = () => {
+    if (!window.confirm('تُعاد أسطر «السابق» المرفوعة إلى الكشف. متابعة؟')) return;
+    hiddenIds.forEach(h => setHidden(h.kind, h.id, false));
+  };
   const title = statusSheetTitle(effectiveAsOf);
 
   return createPortal(
@@ -179,7 +193,7 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                       <td key={c.key} className={`${c.align === 'center' ? `${cell} text-center` : cell}${c.key === 'referenceNumber' ? ' whitespace-nowrap' : c.key === 'action' || c.key === 'note' ? ' whitespace-pre-line' : ''}`}>
                         {c.key === 'no' || c.key === 'announcement' ? r[c.key] : c.align === 'center' ? <bdi>{r[c.key]}</bdi> : r[c.key]}
                         {c.key === 'action' && r.previous.map(p => (
-                          <span key={`${p.kind}-${p.id}`} className="block text-[11px] text-slate-500 mt-1">{p.text}</span>
+                          <span key={`${p.kind}-${p.id}`} className="block text-[11px] text-slate-500 mt-1 no-print print:hidden">{p.text}</span>
                         ))}
                         {c.key === 'action' && r.validity && (
                           <span className={`block text-[11px] font-bold rounded px-1.5 py-0.5 mt-1 border no-print print:hidden ${r.validity.level === 'warn' ? 'text-amber-900 bg-amber-50 border-amber-200' : 'text-rose-900 bg-rose-50 border-rose-300'}`}>⏳ {r.validity.text}</span>
@@ -196,20 +210,34 @@ export const StatusSheetModal: React.FC<StatusSheetModalProps> = ({ isOpen, onCl
                         aria-label={`تعديل الطلبية ${r.referenceNumber || r.title}`}
                         className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-lg cursor-pointer"
                       >تعديل</button>
+                      {/* زرّا كل سطر سابق معاً: تعديله ورفع تذكيره */}
                       {r.previous.map(p => (
-                        <button
-                          key={`${p.kind}-${p.id}`}
-                          type="button"
-                          onClick={() => setEditing({ kind: p.kind, id: p.id })}
-                          aria-label={`تعديل السابق: ${p.text}`}
-                          className="block mx-auto mt-1 px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                        >تعديل السابق</button>
+                        <div key={`${p.kind}-${p.id}`} className="flex items-center justify-center gap-1 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditing({ kind: p.kind, id: p.id })}
+                            aria-label={`تعديل السابق: ${p.text}`}
+                            className="px-2 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                          >تعديل السابق</button>
+                          <button
+                            type="button"
+                            onClick={() => hidePrevious(p.kind, p.id)}
+                            aria-label={`رفع التذكير: ${p.text}`}
+                            className="px-2 py-0.5 text-[11px] font-bold text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"
+                          >رفع</button>
+                        </div>
                       ))}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          )}
+          {hiddenIds.length > 0 && (
+            <p className="no-print print:hidden text-xs text-slate-600 pt-3">
+              رُفع {hiddenIds.length} من المواقف السابقة —{' '}
+              <button type="button" onClick={restoreHidden} className="font-bold text-indigo-700 hover:underline cursor-pointer">إعادة إظهارها</button>
+            </p>
           )}
           {rows.length > 0 && (
             <div className="break-inside-avoid break-before-avoid flex justify-end pt-8 text-center text-xs font-bold">

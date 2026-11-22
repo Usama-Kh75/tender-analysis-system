@@ -370,7 +370,7 @@ test('الأرقام الفارغة لا تُدمج، وسجل بلا statusLog 
   assert.deepEqual(statusSheetRows([tender('8')])[0].previous, []);
 });
 
-test('الترتيب بالإجراء يعتمد الصف الأساسي، وExcel يلحق أسطر السابق بخلية الإجراء', () => {
+test('الترتيب بالإجراء يعتمد الصف الأساسي، وExcel لا يلحق أسطر السابق بخلية الإجراء', () => {
   const x = tender('1 / 26 / 9001', { announcementNo: 2, statusLog: [entry({ stage: 'audit' })] });
   const xOld = tender('1 / 26 / 9001', { announcementNo: 1, statusLog: [entry({ stage: 'analysis' })] });
   const y = tender('2 / 26 / 9001', { statusLog: [entry({ stage: 'analysis' })] });
@@ -380,6 +380,6 @@ test('الترتيب بالإجراء يعتمد الصف الأساسي، وExc
   const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 });
   const col = data[1].indexOf('الإجراء');
   const c = ws[XLSX.utils.encode_cell({ r: 3, c: col })];
-  assert.equal(c.v, 'لدى قسم الرقابة والتدقيق الداخلي\nالسابق (الإعلان الأول): قيد التحليل');
+  assert.equal(c.v, 'لدى قسم الرقابة والتدقيق الداخلي');
   assert.equal(c.s.alignment.wrapText, true);
 });

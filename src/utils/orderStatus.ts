@@ -138,8 +138,11 @@ export interface StatusSheetRow {
   memoNo: string;
   date: string;
   note: string;
-  /** سجلات أقدم بالرقم نفسه (الأحدث أولاً): تُعرض أسطراً رمادية تحت الإجراء، ولا يُغيَّر فيها شيء. */
+  /** سجلات أقدم بالرقم نفسه (الأحدث أولاً): أسطر رمادية على الشاشة وحدها تحت الإجراء (لا تُطبع ولا تُصدَّر)؛ ما رُفع تذكيره لا يدخلها. */
   previous: { kind: 'tender' | 'order'; id: string; text: string }[];
+  /** عدد السجلات الأقدم التي رُفع تذكيرها (hiddenAsPrevious) فلا تظهر في previous، ومعرّفاتها لإعادة إظهارها */
+  hiddenPrevious: number;
+  hiddenPreviousIds: { kind: 'tender' | 'order'; id: string }[];
   /** تنبيه عرض فقط (لا يُطبع ولا يُصدَّر): الموقف متأخر عن عمل اللجنة في النظام؛ للمناقصات وحدها (utils/statusLag.ts). */
   lag?: string;
   /** تنبيه نفاذية العطاءات (عرض فقط، لا يُطبع ولا يُصدَّر) */
@@ -212,7 +215,9 @@ export function statusSheetRows(projects: TenderProject[], orders: StatusOrder[]
   return sorted.map(({ primary: { kind, item: p }, older }, i) => {
     const s = p.statusLog?.at(-1);
     return {
-      previous: older.map(o => ({ kind: o.kind, id: o.item.id, text: previousLine(o) })),
+      previous: older.filter(o => o.item.hiddenAsPrevious !== true).map(o => ({ kind: o.kind, id: o.item.id, text: previousLine(o) })),
+      hiddenPrevious: older.filter(o => o.item.hiddenAsPrevious === true).length,
+      hiddenPreviousIds: older.filter(o => o.item.hiddenAsPrevious === true).map(o => ({ kind: o.kind, id: o.item.id })),
       no: i + 1,
       kind,
       id: p.id,

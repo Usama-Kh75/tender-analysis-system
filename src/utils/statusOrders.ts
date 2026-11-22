@@ -32,6 +32,7 @@ export function normalizeStatusOrders(raw: unknown): StatusOrder[] {
       announcementNo: typeof o.announcementNo === 'number' && announcementLabel(o.announcementNo) ? o.announcementNo : undefined,
       receivedAt: isValidDate(o.receivedAt) ? o.receivedAt : undefined,
       statusLog: sanitizeStatusLog(o.statusLog),
+      ...(o.hiddenAsPrevious === true ? { hiddenAsPrevious: true as const } : {}),
       createdAt: isText(o.createdAt) ? o.createdAt : now,
       updatedAt: isText(o.updatedAt) ? o.updatedAt : isText(o.createdAt) ? o.createdAt : now
     });

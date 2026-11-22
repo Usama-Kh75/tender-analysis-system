@@ -70,6 +70,14 @@ export function bidCountsLabel(project: TenderProject): string | null {
   return parts.length ? `العطاءات: ${parts.join(' · ')}` : null;
 }
 
+/** عند التحميل: hiddenAsPrevious لا يبقى إلا إن كان true تماماً (بلا تغيير updatedAt ولا قيد سجل) */
+export const sanitizeHiddenAsPrevious = <T extends { hiddenAsPrevious?: true }>(item: T): T => {
+  if (item.hiddenAsPrevious === undefined || item.hiddenAsPrevious === true) return item;
+  const { hiddenAsPrevious: _drop, ...rest } = item;
+  void _drop;
+  return rest as T;
+};
+
 /** عند التحميل: splitAllowed لا يبقى إلا إن كان true تماماً (بلا تغيير updatedAt ولا قيد سجل) */
 export const sanitizeSplitAllowed = (project: TenderProject): TenderProject => {
   if (project.splitAllowed === undefined || project.splitAllowed === true) return project;

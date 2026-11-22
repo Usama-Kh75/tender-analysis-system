@@ -64,5 +64,16 @@ export function createStatusOrderHandlers(orders: StatusOrder[], setOrders: (f: 
     withLog(id, log => applyStatusDelete(log, statusId) ?? { error: 'الموقف غير موجود' });
   };
 
-  return { handleAddOrder, handleEditOrder, handleDeleteOrder, handleAddOrderStatus, handleEditOrderStatus, handleDeleteOrderStatus };
+  // رفع تذكير «السابق» من كشف الموقف أو إعادته: علم على السجل لا يحذف شيئاً (بلا سجل تدقيق للطلبيات)
+  const handleSetHiddenAsPrevious = (id: string, hidden: boolean): string | null => {
+    if (!orders.some(o => o.id === id)) return 'الطلبية غير موجودة';
+    touch(id, o => {
+      const { hiddenAsPrevious: _drop, ...rest } = o;
+      void _drop;
+      return hidden ? { ...rest, hiddenAsPrevious: true } : rest;
+    });
+    return null;
+  };
+
+  return { handleSetHiddenAsPrevious, handleAddOrder, handleEditOrder, handleDeleteOrder, handleAddOrderStatus, handleEditOrderStatus, handleDeleteOrderStatus };
 }
