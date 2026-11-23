@@ -100,11 +100,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden xl:inline">مناقصة جديدة</span>
           </button>
 
-          {/* رقم الطلبية في الشريط الثابت (كان في بطاقة المناقصة وحدها فيغيب مع التمرير)؛ يُخفى تحت sm لأن الشريط يفيض على الهاتف */}
+          {/* رقم الطلبية في الشريط الثابت (كان في بطاقة المناقصة وحدها فيغيب مع التمرير)؛ يُخفى تحت md لأن الشريط يفيض دونه،
+              ويُقتطع الرقم الطويل غير المنسَّق ويبقى كاملاً في التلميح (مراجعة Antigravity) */}
           {orderNumber && (
             <span
-              title={tenderTitle || undefined}
-              className="hidden sm:inline-flex items-center whitespace-nowrap bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black px-3 py-1 rounded-full font-mono"
+              title={tenderTitle ? `رقم الطلبية: ${orderNumber} — ${tenderTitle}` : `رقم الطلبية: ${orderNumber}`}
+              className="hidden md:inline-block max-w-[14rem] truncate whitespace-nowrap bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black px-3 py-1 rounded-full font-mono"
             >
               <span className="sr-only">رقم الطلبية: </span>
               {/* بلا bdi: يُعرض باتجاه الصفحة كما في بطاقة المناقصة، فلا يختلف ترتيب أجزائه بين الموضعين */}
