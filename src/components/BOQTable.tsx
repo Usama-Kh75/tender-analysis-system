@@ -289,6 +289,8 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   // غير المسعّرة (عرض فقط، لا خطأ): بمبلغ المجهز نفسه لا العرض الموزون، ولا تُحسب لمن لا مبالغ له
   const unpricedN = hasAmounts ? items.filter(isUnpricedRow).length : 0;
   // إن بلغ العدد صفراً والمرشح فعّال (تصحيح فقرة أو تبديل الشركة) يعود العرض إلى «الكل»
+  // ويُصفَّر الاختيار نفسه (تعديل الحالة أثناء العرض، نمط React الموصى به)، وإلا عاد المرشح وحده حين تظهر فقرة غير مسعّرة لاحقاً (مراجعة Codex)
+  if (normalFilter === 'unpriced' && unpricedN === 0) setNormalFilter('all');
   const nf: NormalFilter = normalFilter === 'unpriced' && unpricedN === 0 ? 'all' : normalFilter;
   const filteredItems = items.filter(item => {
     const matchSearch =
