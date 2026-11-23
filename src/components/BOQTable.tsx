@@ -1,6 +1,6 @@
 import { asSubmitted, findAdoption, isCommitteeCorrected, readingBeforeCorrection, submittedFlags, submittedTotal, unitLostOf } from '../utils/bidderAuditEngine';
 import { AuditCell } from './AuditCell';
-import { auditFilterMatch, isHandled, isPending, pinPending, type AuditFilter, type NormalFilter } from '../utils/tableFilters';
+import { auditFilterMatch, isHandled, isPending, isUnpricedRow, pinPending, type AuditFilter, type NormalFilter } from '../utils/tableFilters';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Plus,
@@ -286,6 +286,10 @@ export const BOQTable: React.FC<BOQTableProps> = ({
   // فلترة الأسطر. الأرقام المشرقية والإنجليزية سيّان في البحث: «24» تجد «كيك ٢٤ قطعة»
   const term = toLatinDigits(searchTerm.toLowerCase());
   const matches = (text: string) => toLatinDigits(text.toLowerCase()).includes(term);
+  // غير المسعّرة (عرض فقط، لا خطأ): بمبلغ المجهز نفسه لا العرض الموزون، ولا تُحسب لمن لا مبالغ له
+  const unpricedN = hasAmounts ? items.filter(isUnpricedRow).length : 0;
+  // إن بلغ العدد صفراً والمرشح فعّال (تصحيح فقرة أو تبديل الشركة) يعود العرض إلى «الكل»
+  const nf: NormalFilter = normalFilter === 'unpriced' && unpricedN === 0 ? 'all' : normalFilter;
   const filteredItems = items.filter(item => {
     const matchSearch =
       matches(String(item.itemNo)) ||
@@ -295,11 +299,12 @@ export const BOQTable: React.FC<BOQTableProps> = ({
     if (!matchSearch) return false;
 
     if (auditMode) return auditFilterMatch(item, auditFilter, pinned);
-    if (normalFilter === 'deviated') return deviationView(item).isDeviated;
-    if (normalFilter === 'savings') return deviationView(item).diffAmount < 0;
+    if (nf === 'deviated') return deviationView(item).isDeviated;
+    if (nf === 'savings') return deviationView(item).diffAmount < 0;
+    if (nf === 'unpriced') return isUnpricedRow(item);
     return true;
   });
-  const filterActive = searchTerm !== '' || (auditMode ? auditFilter !== 'all' : normalFilter !== 'all');
+  const filterActive = searchTerm !== '' || (auditMode ? auditFilter !== 'all' : nf !== 'all');
   const showAll = () => {
     setNormalFilter('all');
     setAuditFilter('all');
@@ -525,7 +530,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <button
               onClick={() => setNormalFilter('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                normalFilter === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                nf === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
               }`}
             >
               الكل ({items.length})
@@ -534,7 +539,7 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <button
               onClick={() => setNormalFilter('deviated')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                normalFilter === 'deviated' ? 'bg-rose-600 text-white shadow-xs' : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
+                nf === 'deviated' ? 'bg-rose-600 text-white shadow-xs' : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
               }`}
             >
               المنحرفة &gt; {deviationThreshold}% ({items.filter(i => deviationView(i).isDeviated).length})
@@ -543,11 +548,23 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             <button
               onClick={() => setNormalFilter('savings')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                normalFilter === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
+                nf === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
               }`}
             >
               مطابقة ({items.filter(i => deviationView(i).diffAmount < 0).length})
             </button>
+
+            {unpricedN > 0 && (
+              <button
+                onClick={() => setNormalFilter('unpriced')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                  nf === 'unpriced' ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                }`}
+                title="فقرات للتخميني مبلغ فيها ولم يكتب المجهز مبلغاً (المادة 10/أولاً/ط: كلفتها مشمولة بمبلغ العطاء، وليست خطأً)"
+              >
+                غير المسعّرة ({unpricedN})
+              </button>
+            )}
           </div>
           )}
         </div>

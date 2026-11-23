@@ -5,5 +5,7 @@ const count = (n: number, one: string, two: string, few: string, many: string): 
 export const itemsCountText = (n: number): string => count(n, 'فقرة واحدة', 'فقرتان', 'فقرات', 'فقرة');
 export const errorsCountText = (n: number): string => count(n, 'خطأ واحد', 'خطآن', 'أخطاء', 'خطأ');
 export const initiativesCountText = (n: number): string => count(n, 'مبادرة واحدة', 'مبادرتان', 'مبادرات', 'مبادرة');
+/** «فقرتان غير مسعّرتين»: فقرات لها مبلغ في التخميني ولا مبلغ للمجهز فيها (عرض فقط، ليست خطأً) */
+export const unpricedCountText = (n: number): string => count(n, 'فقرة واحدة غير مسعّرة', 'فقرتان غير مسعّرتين', 'فقرات غير مسعّرة', 'فقرة غير مسعّرة');
 /** «N فقرات فيها أخطاء» */
 export const itemsWithErrorsText = (n: number): string => `${itemsCountText(n)} فيها أخطاء`;

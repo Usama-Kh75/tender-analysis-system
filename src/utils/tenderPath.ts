@@ -2,7 +2,7 @@
 // كل ما هنا يُستنتج من بيانات المناقصة ولا يُخزَّن، فلا تحويل للمناقصات القديمة،
 // وإن رجعت اللجنة عن خطوة (ألغت اختيار الترسية) رجع الشريط إليها.
 import type { Bidder, TenderProject } from '../types/tender';
-import { isPending } from './tableFilters';
+import { isPending, isUnpricedRow } from './tableFilters';
 import { itemsCountText } from './arabicCount';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate } from './recommendation';
 import { currentStatus } from './orderStatus';
@@ -21,6 +21,9 @@ export type BidderAuditState = { kind: 'empty' } | { kind: 'pending'; count: num
 
 /** فقرات فيها أخطاء لم تُعالج (خطأ ضرب، خلاف تفقيط، اختلاف قراءتين)، والفقرة التي فيها أكثر من واحد تُعدّ مرة */
 const pendingCount = (b: Bidder): number => b.items.filter(isPending).length;
+
+/** عدد الفقرات غير المسعّرة للعرض فقط (0 لمن لا مبالغ له)، ولا تدخل في حالة التدقيق */
+export const unpricedCount = (b: Bidder): number => (hasBidAmounts(b) ? b.items.filter(isUnpricedRow).length : 0);
 
 export function bidderAuditState(b: Bidder): BidderAuditState {
   if (!hasBidAmounts(b)) return { kind: 'empty' };

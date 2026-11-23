@@ -318,6 +318,8 @@ export function App() {
         onBackupAll={handleBackupAll}
         committeeName={committeeName}
         onEditCommitteeName={() => setIsCommitteeEditOpen(true)}
+        orderNumber={currentProject.referenceNumber}
+        tenderTitle={currentProject.title}
       />
 
       {/* Main Content Area */}

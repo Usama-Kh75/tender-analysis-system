@@ -2,12 +2,18 @@
 import type { BOQItem } from '../types/tender';
 import { isCommitteeCorrected } from './bidderAuditEngine';
 
-export type NormalFilter = 'all' | 'deviated' | 'savings';
+export type NormalFilter = 'all' | 'deviated' | 'savings' | 'unpriced';
 export type AuditFilter = 'all' | 'pending' | 'corrected';
 
 /** فقرة فيها أخطاء لم تُعالج: خطأ ضرب أو خلاف تفقيط، أو اختلاف القراءتين لم يُطابَق بالورقة بعد */
 export const isPending = (i: BOQItem): boolean =>
   !!(i.hasMathError || i.hasTextDiscrepancy || (i.readCheck && !i.unpriced && !isCommitteeCorrected(i)));
+
+/**
+ * فقرة غير مسعّرة: للتخميني مبلغ فيها ولم يكتب المجهز مبلغاً. ليست خطأً: المادة (10)/أولاً/ط تعدّ كلفتها مشمولة بمبلغ العطاء،
+ * فلا تدخل isPending ولا حالة التدقيق ولا المحضر ولا Excel (عرض فقط)
+ */
+export const isUnpricedRow = (i: BOQItem): boolean => i.estimatedTotal > 0 && !(i.bidderTotal > 0);
 
 /**
  * معرّفات الفقرات المعلّقة لحظة اختيار مرشح «بانتظار قرار». الفقرة لا تختفي من تحت يد من يصححها:

@@ -9,10 +9,10 @@ import { decisionSensitivity } from '../utils/decisionSensitivity';
 import { isOfferFinal } from '../utils/weightedOffer';
 import { rankingEffect } from '../utils/rankingEffect';
 import { evaluateBids } from '../utils/bidEvaluation';
-import { bidderAuditState, tenderPath } from '../utils/tenderPath';
+import { bidderAuditState, tenderPath, unpricedCount } from '../utils/tenderPath';
 import { isPreAwardStatus } from '../utils/statusLag';
 import { statusBadgeText } from '../utils/orderStatus';
-import { errorsCountText } from '../utils/arabicCount';
+import { errorsCountText, unpricedCountText } from '../utils/arabicCount';
 import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
 import { awardBlockers, needsAwardDialog } from '../utils/awardBlockers';
 import { LEGAL_TEXTS } from '../utils/legalTexts';
@@ -320,6 +320,10 @@ export const StudyView: React.FC<StudyViewProps> = ({
                           ? <span className="text-amber-800">{errorsCountText(st.count)}</span>
                           : <span className="text-emerald-700">مكتمل</span>;
                       })()}
+                      {/* غير المسعّرة عرض فقط (المادة 10/أولاً/ط)، ليست خطأً */}
+                      {unpricedCount(bidder) > 0 && (
+                        <div className="text-slate-600 text-[10px] font-bold mt-0.5">{unpricedCountText(unpricedCount(bidder))}</div>
+                      )}
                     </td>
 
                     {/* الموقف التجاري */}

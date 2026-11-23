@@ -25,6 +25,9 @@ interface NavbarProps {
   onBackupAll: () => void;
   committeeName: string | null;
   onEditCommitteeName: () => void;
+  /** رقم الطلبية وعنوانها للمناقصة المفتوحة، يبقيان ظاهرين مع تمرير الصفحة */
+  orderNumber?: string;
+  tenderTitle?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,7 +40,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   lastBackupAt,
   onBackupAll,
   committeeName,
-  onEditCommitteeName
+  onEditCommitteeName,
+  orderNumber,
+  tenderTitle
 }) => {
   const canInstall = useSyncExternalStore(subscribeInstall, canInstallApp);
   const lastBackupText = lastBackupAt
@@ -94,6 +99,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Plus className="w-4 h-4 text-amber-400" />
             <span className="hidden xl:inline">مناقصة جديدة</span>
           </button>
+
+          {/* رقم الطلبية في الشريط الثابت (كان في بطاقة المناقصة وحدها فيغيب مع التمرير)؛ يُخفى تحت sm لأن الشريط يفيض على الهاتف */}
+          {orderNumber && (
+            <span
+              title={tenderTitle || undefined}
+              className="hidden sm:inline-flex items-center whitespace-nowrap bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black px-3 py-1 rounded-full font-mono"
+            >
+              <span className="sr-only">رقم الطلبية: </span>
+              {/* بلا bdi: يُعرض باتجاه الصفحة كما في بطاقة المناقصة، فلا يختلف ترتيب أجزائه بين الموضعين */}
+              {orderNumber}
+            </span>
+          )}
 
           </div>
 

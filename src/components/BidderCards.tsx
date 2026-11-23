@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { TenderProject } from '../types/tender';
-import { bidderAuditState, tenderPath } from '../utils/tenderPath';
+import { bidderAuditState, tenderPath, unpricedCount } from '../utils/tenderPath';
 import { hasBidAmounts } from '../utils/recommendation';
-import { errorsCountText, initiativesCountText } from '../utils/arabicCount';
+import { errorsCountText, initiativesCountText, unpricedCountText } from '../utils/arabicCount';
 import { formatNumber } from '../utils/calculations';
 import { preferenceRecordOf } from '../utils/preferenceBasis';
 import { bidExpiry } from '../utils/bidValidity';
@@ -68,9 +68,14 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     const st = bidderAuditState(b);
     return st.kind === 'done' ? '✓ مدقّق' : st.kind === 'pending' ? errorsCountText(st.count) : 'لم يُدخل';
   };
+  // غير المسعّرة عرض فقط (المادة 10/أولاً/ط)، تلحق نص الحالة بعد « · »
+  const unpricedSuffix = (b: TenderProject['bidders'][number]) => {
+    const n = unpricedCount(b);
+    return n > 0 ? ` · ${unpricedCountText(n)}` : '';
+  };
   const optionText = (b: TenderProject['bidders'][number]) => {
     const amount = hasBidAmounts(b) ? `${formatNumber(b.totals.totalBidderAmount)} ${project.currency}` : 'لم تُدخل أسعاره بعد';
-    return `${b.name}${b.status === 'disqualified' ? ' (مستبعد)' : ''} — ${amount} — ${stateText(b)}${b.status === 'recommended' ? ' — ★ موصى بالترسية' : ''}`;
+    return `${b.name}${b.status === 'disqualified' ? ' (مستبعد)' : ''} — ${amount} — ${stateText(b)}${unpricedSuffix(b)}${b.status === 'recommended' ? ' — ★ موصى بالترسية' : ''}`;
   };
   const active = project.bidders.find(b => b.id === activeBidderId);
   const activeState = active ? bidderAuditState(active) : null;
@@ -173,6 +178,9 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
           }`}>
             {stateText(active)}
           </span>
+          {unpricedCount(active) > 0 && (
+            <span className="text-xs font-bold text-slate-700">· {unpricedCountText(unpricedCount(active))}</span>
+          )}
           {active && bidExpiry(project, active) && (
             <span className="text-xs font-bold text-slate-600">
               {active.validityExtendedTo ? 'ممدَّد لغاية' : 'نافذ لغاية'} <bdi className="font-mono">{formatSheetDate(bidExpiry(project, active)!)}</bdi>
