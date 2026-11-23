@@ -528,9 +528,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
           {/* Filter Pills (العرض العادي) */}
           {!auditMode && (
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="مرشحات الجدول">
             <button
+              type="button"
               onClick={() => setNormalFilter('all')}
+              aria-pressed={nf === 'all'}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                 nf === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
               }`}
@@ -539,7 +541,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => setNormalFilter('deviated')}
+              aria-pressed={nf === 'deviated'}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                 nf === 'deviated' ? 'bg-rose-600 text-white shadow-xs' : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
               }`}
@@ -548,7 +552,9 @@ export const BOQTable: React.FC<BOQTableProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => setNormalFilter('savings')}
+              aria-pressed={nf === 'savings'}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                 nf === 'savings' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
               }`}
@@ -558,9 +564,11 @@ export const BOQTable: React.FC<BOQTableProps> = ({
 
             {unpricedN > 0 && (
               <button
+                type="button"
                 onClick={() => setNormalFilter('unpriced')}
+                aria-pressed={nf === 'unpriced'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                  nf === 'unpriced' ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                  nf === 'unpriced' ? 'bg-slate-700 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                 }`}
                 title="فقرات للتخميني مبلغ فيها ولم يكتب المجهز مبلغاً (المادة 10/أولاً/ط: كلفتها مشمولة بمبلغ العطاء، وليست خطأً)"
               >
