@@ -89,6 +89,8 @@ export function App() {
   const [statusPresetSeq, setStatusPresetSeq] = useState(0);
   // نموذج نافذة الموقف فيه إدخال لم يُحفظ (يمنع التحديث)
   const [isStatusDirty, setIsStatusDirty] = useState(false);
+  // عنوان المناقصة في الرأس فيه نص لم يُحفظ (يمنع التحديث)
+  const [isTitleDirty, setIsTitleDirty] = useState(false);
   const [isStatusSheetOpen, setIsStatusSheetOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
@@ -128,6 +130,7 @@ export function App() {
     : isManualOpen && isManualDirty ? 'إدخال يدوي'
     : isSettingsOpen ? 'إعدادات المناقصة'
     : isStatusDirty ? 'موقف الطلبية'
+    : isTitleDirty ? 'عنوان المناقصة'
     : isStatusSheetOpen ? 'كشف موقف الطلبيات'
     : isNewProjectOpen ? 'مناقصة جديدة'
     : isPageBreaksOpen ? 'فواصل الصفحات'
@@ -248,7 +251,7 @@ export function App() {
   };
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
   const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
-    handleSaveSettings, handleSaveBidValidity, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
+    handleSaveSettings, handleRenameProject, handleSaveBidValidity, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
   const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
   const { handleSavePreferenceInitiatives } = createPreferenceHandlers(currentProject, ctx.saveProject);
@@ -342,6 +345,8 @@ export function App() {
           pendingAudit={tenderPath(currentProject).audit.pending}
           onGo={handleGo}
           activeBidderId={activeBidder.id}
+          onRenameTitle={handleRenameProject}
+          onTitleDirtyChange={setIsTitleDirty}
         />
 
         {/* لوحة التبويب المفتوح (تُرسم لوحة واحدة فقط) مرتبطة بزرها في ProjectHeader */}

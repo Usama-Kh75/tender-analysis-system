@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Settings, Pencil } from 'lucide-react';
 import type { MainTab } from '../resume';
 import { TenderProject } from '../types/tender';
 import { contractTypeInfo } from '../utils/contractTypes';
@@ -42,12 +42,73 @@ interface ProjectHeaderProps {
   onGo: (a: NextStepAction) => void;
   /** المجهز المعروض في الجدول، يمرَّر إلى شريط «الخطوة التالية» */
   activeBidderId?: string;
+  /** تعديل العنوان من الرأس مباشرة */
+  onRenameTitle: (title: string) => void;
+  /** النص المكتوب في حقل العنوان لم يُحفظ بعد (يمنع التحديث) */
+  onTitleDirtyChange: (dirty: boolean) => void;
 }
 
-// بطاقة رأس المناقصة: رقم الطلبية والعنوان وبياناتها للقراءة فقط (التعديل من الإعدادات)، والخطوة التالية
+// عنوان المناقصة مع تعديل مباشر: حفظ/إلغاء صريحان، Enter يحفظ وEscape يلغي. يُرسم بمفتاح معرّف المناقصة فيبدأ نظيفاً عند تبديلها
+const TitleEditor: React.FC<{ title: string; onRename: (t: string) => void; onDirtyChange: (d: boolean) => void }> = ({ title, onRename, onDirtyChange }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const dirty = editing && draft !== title;
+  useEffect(() => {
+    onDirtyChange(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+
+  const save = () => {
+    const next = draft.trim();
+    if (!next) { setError('عنوان المناقصة لا يكون فارغاً'); return; }
+    if (next !== title) onRename(next);
+    setEditing(false);
+    setError('');
+  };
+  const cancel = () => { setEditing(false); setError(''); };
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{title}</h1>
+        <button
+          type="button"
+          onClick={() => { setDraft(title); setError(''); setEditing(true); }}
+          className="no-print print:hidden shrink-0 p-1.5 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+          title="تعديل عنوان المناقصة"
+          aria-label="تعديل عنوان المناقصة"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="no-print print:hidden" onKeyDown={(e) => { if (e.key === 'Escape') cancel(); }}>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); setError(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
+          className="flex-1 min-w-0 bg-white border border-blue-400 rounded-lg px-2 py-1 text-base sm:text-lg font-black text-slate-900 focus:outline-none ring-2 ring-blue-500/20"
+          aria-label="عنوان المناقصة"
+          aria-invalid={error ? true : undefined}
+          autoFocus
+        />
+        <button type="button" onClick={save} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg cursor-pointer">حفظ</button>
+        <button type="button" onClick={cancel} className="shrink-0 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold px-2.5 py-1.5 rounded-lg cursor-pointer">إلغاء</button>
+      </div>
+      {error && <p role="alert" className="mt-1 text-xs font-bold text-red-700">{error}</p>}
+    </div>
+  );
+};
+
+// بطاقة رأس المناقصة: رقم الطلبية وبياناتها للقراءة فقط (التعديل من الإعدادات)، والعنوان يُعدَّل من الرأس مباشرة، والخطوة التالية
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project: currentProject, onOpenSettings, onOpenStatus, onGo,
-  activeTab, onSelectTab, pendingAudit, activeBidderId
+  activeTab, onSelectTab, pendingAudit, activeBidderId, onRenameTitle, onTitleDirtyChange
 }) => {
   const states = stageStates(currentProject);
   const lag = statusLag(currentProject);
@@ -170,9 +231,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       {/* Middle Row: Project Title (Editable) */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
         <div className="flex-1 min-w-0 sm:min-w-[280px]">
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            {currentProject.title}
-          </h1>
+          <TitleEditor key={currentProject.id} title={currentProject.title} onRename={onRenameTitle} onDirtyChange={onTitleDirtyChange} />
         </div>
       </div>
 

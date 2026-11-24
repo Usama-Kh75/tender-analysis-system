@@ -416,6 +416,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <th className="border border-slate-300 p-2 text-center">نسبة الانحراف</th>
                   <th className="border border-slate-300 p-2 text-center">الفقرة المنحرفة (&gt;{project.deviationThreshold}%)</th>
                   <th className="border border-slate-300 p-2 text-center">النسبة السعرية</th>
+                  <th className="border border-slate-300 p-2 text-center">الكمية</th>
+                  <th className="border border-slate-300 p-2 text-center">المفرد الموزون</th>
                   <th className="border border-slate-300 p-2 text-center">المبلغ الموزون (المعتمد)</th>
                   <th className="border border-slate-300 p-2 text-center">التقييم</th>
                 </tr>
@@ -434,6 +436,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       {item.deviatedAmount > 0 ? formatNumber(item.deviatedAmount) : '-'}
                     </td>
                     <td className="border border-slate-300 p-2 text-center font-mono">{item.estimatedTotal > 0 ? item.priceRatio.toFixed(4) : '—'}</td>
+                    <td className="border border-slate-300 p-2 text-center font-bold">{item.estimatedTotal > 0 ? formatNumber(item.quantity) : '—'}</td>
+                    <td className="border border-slate-300 p-2 text-center font-bold">{item.estimatedTotal > 0 ? formatNumber(item.weightedUnitPrice, 2) : '—'}</td>
                     <td className="border border-slate-300 p-2 text-center font-bold text-purple-900">{item.estimatedTotal > 0 ? formatNumber(item.newPrice) : '—'}</td>
                     <td className="border border-slate-300 p-2 text-center font-bold">
                       {item.estimatedTotal > 0 ? (item.isDeviated ? 'منحرفة' : 'متوازن') : '—'}
@@ -449,6 +453,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <td className="border border-slate-400 p-2 text-center">{formatPercent(subject.totals.totalDeviationPercent, 2, exclusion)}</td>
                   <td className="border border-slate-400 p-2 text-center text-rose-800">{formatNumber(subject.totals.deviatedItemsSum)}</td>
                   <td className="border border-slate-400 p-2 text-center font-mono">{subject.totals.overallPriceRatio.toFixed(4)}</td>
+                  <td className="border border-slate-400 p-2 text-center">-</td>
+                  <td className="border border-slate-400 p-2 text-center">-</td>
                   <td className="border border-slate-400 p-2 text-center">{formatNumber(subject.totals.newPricesTotal)}</td>
                   <td className="border border-slate-400 p-2 text-center">-</td>
                 </tr>

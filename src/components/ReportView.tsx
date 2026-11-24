@@ -6,6 +6,8 @@ import { buildRecommendation, hasNoEstimate, exclusionThresholdOf, offerWinner, 
 import { budgetApprovalNote } from '../utils/budgetTypes';
 import { isOfferFinal, assessBalance, correctedBalanceRows } from '../utils/weightedOffer';
 import { WeightedOfferBar } from './WeightedOfferBar';
+import { WeightedTableView } from './WeightedTableView';
+import { offerSheetTarget } from '../utils/bidderAuditExcel';
 import { LEGAL_TEXTS, type LegalKey } from '../utils/legalTexts';
 
 // «النص الرسمي» للمادة المذكورة في بطاقة الفائز: يبقى النص في الصفحة مخفياً ليشير إليه aria-controls دائماً (عرض فقط، لا يُطبع)
@@ -73,6 +75,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
 
   // بطاقة الفائز تضم عرضه الموزون تحتها؛ وغير الفائز يبقى في قسم مستقل (قرار أسامة 2026-11-19)
+  const sheetTarget = offerSheetTarget(project);
   const winnerCard = rec.kind === 'award' && rec.chosenByCommittee && !!rec.primary;
   const winnerBalance = winnerCard ? balanceBidders.find(b => b.id === winner?.id) : undefined;
   const otherBalance = winnerBalance ? balanceBidders.filter(b => b.id !== winnerBalance.id) : balanceBidders;
@@ -93,6 +96,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
           <p className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
             يلزم اعتماد الجدول الموزون لهذا العطاء (ضوابط رقم (4) سادساً/5): كل فقرة = مبلغها في الكلفة التخمينية × النسبة السعرية. الجدول محسوب تلقائياً، ويظهر في معاينة المحضر وفي ورقة «الجدول الموزون» في تصدير Excel.
           </p>
+        )}
+        {b.id === winner?.id && sheetTarget.bidder?.id === b.id && sheetTarget.source && (
+          <WeightedTableView bidder={b} source={sheetTarget.source} />
         )}
         {b.id === winner?.id && b.weightedOffer?.status === 'paused' && (
           <button

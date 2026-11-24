@@ -1,5 +1,6 @@
 // xlsx-js-style: نسخة من SheetJS 0.18.5 نفسها تكتب تنسيق الخلايا (الخط والتعبئة والحدود والمحاذاة)، فيخرج
 // التصدير بمواصفات «عرض_المجهز_..._مطابق_للأصل.xlsx» التي اعتمدتها اللجنة. الاستيراد يبقى على xlsx
+import { weightedSheetRows } from './weightedSheetRows';
 import * as XLSX from 'xlsx-js-style';
 import { AuditLogEntry, BOQItem, Bidder, TenderProject } from '../types/tender';
 import { ADOPTION_ACTIONS, asSubmitted, auditRowAmounts, findAdoption, isCommitteeCorrected, unitLostOf, isSignedCorrection, parseArabicTextToNumber, readMissingThousands } from './bidderAuditEngine';
@@ -483,20 +484,12 @@ export function buildOfferApprovalSheet(project: TenderProject, bidder: Bidder, 
   const items = bidder.items;
   const last = FIRST + items.length - 1;
   const final = !byFormula && isOfferFinal(bidder);
-  const rowUnit = (item: BOQItem) => byFormula ? item.weightedUnitPrice
-    : item.offerUnitPrice ?? (item.quantity > 0 ? item.bidderTotal / item.quantity : item.bidderTotal);
-  const rowTotal = (item: BOQItem) => byFormula ? item.newPrice : item.offerTotal ?? item.bidderTotal;
-  const data: Cell[][] = items.map(item => {
+  const { rows: sheetRows, sum: offerSum } = weightedSheetRows(bidder, source);
+  const data: Cell[][] = sheetRows.map(({ item, dash, unit, total }) => {
     // غير مسعّرة بلا سعر في العرض: شرطة. أما العرض المنطلق من المعادلة فقد يسعّر الفقرة، فيُعرض سعره ليطابق المجموع
-    if (byFormula ? !(item.estimatedTotal > 0) : item.unpriced && !((item.offerTotal ?? 0) > 0)) {
-      return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
-    }
-    return [
-      itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity),
-      unitCell(rowUnit(item)), amount(rowTotal(item))
-    ];
+    if (dash) return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), '-', '-'];
+    return [itemNoCell(item.itemNo), item.description, item.unit, amount(item.quantity), unitCell(unit), amount(total)];
   });
-  const offerSum = round2(items.reduce((s, i) => s + (byFormula && !(i.estimatedTotal > 0) ? 0 : rowTotal(i)), 0));
   const gap = round2(offerSum - bidder.totals.totalBidderAmount);
   const note = byFormula
     ? 'للمجهز: الأسعار الموزونة بالمعادلة (الكلفة التخمينية × النسبة السعرية) كما في جدول المحضر، لأن عطاءك يحتاج توزيناً (ضوابط رقم (4) سادساً/5). لم يُبدأ عرض موزون رسمي بعد، فالأسعار غير نهائية. الوصف والوحدة والكمية كما في جدول العطاء.'

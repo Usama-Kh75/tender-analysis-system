@@ -250,6 +250,16 @@ ${exclusionLock}`);
     saveProject(updatedProj);
   };
 
+  // تعديل عنوان المناقصة من رأسها: تسمية فقط، لا تمسّ أي حساب
+  const handleRenameProject = (title: string) => {
+    const next = title.trim();
+    const old = currentProject.title;
+    if (!next || next === old) return;
+    let updatedProj: TenderProject = { ...currentProject, title: next, updatedAt: new Date().toISOString() };
+    updatedProj = addAuditLog(updatedProj, 'تعديل عنوان المناقصة', `تم تعديل عنوان المناقصة من (${old}) إلى (${next})`);
+    saveProject(updatedProj);
+  };
+
   // نفاذية عطاء (المادة 13/أولاً): مدة بالأيام وتمديد، عرض فقط، بقيد واحد في السجل
   const handleSaveBidValidity = (bidderId: string, v: { validityDays?: number; validityExtendedTo?: string }) => {
     const target = currentProject.bidders.find(b => b.id === bidderId);
@@ -274,6 +284,6 @@ ${exclusionLock}`);
 
   return {
     handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleResetAllBidders,
-    handleUpdateBidderStatus, handleSaveSettings, handleSaveBidValidity, selectBidder
+    handleUpdateBidderStatus, handleSaveSettings, handleRenameProject, handleSaveBidValidity, selectBidder
   };
 }
