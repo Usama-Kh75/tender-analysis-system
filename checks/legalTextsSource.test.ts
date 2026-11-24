@@ -5,8 +5,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { LEGAL_TEXTS, type LegalKey } from '../src/utils/legalTexts';
 
-const DIR = 'E:/Claude Projects/تعليمات 2025/contract-instructions-2025-offline/src/units/';
+// مجلد التعليمات المهيكلة خارج المستودع عمداً. LEGAL_UNITS_DIR يغيّر مساره، و REQUIRE_LEGAL_SOURCE=1 يجعل غيابه فشلاً (قبل كل إصدار)
+const DIR = (process.env.LEGAL_UNITS_DIR ?? 'E:/Claude Projects/تعليمات 2025/contract-instructions-2025-offline/src/units').replace(/\/?$/, '/');
 const available = fs.existsSync(DIR);
+if (!available) console.warn(`⚠ مجلد التعليمات غير موجود (${DIR}): لم تُقارَن نصوص LEGAL_TEXTS بالأصل`);
+
+test('مجلد التعليمات الرسمية موجود حين يُطلب (REQUIRE_LEGAL_SOURCE=1)', { skip: process.env.REQUIRE_LEGAL_SOURCE !== '1' }, () => {
+  assert.ok(available, `لا مجلد: ${DIR}`);
+});
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
 // الأصل يكتب «اولاً» بلا همزة و«ثالثا» بلا تنوين في ضوابط (5) وبهما في غيرها
 const plain = (s: string) => s.replace(/[أإآ]/g, 'ا').replace(/ً/g, '');
