@@ -24,6 +24,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.32.5',
+    date: '2026-11-24',
+    notes: [
+      'تثبيت أوجه الخلاف في الرأي بين أعضاء اللجنة من معاينة المحضر، فتُطبع مع سندها من ضوابط رقم (4) أحد عشر/6.',
+    ]
+  },
+  {
     version: '1.32.1',
     date: '2026-11-22',
     notes: [
