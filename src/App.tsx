@@ -38,6 +38,7 @@ import { CommitteeNameModal } from './components/modals/CommitteeNameModal';
 import { ExclusionReasonsModal } from './components/modals/ExclusionReasonsModal';
 import { createExclusionHandlers } from './app/exclusionHandlers';
 import { createPreferenceHandlers } from './app/preferenceHandlers';
+import { createCommitteeRecordHandlers } from './app/committeeRecordHandlers';
 import { saveCommitteeName } from './utils/committeeName';
 import { StatusSheetModal } from './components/modals/StatusSheetModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -100,6 +101,9 @@ export function App() {
   const [isRecEditing, setIsRecEditing] = useState(false);
   // نوافذ الدراسة (أساس المفاضلة، موانع الترسية) فيها إدخال لم يُحفظ (يمنع التحديث)
   const [isStudyDirty, setIsStudyDirty] = useState(false);
+  // تاريخ إيعاز التحقق من المرشحين (الدراسة) وأوجه الخلاف (معاينة المحضر): إدخال لم يُحفظ يمنع التحديث
+  const [isCheckDirty, setIsCheckDirty] = useState(false);
+  const [isDissentDirty, setIsDissentDirty] = useState(false);
   const [chartsOpen, setChartsOpen] = useState(false);
   // عرض التدقيق على الجدول: يُفتح لمناقصة بعينها (يُغلق بتبديلها)، بمرشح ابتدائي وفقرة يُنزَل إليها
   const [auditProjectId, setAuditProjectId] = useState<string | null>(null);
@@ -131,6 +135,8 @@ export function App() {
     : validityBidderId && isValidityDirty ? 'نفاذية العطاء'
     : initiativesBidderId && isInitiativesDirty ? 'المبادرات'
     : exclusionBidderId ? 'أسباب الاستبعاد'
+    : isCheckDirty ? 'تاريخ إيعاز التحقق من المرشحين'
+    : isPrintOpen && isDissentDirty ? 'أوجه الخلاف'
     : isStudyDirty ? 'أساس المفاضلة أو مبرر الترسية'
     : null;
 
@@ -246,6 +252,7 @@ export function App() {
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
   const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
   const { handleSavePreferenceInitiatives } = createPreferenceHandlers(currentProject, ctx.saveProject);
+  const { handleSaveCandidatesCheck, handleSaveDissent } = createCommitteeRecordHandlers(currentProject, ctx.saveProject);
   const exclusionBidder = exclusionBidderId ? currentProject.bidders.find(b => b.id === exclusionBidderId) : undefined;
   const { handleAddStatus, handleEditStatus, handleDeleteStatus } = createStatusHandlers(currentProject, ctx.saveProject);
   const orderHandlers = createStatusOrderHandlers(statusOrders, setStatusOrders);
@@ -448,6 +455,8 @@ export function App() {
               onOpenAudit={(id) => handleGo({ label: 'فتح التدقيق', target: 'audit', bidderId: id ?? tenderPath(currentProject).audit.firstBidderId ?? undefined })}
               onSavePreferenceInitiatives={handleSavePreferenceInitiatives}
               onDirtyChange={setIsStudyDirty}
+              onSaveCandidatesCheck={handleSaveCandidatesCheck}
+              onCheckDirtyChange={setIsCheckDirty}
               onEnterBid={(id) => handleGo({ label: 'إدخال العطاء', target: 'bids', bidderId: id })}
               onDeleteBidder={handleDeleteBidder}
               onOpenMatrix={() => setIsMultiBidderOpen(true)}
@@ -660,6 +669,8 @@ export function App() {
         committeeName={committeeName}
         onSaveRecommendationEdit={handleSaveRecommendationEdit}
         onEditingChange={setIsRecEditing}
+        onSaveDissent={handleSaveDissent}
+        onDissentDirtyChange={setIsDissentDirty}
       />
 
       {committeeNameModal}

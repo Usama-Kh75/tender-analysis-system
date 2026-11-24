@@ -14,6 +14,8 @@ import { tenderDetailParts } from '../../utils/tenderDetails';
 import { localDate } from '../../utils/localDate';
 import { recommendationPieces, recommendationEditChanges, savedRecommendationEdit, type RecommendationBlock } from '../../utils/recommendationText';
 import { LegalTextsList, ThresholdBasisSentence } from '../LegalTexts';
+import { dissentBlock, cleanDissentNote } from '../../utils/committeeRecords';
+import { LEGAL_TEXTS } from '../../utils/legalTexts';
 import { reasonedExclusions, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
 
 interface PrintReportModalProps {
@@ -27,6 +29,10 @@ interface PrintReportModalProps {
   onSaveRecommendationEdit?: (edit: RecommendationEdit | null, systemText: string) => void;
   // محرر الصياغة مفتوح: يمنع App التحديث حتى يُحفظ أو يُلغى (blockingWork)
   onEditingChange?: (editing: boolean) => void;
+  // يحفظ أوجه الخلاف (فارغ = مسح)؛ يعيد رسالة خطأ عربية أو null. لا يدخل حساباً ولا Excel؛ يُطبع في المحضر إن كُتب
+  onSaveDissent?: (text: string) => string | null;
+  // نص أوجه خلاف مكتوب لم يُحفظ: يمنع App التحديث (blockingWork)
+  onDissentDirtyChange?: (dirty: boolean) => void;
 }
 
 // كلمات الشرط: التوصية لا تُقيَّد بشروط (قرار أسامة 2026-10-23)، فيُسأل عنها إن لم تكن في صياغة النظام
@@ -68,7 +74,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   activeBidder,
   committeeName,
   onSaveRecommendationEdit,
-  onEditingChange
+  onEditingChange,
+  onSaveDissent,
+  onDissentDirtyChange
 }) => {
   // تجاوز المستخدم لطباعة جدول الأسعار الموزونة؛ null = القيمة الافتراضية (تتبع نص التوصية)
   const [weightedOverride, setWeightedOverride] = useState<boolean | null>(null);
@@ -79,11 +87,20 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     onEditingChange?.(editing);
     return () => onEditingChange?.(false);
   }, [editing, onEditingChange]);
+  // أوجه الخلاف (ضوابط (4) أحد عشر/6): null = لا مسودة؛ المسودة المختلفة عن المحفوظ إدخال لم يُحفظ
+  const [dissentDraft, setDissentDraft] = useState<string | null>(null);
+  const dissentSaved = cleanDissentNote(project.dissentNote) ?? '';
+  const dissentDirty = dissentDraft !== null && (cleanDissentNote(dissentDraft) ?? '') !== dissentSaved;
+  useEffect(() => {
+    onDissentDirtyChange?.(dissentDirty);
+    return () => onDissentDirtyChange?.(false);
+  }, [dissentDirty, onDissentDirtyChange]);
   if (!isOpen) return null;
 
   // المحرر لا يُطبع: يُطبع المحفوظ وحده، فيُنبَّه قبل الطباعة إن بقي فيه ما لم يُحفظ
   const handlePrint = () => {
     if (draftDirty && !window.confirm('في محرر الصياغة تعديل لم يُحفظ، فيُطبع المحضر بالصياغة المحفوظة. أتطبع مع ذلك؟')) return;
+    if (dissentDirty && !window.confirm('في مربع أوجه الخلاف نص لم يُحفظ، فيُطبع المحضر بالمحفوظ. أتطبع مع ذلك؟')) return;
     window.print();
   };
 
@@ -152,6 +169,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
   const handleClose = () => {
     if (draftDirty && !window.confirm('في محرر الصياغة تعديل لم يُحفظ. أتغلق المحضر وتتركه؟')) return;
+    if (dissentDirty && !window.confirm('في مربع أوجه الخلاف نص لم يُحفظ. أتغلق المحضر وتتركه؟')) return;
     onClose();
   };
 
@@ -626,6 +644,45 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <LegalTextsList keys={legalKeys} />
             </>}
           </div>
+
+          {/* مربع تسجيل أوجه الخلاف (ضوابط (4) أحد عشر/6): للمعاينة وحدها، لا يُطبع */}
+          {onSaveDissent && rec.kind !== 'no-estimate' && (
+            <div className="no-print mb-6 p-3 bg-white border border-indigo-300 rounded-xl text-xs space-y-2">
+              <label htmlFor="dissent-note" className="block font-black text-slate-900">أوجه الخلاف في الرأي بين أعضاء اللجنة (اختياري)</label>
+              <p id="dissent-hint" className="text-[11px] text-slate-600 font-semibold">
+                إن اختلف أعضاء اللجنة فتُثبَّت أوجه الخلاف في التقرير النهائي، ويُحسم الخلاف بالتصويت بالأغلبية داخل اللجنة، وعند تساوي الأصوات يرجح الجانب الذي فيه رئيس اللجنة. كل سطر يُطبع على سطر، ولا يُطبع شيء إن تُرك المربع فارغاً.
+              </p>
+              <textarea id="dissent-note" dir="rtl" rows={4} aria-describedby="dissent-hint"
+                value={dissentDraft ?? project.dissentNote ?? ''}
+                onChange={e => setDissentDraft(e.target.value)}
+                className="w-full resize-y text-xs leading-relaxed p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <details className="font-normal">
+                <summary className="cursor-pointer font-bold text-indigo-800 underline">النص الرسمي</summary>
+                <blockquote className="mt-1 rounded-lg border border-indigo-100 bg-white px-3 py-2 leading-relaxed text-slate-700">
+                  <span className="font-bold">{LEGAL_TEXTS.ann4_11_6.label}:</span> «{LEGAL_TEXTS.ann4_11_6.text}» (ص {LEGAL_TEXTS.ann4_11_6.page})
+                </blockquote>
+              </details>
+              <button type="button" disabled={!dissentDirty}
+                onClick={() => { const err = onSaveDissent(dissentDraft ?? ''); if (err) window.alert(err); else setDissentDraft(null); }}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                حفظ أوجه الخلاف
+              </button>
+            </div>
+          )}
+
+          {/* أوجه الخلاف في الرأي: تُطبع إن كُتبت وحدها، وبغيابها لا يتغير المحضر بحرف */}
+          {(() => {
+            const dissent = dissentBlock(project);
+            return dissent && (
+              <div className="border border-slate-300 rounded-xl p-4 mb-8 text-xs leading-relaxed">
+                <h4 className="font-bold text-slate-900 mb-1 text-sm">{dissent.title}:</h4>
+                {dissent.lines.map((l, i) => <p key={i}>{l}</p>)}
+                <p className="mt-2">
+                  وفق <strong>{LEGAL_TEXTS[dissent.legalKey].label}</strong>: «{LEGAL_TEXTS[dissent.legalKey].text}»
+                </p>
+              </div>
+            );
+          })()}
 
           {offer && (
             <div className="mb-6">

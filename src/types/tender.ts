@@ -208,7 +208,9 @@ export interface TenderProject {
   receivedAt?: string;                // تاريخ استلام الطلبية YYYY-MM-DD
   closingDate?: string;               // تاريخ غلق المناقصة YYYY-MM-DD، تبدأ منه نفاذية العطاءات (utils/bidValidity.ts)
   hiddenAsPrevious?: true;            // رفع تذكير «السابق» من كشف الموقف؛ لا يُحذف السجل
-  splitAllowed?: boolean;             // شروط المناقصة تجيز الإرساء على أكثر من متقدم أو تجزئة الكميات (15/رابعاً، الملحق 1/د)؛ عرض فقط، true أو غائب
+  candidatesCheckDate?: string;       // تاريخ (YYYY-MM-DD) إيعاز اللجنة لتشكيلات العقود بالتحقق من المرشحين الثلاثة الأوائل (ضوابط (4) أحد عشر/4 و5)؛ تسجيل وتذكير فقط
+  dissentNote?: string;               // أوجه الخلاف في الرأي بين أعضاء اللجنة (ضوابط (4) أحد عشر/6)؛ تُطبع في المحضر إن كُتبت، ولا تدخل حساباً
+  splitAllowed?: boolean;           // شروط المناقصة تجيز الإرساء على أكثر من متقدم أو تجزئة الكميات (15/رابعاً، الملحق 1/د)؛ عرض فقط، true أو غائب
   statusLog?: StatusEntry[];          // موقف الطلبية؛ الحالي هو آخر عنصر
   committeeChairman: string;          // رئيس لجنة التحليل
   committeeMembers: string[];         // أعضاء اللجنة

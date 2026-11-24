@@ -17,6 +17,8 @@ import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
 import { awardBlockers, needsAwardDialog } from '../utils/awardBlockers';
 import { LEGAL_TEXTS } from '../utils/legalTexts';
 import { hasCompletePreferenceRecord, preferenceRecordOf } from '../utils/preferenceBasis';
+import { CandidatesCheckNote } from './CandidatesCheckNote';
+import { candidatesCheckDateOf } from '../utils/committeeRecords';
 import { AwardBlockersModal } from './modals/AwardBlockersModal';
 import { PreferenceBasisModal } from './modals/PreferenceBasisModal';
 
@@ -40,6 +42,10 @@ interface StudyViewProps {
   onSavePreferenceInitiatives: (records: PreferenceRecord[]) => string | null;
   /** إدخال لم يُحفظ في نوافذ الدراسة (يمنع التحديث) */
   onDirtyChange: (dirty: boolean) => void;
+  /** يسجّل تاريخ إيعاز التحقق من المرشحين (فارغ = مسح)؛ يعيد رسالة خطأ عربية أو null */
+  onSaveCandidatesCheck: (date: string) => string | null;
+  /** تاريخ مكتوب لم يُسجَّل (يمنع التحديث) */
+  onCheckDirtyChange: (dirty: boolean) => void;
 }
 
 /** «الدراسة والتوصية»: مقارنة العطاءات تجارياً، وتوصية اللجنة، وقرار الترسية (اختيار الفائز) */
@@ -56,7 +62,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
   chartsOpen,
   onToggleCharts,
   onSavePreferenceInitiatives,
-  onDirtyChange
+  onDirtyChange,
+  onSaveCandidatesCheck,
+  onCheckDirtyChange
 }) => {
   // الترسية المؤجَّلة بانتظار موقف الشركات غير المحسومة
   const [pendingAwardId, setPendingAwardId] = React.useState<string | null>(null);
@@ -477,6 +485,10 @@ export const StudyView: React.FC<StudyViewProps> = ({
                     ))}
                   </details>
                 </div>
+              )}
+              {/* تذكير غير مانع (ضوابط (4) أحد عشر/4 و5): حيث يوجد مرشحون للإحالة، سواء فُتح حوار الترسية أم لا */}
+              {(rec.kind === 'award' || rec.kind === 'tie') && (
+                <CandidatesCheckNote key={`${project.id}-${candidatesCheckDateOf(project) ?? ''}`} date={candidatesCheckDateOf(project)} onSave={onSaveCandidatesCheck} onDirtyChange={onCheckDirtyChange} />
               )}
               {rec.closeBids.length > 1 && (
                 <button type="button" onClick={() => setPrefOpen(true)}
