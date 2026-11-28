@@ -96,7 +96,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     >
       {counterText}
     </p>
-    <BidCountGapCard project={project} onAdd={onAdd} onAddExcluded={onAddExcluded} onOpenSettings={onOpenSettings} onDirtyChange={onGapDirtyChange} />
+    <BidCountGapCard key={project.id} project={project} onAdd={onAdd} onAddExcluded={onAddExcluded} onOpenSettings={onOpenSettings} onDirtyChange={onGapDirtyChange} />
     <div className="mb-4 bg-white rounded-2xl border border-slate-200 px-3 py-2">
       <div className="flex items-center gap-2">
         <label htmlFor="bidder-select" className="text-sm font-black text-slate-700 shrink-0">المجهز:</label>
