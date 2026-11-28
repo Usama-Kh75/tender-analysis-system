@@ -3,6 +3,7 @@ import { formatCurrency, formatNumber, formatPercent, tafqeetArabic } from './ca
 import { buildRecommendation, equalPriceBids, exclusionThresholdOf, PREFERENCE_BAND_PERCENT, type Recommendation } from './recommendation';
 import { preferenceReference } from './contractTypes';
 import { budgetApprovalNote } from './budgetTypes';
+import { isThirdOrLaterAnnouncement } from './tenderDetails';
 import { assessBalance, correctedBalanceRows, isOfferFinal, pricingClause } from './weightedOffer';
 import { uniqueLegalKeys } from './legalTexts';
 import { allExcludedHaveReasons } from './exclusionReasons';
@@ -19,6 +20,15 @@ export type RecommendationBlock = { type: 'p'; runs: Run[] } | { type: 'list'; i
 const strong = (text: string): Run => ({ text, strong: true });
 const para = (...runs: (Run | string | false | undefined)[]): RecommendationBlock =>
   ({ type: 'p', runs: runs.filter((r): r is Run | string => !!r).map(r => typeof r === 'string' ? { text: r } : r) });
+
+/**
+ * مضمون التوصية عند إعادة الإعلان: في الإعلان الثالث فما بعد لا إحالة بعده في السنة التقويمية فتُلغى المناقصة ويُعلن عنها في
+ * السنة اللاحقة (ضوابط رقم (2) ثالثاً/7)، وإلا فالنظر في إعادة الإعلان أو الدعوة (المادة (20)).
+ */
+const retenderRuns = (project: TenderProject, article: string): [Run, string] =>
+  isThirdOrLaterAnnouncement(project)
+    ? [strong('بإلغاء المناقصة وإعادة الإعلان عنها في السنة التقويمية اللاحقة'), ` استناداً إلى ضوابط رقم (2) ثالثاً/7 والمادة (20)/${article}.`]
+    : [strong('بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة'), ` استناداً إلى المادة (20)/${article}.`];
 
 interface BlockInput {
   project: TenderProject;
@@ -88,16 +98,16 @@ function recommendationBlocks({ project, rec, subject, exclusion, pricingText, a
         `بعد التحليل التجاري والمالي للعطاءات ومقارنتها بالكلفة التخمينية، لم يرد أي عطاء ضمن الحدود المقبولة (±${exclusion}%) وفق المادة (13)/ثالثاً/أ، وكان أقل العطاءات هو العطاء المقدم من `,
         strong(`(${x.name})`), ' بمبلغ ', strong(`(${money(x)})`),
         ` ويقل عن الكلفة التخمينية بنسبة (${pct(x)})، فلا ينطبق عليه استثناء المادة (13)/ثالثاً/ب المشروط بزيادة أقل العطاءات على الحدود. وعليه توصي لجنة التحليل `,
-        strong('بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة'), ' استناداً إلى المادة (20)/رابعاً.'
+        ...retenderRuns(project, 'رابعاً')
       )
       : allExcludedHaveReasons(project)
       ? para(
         'استبعدت اللجنة جميع العطاءات المقدمة للأسباب المبينة في (أولاً)، وعليه توصي لجنة التحليل ',
-        strong('بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة'), ' استناداً إلى المادة (20)/ثالثاً.'
+        ...retenderRuns(project, 'ثالثاً')
       )
       : para(
         'استبعدت اللجنة جميع العطاءات المقدمة. وإذا كان استبعادها لعدم مطابقتها لشروط ومعايير المناقصة، توصي لجنة التحليل ',
-        strong('بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان أو الدعوة'), ' استناداً إلى المادة (20)/ثالثاً.'
+        ...retenderRuns(project, 'ثالثاً')
       )];
   }
 
@@ -142,7 +152,7 @@ export function recommendationPieces(project: TenderProject, activeBidder: Bidde
     rec.kind === 'award' ? ['art13_3a', pricingText.includes('سادساً/5') && 'ann4_6_5', 'art13_1', approval?.kind === 'note' && approval.ref, rec.closeBids.length > 1 && pref.legalKey]
     : rec.kind === 'tie' ? [pref.legalKey, equalPriceBids(rec.closeBids).length > 1 && 'art15_4a']
     : rec.kind === 'referral' ? ['art13_3a', 'art13_3b', 'art20_1']
-    : rec.kind === 'retender' ? (rec.retenderReason === 'lowest-below' ? ['art13_3a', 'art13_3b', 'art20_4'] : ['art20_3'])
+    : rec.kind === 'retender' ? [...(rec.retenderReason === 'lowest-below' ? ['art13_3a', 'art13_3b', 'art20_4'] as const : ['art20_3'] as const), isThirdOrLaterAnnouncement(project) && 'ann2_3_7' as const]
     : []
   );
   const blocks = recommendationBlocks({ project, rec, subject, exclusion, pricingText, approval });

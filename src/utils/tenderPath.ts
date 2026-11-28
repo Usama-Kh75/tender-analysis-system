@@ -6,6 +6,7 @@ import { isPending, isUnpricedRow } from './tableFilters';
 import { itemsCountText } from './arabicCount';
 import { buildRecommendation, hasBidAmounts, hasNoEstimate } from './recommendation';
 import { currentStatus } from './orderStatus';
+import { excludedBeforeAnalysisCount } from './tenderDetails';
 import type { StatusStage } from '../types/tender';
 
 /** الموقف يُسجَّل من أول يوم تدخل فيه الطلبية ويتبع عمل اللجنة (أسامة 2026-11-19)، فوجوده لا يعني أن المحضر انتهى.
@@ -33,9 +34,10 @@ export function bidderAuditState(b: Bidder): BidderAuditState {
 
 export interface TenderPath {
   hasEstimate: boolean;
-  /** entered: الشركات التي لها مبالغ؛ registered: الشركات المسجّلة في المناقصة؛
-   *  expected للعرض: الأكبر من العطاءات المستلمة (إن أُدخلت) والمسجّلة، فالمستلمة قد تزيد على المحلَّلة بحق */
-  bids: { entered: number; registered: number; expected: number };
+  /** entered: الشركات التي لها مبالغ؛ registered: الشركات المسجّلة التي يُنتظر إدخال عطائها، أي ما عدا المستبعد قبل التحليل؛
+   *  excludedBefore: الشركات المستبعدة بقرار اللجنة بلا مبالغ (لا عطاء يُدخل لها، فلا تمنع اكتمال المرحلة ولا تُطلب «خطوة إدخال»)؛
+   *  expected للعرض: الأكبر من العطاءات المستلمة (إن أُدخلت) وكل المسجّلين، فالمستلمة قد تزيد على المحلَّلة بحق */
+  bids: { entered: number; registered: number; excludedBefore: number; expected: number };
   /** pending في الشركات ذوات المبالغ غير المستبعدة بقرار اللجنة؛ firstBidderId أولها بترتيب الشركات */
   audit: { pending: number; firstBidderId: string | null };
   /** من اختارته اللجنة للترسية، وnull قبل اختيارها */
@@ -48,9 +50,15 @@ export function tenderPath(p: TenderProject): TenderPath {
   const auditable = withAmounts.filter(b => b.status !== 'disqualified');
   const pendingBidders = auditable.filter(b => pendingCount(b) > 0);
   const rec = buildRecommendation(p);
+  const excludedBefore = excludedBeforeAnalysisCount(p);
   return {
     hasEstimate: !hasNoEstimate(p),
-    bids: { entered: withAmounts.length, registered: p.bidders.length, expected: Math.max(p.receivedBidsCount ?? 0, p.bidders.length) },
+    bids: {
+      entered: withAmounts.length,
+      registered: p.bidders.length - excludedBefore,
+      excludedBefore,
+      expected: Math.max(p.receivedBidsCount ?? 0, p.bidders.length)
+    },
     audit: {
       pending: auditable.reduce((n, b) => n + pendingCount(b), 0),
       firstBidderId: pendingBidders[0]?.id ?? null
@@ -107,7 +115,7 @@ export function stageStep(p: TenderProject, tab?: string, activeBidderId?: strin
     return {
       kind: 'stageDone',
       text: `اكتملت مرحلة العطاءات والتدقيق: أُدخلت العطاءات (${bids.entered} من ${bids.expected}) ودُقّقت. المرحلة التالية: الدراسة والتوصية`
-        + (bids.expected > bids.registered
+        + (bids.expected > bids.registered + bids.excludedBefore
           ? `. استُلمت (${bids.expected}) عطاءات، وأُدخل منها (${bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
           : ''),
       actions: [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]
@@ -175,7 +183,8 @@ export function nextStep(p: TenderProject): NextStep | null {
       actions: [action]
     };
   }
-  const empty = p.bidders.find(b => !hasBidAmounts(b));
+  // المستبعد قبل التحليل (بلا مبالغ) لا ينتظر إدخال عطاء
+  const empty = p.bidders.find(b => !hasBidAmounts(b) && b.status !== 'disqualified');
   if (empty && !path.award) {
     const action: NextStepAction = { label: 'إدخال العطاء', target: 'bids', bidderId: empty.id };
     return {
@@ -188,7 +197,7 @@ export function nextStep(p: TenderProject): NextStep | null {
     return {
       kind: 'award',
       text: `اكتمل إدخال العطاءات (${path.bids.entered} من ${path.bids.expected}) والكلفة التخمينية. الخطوة التالية: دراسة العطاءات والتوصية بالإحالة`
-        + (path.bids.expected > path.bids.registered
+        + (path.bids.expected > path.bids.registered + path.bids.excludedBefore
           ? `. استُلمت (${path.bids.expected}) عطاءات، وأُدخل منها (${path.bids.entered}) للتحليل التجاري. العطاء الذي فيه نقص جوهري (كالتأمينات الأولية) يُعدّ مستلماً ولا يُحلَّل تجارياً، وإن لم يكن فيه نقص فأضفه من «إضافة مجهز».`
           : ''),
       actions: [{ label: 'الانتقال إلى الدراسة والتوصية', target: 'study' }]

@@ -2,8 +2,10 @@ import type { InvitationType, TenderProject } from '../types/tender';
 import { hasBidAmounts } from './recommendation';
 
 /**
- * بيانات المناقصة الاختيارية (منذ الإصدار 1.19.0): للعرض في رأس المحضر وبطاقة المناقصة وملفات Excel فقط،
- * ولا تدخل في أي حساب أو توصية. لا يُطبع منها إلا ما أُدخل.
+ * بيانات المناقصة الاختيارية (منذ الإصدار 1.19.0): تُعرض في رأس المحضر وبطاقة المناقصة وملفات Excel، ولا يُطبع منها إلا ما أُدخل.
+ * لا تدخل في حساب المبالغ أو الترتيب، لكنها تغذّي أحكام التعليمات المعروضة وتذكيراتها (بعد 1.32.6، لم تُصدر):
+ * عدد المستلمة (bidCountGap وملصق العدد)، ورقم الإعلان (إعادة الإعلان في الإعلان الثالث وموافقات الزيادة)، وأسلوب الدعوة
+ * (الإعفاء من التأمينات الأولية: bidBondExempt). والتوصية المطبوعة للعطاء الواحد لا تتغيّر.
  */
 
 /** أساليب التعاقد كما سمّتها المادة (6)؛ المسابقة (خامساً) ليست تحليل أسعار فلا تُدرج. */
@@ -39,6 +41,24 @@ export function receivedBidsCountOf(project: TenderProject): number | undefined 
   return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
+/** الإعلان الثالث فما بعد (ضوابط رقم (2) ثالثاً/5 إلى 7). يُحدَّد رقمه يدوياً فلا يُفترض حين يُترك فارغاً */
+export const isThirdOrLaterAnnouncement = (project: Pick<TenderProject, 'announcementNo'>): boolean => {
+  const n = project.announcementNo;
+  return typeof n === 'number' && Number.isInteger(n) && n >= 3;
+};
+
+/**
+ * أسلوب الدعوة يُعفي مقدمي العطاءات من التأمينات الأولية: المناقصة المحدودة، والمناقصة بمرحلتين (المرحلة الثانية)،
+ * والدعوة المباشرة، والعرض الوحيد (المادة (27)/أولاً/هـ). المناقصة العامة وغير المحدد لا تُعفي.
+ */
+const BID_BOND_EXEMPT: ReadonlySet<string> = new Set<InvitationType>(['limited', 'twoStage', 'direct', 'singleSource']);
+export const bidBondExempt = (project: Pick<TenderProject, 'invitationType'>): boolean =>
+  !!project.invitationType && BID_BOND_EXEMPT.has(project.invitationType);
+
+/** مجهزون استُبعدوا قبل التحليل التجاري: مستبعدون بقرار اللجنة بلا مبالغ (لا يُدخَل لهم عطاء) */
+export const excludedBeforeAnalysisCount = (project: TenderProject): number =>
+  project.bidders.filter(b => b.status === 'disqualified' && !hasBidAmounts(b)).length;
+
 /** أجزاء البيانات المُدخلة بالترتيب، كل جزء نص مستقل. */
 export function tenderDetailParts(project: TenderProject, { withCounts = true, withAnnouncement = true }: { withCounts?: boolean; withAnnouncement?: boolean } = {}): string[] {
   const parts: string[] = [];
@@ -56,9 +76,10 @@ export function tenderDetailParts(project: TenderProject, { withCounts = true, w
 }
 
 /**
- * ملصق أعداد العطاءات في الرأس: «العطاءات: 5 مستلمة · 4 محلَّلة تجارياً · 1 لم تُحلَّل لنقص جوهري»؛ null إن لم يوجد شيء.
+ * ملصق أعداد العطاءات في الرأس: «العطاءات: 5 مستلمة · 4 محلَّلة تجارياً · 1 استُبعدت قبل التحليل»؛ null إن لم يوجد شيء.
  * كل عطاء في جدول التحليل يُحلَّل تجارياً والترسية على أفضلها، فلا «مؤهلة/غير مؤهلة» هنا (أسامة 2026-11-13). العطاء الذي
  * فيه نقص جوهري (كالتأمينات الأولية) تستلمه اللجنة فيُعدّ مستلماً، ولا يدخل جدول التحليل التجاري.
+ * الأجزاء من البيانات: «استُبعدت قبل التحليل» من المجهزين المستبعدين بلا مبالغ، وما بقي من الفرق «لم يُسجَّل سببه».
  */
 export function bidCountsLabel(project: TenderProject): string | null {
   const analyzed = analyzedBidsCount(project);
@@ -66,7 +87,11 @@ export function bidCountsLabel(project: TenderProject): string | null {
   const parts: string[] = [];
   if (received && received >= analyzed) parts.push(`${received} مستلمة`);
   if (analyzed > 0) parts.push(`${analyzed} محلَّلة تجارياً`);
-  if (received && received > analyzed) parts.push(`${received - analyzed} لم تُحلَّل لنقص جوهري`);
+  if (received && received > analyzed) {
+    const excluded = Math.min(excludedBeforeAnalysisCount(project), received - analyzed);
+    if (excluded > 0) parts.push(`${excluded} استُبعدت قبل التحليل`);
+    if (received - analyzed - excluded > 0) parts.push(`${received - analyzed - excluded} لم يُسجَّل سببه`);
+  }
   return parts.length ? `العطاءات: ${parts.join(' · ')}` : null;
 }
 

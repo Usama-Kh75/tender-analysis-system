@@ -14,9 +14,9 @@ test('أعداد المؤهلة وغير المؤهلة (بطاقتا الملخ
   assert.deepEqual(eligibilityCounts(p), { analyzed: 4, eligible: 2, excluded: 2 });
 });
 
-test('ملصق الرأس: المستلمة والمحلَّلة تجارياً وما لم يُحلَّل لنقص جوهري، بلا مؤهلة/غير مؤهلة', () => {
+test('ملصق الرأس: المستلمة والمحلَّلة تجارياً وما لم يُحلَّل (بلا سبب مسجَّل)، بلا مؤهلة/غير مؤهلة', () => {
   const p = proj([bidder(100, 5), bidder(110, 8), bidder(150, 50), bidder(90, 1, 'disqualified'), bidder(0, 0)], { receivedBidsCount: 6 });
-  assert.equal(bidCountsLabel(p), 'العطاءات: 6 مستلمة · 4 محلَّلة تجارياً · 2 لم تُحلَّل لنقص جوهري');
+  assert.equal(bidCountsLabel(p), 'العطاءات: 6 مستلمة · 4 محلَّلة تجارياً · 2 لم يُسجَّل سببه');
 });
 
 test('المستلمة تُحذف إن لم تُدخل، وما لم يُحلَّل يُحذف عند التساوي', () => {
@@ -29,4 +29,15 @@ test('قبل الكلفة التخمينية: الأهلية غير معروفة
   const p = proj([b]);
   assert.equal(eligibilityCounts(p), null);
   assert.equal(bidCountsLabel(p), 'العطاءات: 1 محلَّلة تجارياً');
+});
+
+test('ملصق الرأس: المستبعد قبل التحليل (مستبعد بلا مبالغ) يُسمّى، وما بقي من الفرق «لم يُسجَّل سببه»', () => {
+  const noAmounts = (status: string) => ({ ...bidder(0, 0), id: `x${status}`, status });
+  const one = proj([bidder(100, 5), bidder(110, 8), noAmounts('disqualified')], { receivedBidsCount: 3 });
+  assert.equal(bidCountsLabel(one), 'العطاءات: 3 مستلمة · 2 محلَّلة تجارياً · 1 استُبعدت قبل التحليل');
+  const two = proj([bidder(100, 5), bidder(110, 8), noAmounts('disqualified')], { receivedBidsCount: 5 });
+  assert.equal(bidCountsLabel(two), 'العطاءات: 5 مستلمة · 2 محلَّلة تجارياً · 1 استُبعدت قبل التحليل · 2 لم يُسجَّل سببه');
+  // مستبعد بلا مبالغ أكثر من الفرق لا يزيد على الفرق
+  const capped = proj([bidder(100, 5), noAmounts('disqualified'), { ...noAmounts('disqualified'), id: 'y' }], { receivedBidsCount: 2 });
+  assert.equal(bidCountsLabel(capped), 'العطاءات: 2 مستلمة · 1 محلَّلة تجارياً · 1 استُبعدت قبل التحليل');
 });

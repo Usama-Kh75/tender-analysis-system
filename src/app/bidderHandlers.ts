@@ -43,13 +43,8 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
     saveProject(updatedProj);
   };
 
-  // Add New Bidder
-  const handleAddNewBidder = (name?: string) => {
-    // إلغاء نافذة الاسم أو تركه فارغاً لا يضيف شركة (كان يضيف «شركة جديدة (ن)» فارغة تظهر في المقارنة)
-    const targetName = (name || prompt('أدخل اسم الشركة / المجهز الجديد:') || '').trim();
-    if (!targetName) return;
-
-    // استنساخ الفقرات بلا أي سعر لإدخال عطاء الشركة الخاص
+  // مجهز جديد بفقرات المجهز النشط بلا أي سعر (الكشف التخميني داخل فقرات كل مجهز)
+  const blankBidder = (targetName: string): Bidder => {
     // رقم الفقرة في المعرّف: الحروف العشوائية وحدها تتصادم في الطلبيات الكبيرة فيختلط ترتيب الصفوف
     const stamp = Date.now();
     const clonedItems = activeBidder.items.map((item, index) => ({
@@ -57,10 +52,8 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       pageNo: undefined,
       id: `item-${stamp}-${index + 1}`
     }));
-
     const recalc = calculateBOQMetrics(clonedItems, currentProject.deviationThreshold);
-
-    const newBidder: Bidder = {
+    return {
       id: `bidder-${Date.now()}`,
       name: targetName,
       submissionDate: localDate(),
@@ -68,6 +61,15 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       totals: recalc.totals,
       status: 'pending'
     };
+  };
+
+  // Add New Bidder
+  const handleAddNewBidder = (name?: string) => {
+    // إلغاء نافذة الاسم أو تركه فارغاً لا يضيف شركة (كان يضيف «شركة جديدة (ن)» فارغة تظهر في المقارنة)
+    const targetName = (name || prompt('أدخل اسم الشركة / المجهز الجديد:') || '').trim();
+    if (!targetName) return;
+
+    const newBidder = blankBidder(targetName);
 
     // أول مجهز يحلّ محل الحامل «شركة جديدة» إن لم يُمسّ، فلا يبقى مجهز فارغ يُعدّ عطاءً
     const placed = addOrReplacePlaceholder(currentProject, currentProject.bidders, newBidder);
@@ -87,6 +89,37 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
     );
 
     saveProject(updatedProj);
+  };
+
+  // عطاء مستلم استُبعد قبل التحليل التجاري (بطاقة فرق عدد العطاءات): مجهز بلا مبالغ بحالة «مستبعد» فيُعدّ من المستلمة
+  // ولا يُطلب إدخال عطائه. بقية الشأن كإضافة مجهز، ويعيد معرّفه ليُفتح له نافذة أسباب الاستبعاد؛ لا قفل للعرض الموزون
+  // لأن الإضافة العادية لا تقفل به أيضاً
+  const handleAddExcludedBeforeAnalysis = (name: string): string | undefined => {
+    const targetName = name.trim();
+    if (!targetName) return undefined;
+
+    const newBidder: Bidder = { ...blankBidder(targetName), status: 'disqualified' };
+    const placed = addOrReplacePlaceholder(currentProject, currentProject.bidders, newBidder);
+    // المجهز المعروض لا يتبدّل إلى عطاء بلا مبالغ، إلا إن حلّ محل الحامل المعروض نفسه
+    const activeStillThere = placed.bidders.some(b => b.id === currentProject.activeBidderId);
+
+    let updatedProj: TenderProject = {
+      ...currentProject,
+      bidders: placed.bidders,
+      activeBidderId: activeStillThere ? currentProject.activeBidderId : newBidder.id,
+      updatedAt: new Date().toISOString()
+    };
+
+    updatedProj = addAuditLog(
+      updatedProj,
+      'إضافة مجهز مستبعد قبل التحليل',
+      `سُجّل المجهز (${targetName}) عطاءً مستلماً استُبعد قبل التحليل التجاري، بلا مبالغ`
+        + (placed.replaced ? ` في موضع المجهز الفارغ (${placed.replaced}) الذي وضعه النظام عند الإنشاء` : ''),
+      { bidderId: newBidder.id }
+    );
+
+    saveProject(updatedProj);
+    return newBidder.id;
   };
 
   // Delete Bidder
@@ -288,7 +321,7 @@ ${exclusionLock}`);
   };
 
   return {
-    handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleResetAllBidders,
+    handleUpdateBidderName, handleAddNewBidder, handleAddExcludedBeforeAnalysis, handleDeleteBidder, handleResetAllBidders,
     handleUpdateBidderStatus, handleSaveSettings, handleRenameProject, handleSaveBidValidity, selectBidder
   };
 }

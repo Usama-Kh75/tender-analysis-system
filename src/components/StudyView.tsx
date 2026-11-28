@@ -16,6 +16,8 @@ import { errorsCountText, unpricedCountText } from '../utils/arabicCount';
 import { unresolvedEmptyBidders } from '../utils/exclusionReasons';
 import { awardBlockers, needsAwardDialog } from '../utils/awardBlockers';
 import { LEGAL_TEXTS } from '../utils/legalTexts';
+import { thirdAnnouncementNote } from '../utils/budgetTypes';
+import { isThirdOrLaterAnnouncement } from '../utils/tenderDetails';
 import { hasCompletePreferenceRecord, preferenceRecordOf } from '../utils/preferenceBasis';
 import { CandidatesCheckNote } from './CandidatesCheckNote';
 import { candidatesCheckDateOf } from '../utils/committeeRecords';
@@ -454,7 +456,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
                 )}
                 {rec.kind === 'retender' && (
                   <>
-                    لا يوجد عطاء مؤهل — التوصية بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان (المادة 20/{rec.retenderReason === 'lowest-below' ? 'رابعاً' : 'ثالثاً'}).
+                    لا يوجد عطاء مؤهل — {isThirdOrLaterAnnouncement(project)
+                      ? `التوصية بإلغاء المناقصة وإعادة الإعلان عنها في السنة التقويمية اللاحقة (ضوابط رقم (2) ثالثاً/7، والمادة 20/${rec.retenderReason === 'lowest-below' ? 'رابعاً' : 'ثالثاً'}).`
+                      : `التوصية بعرض الموضوع على جهة التعاقد للنظر في إعادة الإعلان (المادة 20/${rec.retenderReason === 'lowest-below' ? 'رابعاً' : 'ثالثاً'}).`}
                   </>
                 )}
                 {rec.kind === 'no-estimate' && (
@@ -486,6 +490,22 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   </details>
                 </div>
               )}
+              {rec.kind === 'award' && rec.primary && (() => {
+                const note = thirdAnnouncementNote(project, rec.primary.totals.totalDeviationPercent);
+                if (!note) return null;
+                const t = LEGAL_TEXTS[note.ref];
+                return (
+                  <div className="text-xs font-bold text-indigo-900 mt-1.5 leading-relaxed no-print">
+                    {note.text}
+                    <details className="mt-1 font-normal">
+                      <summary className="cursor-pointer font-bold underline">النص الرسمي</summary>
+                      <blockquote className="mt-1 rounded-lg border border-indigo-100 bg-white px-3 py-2 leading-relaxed text-slate-700">
+                        <span className="font-bold">{t.label}:</span> «{t.text}» (ص {t.page})
+                      </blockquote>
+                    </details>
+                  </div>
+                );
+              })()}
               {/* تذكير غير مانع (ضوابط (4) أحد عشر/4 و5): حيث يوجد مرشحون للإحالة، سواء فُتح حوار الترسية أم لا */}
               {(rec.kind === 'award' || rec.kind === 'tie') && (
                 <CandidatesCheckNote key={`${project.id}-${candidatesCheckDateOf(project) ?? ''}`} date={candidatesCheckDateOf(project)} onSave={onSaveCandidatesCheck} onDirtyChange={onCheckDirtyChange} />

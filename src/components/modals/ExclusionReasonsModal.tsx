@@ -3,8 +3,10 @@ import { createPortal } from 'react-dom';
 import { X, Gavel, Plus, Trash2 } from 'lucide-react';
 import type { Bidder, ExclusionReason, TechnicalOpinion, TenderProject } from '../../types/tender';
 import {
-  EXCLUSION_GROUNDS, INCOMPLETE_ITEMS, cleanExclusionReasons, cleanTechnicalOpinion, groundInfo, reasonLine, validateReasons
+  BID_BOND_EXEMPT_NOTE, EXCLUSION_GROUNDS, INCOMPLETE_ITEMS, cleanExclusionReasons, cleanTechnicalOpinion, groundInfo, isBidBondGround, reasonLine, validateReasons
 } from '../../utils/exclusionReasons';
+import { bidBondExempt } from '../../utils/tenderDetails';
+import { LEGAL_TEXTS } from '../../utils/legalTexts';
 
 interface ExclusionReasonsModalProps {
   project: TenderProject;
@@ -29,7 +31,9 @@ export const ExclusionReasonsModal: React.FC<ExclusionReasonsModalProps> = ({ pr
   const [snapshot] = useState(() => stateKey(reasons, opinion));
   const dirty = stateKey(reasons, opinion) !== snapshot;
   const hasTechnical = reasons.some(r => r.ground === 'technical');
-  const nextGround = EXCLUSION_GROUNDS.find(g => !reasons.some(r => r.ground === g.ground));
+  // أسلوب دعوة يُعفي من التأمينات الأولية: أسبابها لا تُختار لسبب جديد، وما كان محفوظاً منها يُرفض عند الحفظ
+  const bondExempt = bidBondExempt(project);
+  const nextGround = EXCLUSION_GROUNDS.find(g => !reasons.some(r => r.ground === g.ground) && !(bondExempt && isBidBondGround(g.ground)));
 
   const requestClose = () => {
     if (dirty && !window.confirm('في النافذة تعديل لم يُحفظ. أتتخلى عنه؟')) return;
@@ -65,7 +69,7 @@ export const ExclusionReasonsModal: React.FC<ExclusionReasonsModalProps> = ({ pr
     e.preventDefault();
     setError(null);
     const clean = cleanExclusionReasons(reasons) ?? [];
-    const message = validateReasons(clean);
+    const message = validateReasons(clean, bondExempt);
     if (message) { setError(message); return; }
     // قسم المصدر مخفي بلا سبب فني: يبقى المحفوظ كما هو
     onSave(bidder.id, clean, hasTechnical ? cleanTechnicalOpinion(opinion) : project.technicalOpinion);
@@ -96,6 +100,18 @@ export const ExclusionReasonsModal: React.FC<ExclusionReasonsModalProps> = ({ pr
             الأسباب بنود من التعليمات تستند إليها اللجنة في استبعاد العطاء كله، وتُطبع في المحضر بصياغة ثابتة مع نصوصها الرسمية.
           </p>
 
+          {bondExempt && (
+            <div className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-xl p-3 leading-relaxed">
+              {BID_BOND_EXEMPT_NOTE}
+              <details className="mt-1 font-normal">
+                <summary className="cursor-pointer font-bold underline">النص الرسمي</summary>
+                <blockquote className="mt-1 rounded-lg border border-indigo-100 bg-white px-3 py-2 leading-relaxed text-slate-700">
+                  <span className="font-bold">{LEGAL_TEXTS.art27_1_h.label}:</span> «{LEGAL_TEXTS.art27_1_h.text}» (ص {LEGAL_TEXTS.art27_1_h.page})
+                </blockquote>
+              </details>
+            </div>
+          )}
+
           <ol className="space-y-3">
             {reasons.map((r, i) => {
               const info = groundInfo(r.ground);
@@ -111,7 +127,11 @@ export const ExclusionReasonsModal: React.FC<ExclusionReasonsModalProps> = ({ pr
                         className={fieldClass}
                       >
                         {!info && <option value={r.ground}>سبب غير محدد</option>}
-                        {EXCLUSION_GROUNDS.map(g => <option key={g.ground} value={g.ground}>{g.label}</option>)}
+                        {EXCLUSION_GROUNDS.map(g => (
+                          <option key={g.ground} value={g.ground} disabled={bondExempt && isBidBondGround(g.ground) && g.ground !== r.ground}>
+                            {g.label}{bondExempt && isBidBondGround(g.ground) ? ' (لا ينطبق: معفى من التأمينات)' : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <button

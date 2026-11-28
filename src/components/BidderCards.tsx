@@ -8,6 +8,7 @@ import { formatNumber } from '../utils/calculations';
 import { preferenceRecordOf } from '../utils/preferenceBasis';
 import { bidExpiry } from '../utils/bidValidity';
 import { formatSheetDate } from '../utils/orderStatus';
+import { BidCountGapCard } from './BidCountGapCard';
 
 interface BidderCardsProps {
   project: TenderProject;
@@ -19,10 +20,16 @@ interface BidderCardsProps {
   onEditValidity: (bidderId: string) => void;
   /** فتح نافذة المبادرات المقدَّمة مع العطاء (ضوابط رقم (5)) */
   onEditInitiatives: (bidderId: string) => void;
+  /** «استُبعد قبل التحليل التجاري» في بطاقة فرق العدد: يضيف مجهزاً مستبعداً بالاسم ويفتح أسباب استبعاده */
+  onAddExcluded: (name: string) => void;
+  /** «العدد خطأ»: يفتح إعدادات المناقصة */
+  onOpenSettings: () => void;
+  /** اسم مكتوب في البطاقة لم يُحفظ (يمنع التحديث) */
+  onGapDirtyChange: (dirty: boolean) => void;
 }
 
 // الشركات في قائمة منسدلة (الاسم — المبلغ — حالة التدقيق) وتحتها سطر ملخص للمختارة: المبلغ بعد التدقيق، الحالة (أخضر مدقّق، كهرماني فيها أخطاء، رمادي لم يُدخل)، وشارتا الترسية والاستبعاد
-export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd, onEditValidity, onEditInitiatives }) => {
+export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderId, onSelect, onRename, onAdd, onEditValidity, onEditInitiatives, onAddExcluded, onOpenSettings, onGapDirtyChange }) => {
   // الشركة الجاري تعديل اسمها (بمعرّفها): لا يتسرب التعديل إلى بطاقة أخرى عند اختيارها
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
@@ -89,6 +96,7 @@ export const BidderCards: React.FC<BidderCardsProps> = ({ project, activeBidderI
     >
       {counterText}
     </p>
+    <BidCountGapCard project={project} onAdd={onAdd} onAddExcluded={onAddExcluded} onOpenSettings={onOpenSettings} onDirtyChange={onGapDirtyChange} />
     <div className="mb-4 bg-white rounded-2xl border border-slate-200 px-3 py-2">
       <div className="flex items-center gap-2">
         <label htmlFor="bidder-select" className="text-sm font-black text-slate-700 shrink-0">المجهز:</label>

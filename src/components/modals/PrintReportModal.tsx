@@ -16,7 +16,7 @@ import { recommendationPieces, recommendationEditChanges, savedRecommendationEdi
 import { LegalTextsList, ThresholdBasisSentence } from '../LegalTexts';
 import { dissentBlock, cleanDissentNote } from '../../utils/committeeRecords';
 import { LEGAL_TEXTS } from '../../utils/legalTexts';
-import { reasonedExclusions, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
+import { bidBondReasonConflicts, reasonedExclusions, exclusionLegalKeys, exclusionLegalLabels, needsOpinionSource, reasonLine } from '../../utils/exclusionReasons';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -380,6 +380,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             {withoutReasons.map(b => (
               <div key={b.id} className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
                 لم تُذكر أسباب استبعاد عطاء ({b.name})؛ تُسجَّل من «أسباب الاستبعاد». (هذه الملاحظة لا تظهر في الطباعة)
+              </div>
+            ))}
+            {bidBondReasonConflicts(project).map(b => (
+              <div key={`bond-${b.id}`} className="no-print mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 font-bold text-[11px]">
+                سبب استبعاد عطاء ({b.name}) يتعلق بالتأمينات الأولية، وأسلوب التعاقد في هذه المناقصة يُعفي منها (المادة (27)/أولاً/هـ): احذف السبب من «أسباب الاستبعاد»، أو صحّح أسلوب التعاقد من «إعدادات المناقصة» إن كُتب خطأً. (هذه الملاحظة لا تظهر في الطباعة)
               </div>
             ))}
             {needsOpinionSource(project) && (

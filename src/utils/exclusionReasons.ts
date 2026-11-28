@@ -2,6 +2,7 @@ import type { Bidder, ExclusionReason, TechnicalOpinion, TenderProject } from '.
 import { LEGAL_TEXTS, uniqueLegalKeys, type LegalKey } from './legalTexts';
 import { formatSheetDate, isValidDate } from './orderStatus';
 import { hasBidAmounts } from './recommendation';
+import { bidBondExempt } from './tenderDetails';
 
 /**
  * أسباب استبعاد العطاء كله (status 'disqualified'): كل سبب بند من التعليمات مع تفصيل اختياري، وصياغته الثابتة
@@ -182,12 +183,28 @@ export function exclusionLegalLabels(bidder: Bidder): string {
   return [...new Set(uniqueLegalKeys(reasonsOf(bidder).map(reasonLegalKey)).map(k => LEGAL_TEXTS[k].label))].join('، ');
 }
 
-/** رسالة خطأ عربية أو null */
-export function validateReasons(reasons: ExclusionReason[]): string | null {
+/** أسباب الاستبعاد المتعلقة بالتأمينات الأولية (ضوابط رقم (4) سادساً/1 وخامساً/د) */
+export const BID_BOND_GROUNDS: readonly string[] = ['bidBond', 'bondInvalid'];
+export const isBidBondGround = (ground: string): boolean => BID_BOND_GROUNDS.includes(ground);
+
+/** شرح منع هذه الأسباب في أسلوب دعوة يُعفي من التأمينات الأولية (المادة (27)/أولاً/هـ) */
+export const BID_BOND_EXEMPT_NOTE = 'أسلوب التعاقد في هذه المناقصة يُعفي مقدمي العطاءات من تقديم التأمينات الأولية (المادة (27)/أولاً/هـ)، فلا يُستبعد عطاء لعدم إرفاقها أو لعدم استيفاء خطابها. إن كان أسلوب التعاقد مكتوباً خطأً فصحّحه من «إعدادات المناقصة».';
+
+/** عطاءات مستبعدة تحمل سبباً متعلقاً بالتأمينات الأولية في مناقصة أسلوبها يُعفي منها (تذكير في معاينة المحضر) */
+export function bidBondReasonConflicts(project: TenderProject): Bidder[] {
+  if (!bidBondExempt(project)) return [];
+  return reasonedExclusions(project).filter(b => reasonsOf(b).some(r => isBidBondGround(r.ground)));
+}
+
+/** رسالة خطأ عربية أو null. bondExempt: أسلوب الدعوة يُعفي من التأمينات الأولية فلا يُحفظ سبب منها */
+export function validateReasons(reasons: ExclusionReason[], bondExempt = false): string | null {
   const seen = new Set<string>();
   for (const r of reasons) {
     const info = groundInfo(r.ground);
     const name = info ? info.label : 'سبب غير محدد';
+    if (bondExempt && isBidBondGround(r.ground)) {
+      return `السبب «${name}» لا ينطبق: أسلوب التعاقد يُعفي من التأمينات الأولية (المادة (27)/أولاً/هـ). احذف هذا السبب، أو صحّح أسلوب التعاقد من «إعدادات المناقصة» إن كُتب خطأً`;
+    }
     if (r.ground === 'incomplete' && !isItemNo(r.item)) return `اختر المتطلب الذي لم يستكمله المجهز في سبب «${name}»`;
     if (info?.detailRequired && !r.detail?.trim()) {
       return r.ground === 'other' ? 'اكتب السبب الآخر كما تثبته اللجنة' : `اكتب وجه المخالفة في سبب «${name}»`;

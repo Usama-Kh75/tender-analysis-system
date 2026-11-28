@@ -9,3 +9,7 @@ export const initiativesCountText = (n: number): string => count(n, 'مبادر�
 export const unpricedCountText = (n: number): string => count(n, 'فقرة واحدة غير مسعّرة', 'فقرتان غير مسعّرتين', 'فقرات غير مسعّرة', 'فقرة غير مسعّرة');
 /** «N فقرات فيها أخطاء» */
 export const itemsWithErrorsText = (n: number): string => `${itemsCountText(n)} فيها أخطاء`;
+/** «عطاء واحد / عطاءان / N عطاءات / N عطاءً» (عدد العطاءات في فرق المستلمة والمسجَّلة) */
+export const bidsCountText = (n: number): string => count(n, 'عطاء واحد', 'عطاءان', 'عطاءات', 'عطاءً');
+/** المنصوب (للنقص): «عطاءً واحداً / عطاءين / N عطاءات / N عطاءً» */
+export const bidsCountAccusative = (n: number): string => count(n, 'عطاءً واحداً', 'عطاءين', 'عطاءات', 'عطاءً');

@@ -41,8 +41,8 @@ test('حالة الشركة: بلا مبالغ، ومعلّقة بعدد فقر�
 
 test('العطاءات n من m: m عدد الشركات أو العطاءات المستلمة', () => {
   const p = setup();
-  assert.deepEqual(tenderPath(p).bids, { entered: 2, registered: 3, expected: 3 });
-  assert.deepEqual(tenderPath({ ...p, receivedBidsCount: 4 }).bids, { entered: 2, registered: 3, expected: 4 });
+  assert.deepEqual(tenderPath(p).bids, { entered: 2, registered: 3, excludedBefore: 0, expected: 3 });
+  assert.deepEqual(tenderPath({ ...p, receivedBidsCount: 4 }).bids, { entered: 2, registered: 3, excludedBefore: 0, expected: 4 });
 });
 
 test('التدقيق: لا يعدّ شركة بلا مبالغ، وأول شركة معلّقة بترتيبها', () => {

@@ -3,7 +3,7 @@ import { Award, FileSpreadsheet, Printer } from 'lucide-react';
 import { TenderProject } from '../types/tender';
 import { formatCurrency, formatPercent } from '../utils/calculations';
 import { buildRecommendation, hasNoEstimate, exclusionThresholdOf, offerWinner, hasBidAmounts, isCommerciallyExcluded } from '../utils/recommendation';
-import { budgetApprovalNote } from '../utils/budgetTypes';
+import { budgetApprovalNote, thirdAnnouncementNote } from '../utils/budgetTypes';
 import { isOfferFinal, assessBalance, correctedBalanceRows } from '../utils/weightedOffer';
 import { WeightedOfferBar } from './WeightedOfferBar';
 import { WeightedTableView } from './WeightedTableView';
@@ -73,6 +73,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
   const rec = buildRecommendation(project);
   const approval = rec.kind === 'award' && rec.primary
     ? budgetApprovalNote(project.budgetType, rec.primary.totals.totalDeviationPercent) : null;
+  // الإعلان الثالث والعطاء الأفضل أعلى من التخمينية (ضوابط (2) ثالثاً/5 و6): عرض فقط، لا يُطبع
+  const thirdNote = rec.kind === 'award' && rec.primary
+    ? thirdAnnouncementNote(project, rec.primary.totals.totalDeviationPercent) : null;
 
   // بطاقة الفائز تضم عرضه الموزون تحتها؛ وغير الفائز يبقى في قسم مستقل (قرار أسامة 2026-11-19)
   const sheetTarget = offerSheetTarget(project);
@@ -200,6 +203,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
           {/* موافقة قبول العطاء (نوع الموازنة) بعد كتلة العرض الموزون */}
           {approval?.kind === 'note' && (
             <div className="text-xs font-bold text-slate-700 mt-3">{approval.text}<OfficialText legalKey={approval.ref} /></div>
+          )}
+          {thirdNote && (
+            <div className="no-print print:hidden text-xs font-bold text-indigo-900 mt-3">{thirdNote.text}<OfficialText legalKey={thirdNote.ref} /></div>
           )}
           {approval?.kind === 'missing' && (
             <div className="text-xs font-bold text-amber-700 mt-3">

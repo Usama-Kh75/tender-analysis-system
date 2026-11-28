@@ -122,6 +122,8 @@ export function App() {
   // نافذة المبادرات المقدَّمة مع العطاء (المجهز المعني) وفيها إدخال لم يُحفظ
   const [initiativesBidderId, setInitiativesBidderId] = useState<string | null>(null);
   const [isInitiativesDirty, setIsInitiativesDirty] = useState(false);
+  // اسم شركة مكتوب في بطاقة فرق عدد العطاءات ولم يُحفظ (يمنع التحديث)
+  const [isGapNameDirty, setIsGapNameDirty] = useState(false);
 
   // نافذة مفتوحة فيها عمل لم يُطبَّق أو يُحفظ بعد: يُمنع التحديث حتى تُكمل أو تُغلق
   const blockingWork = loaded && (committeeName === null || isCommitteeEditOpen) ? 'اسم اللجنة'
@@ -138,6 +140,7 @@ export function App() {
     : validityBidderId && isValidityDirty ? 'نفاذية العطاء'
     : initiativesBidderId && isInitiativesDirty ? 'المبادرات'
     : exclusionBidderId ? 'أسباب الاستبعاد'
+    : isGapNameDirty ? 'اسم الشركة المستبعدة قبل التحليل'
     : isCheckDirty ? 'تاريخ إيعاز التحقق من المرشحين'
     : isPrintOpen && isDissentDirty ? 'أوجه الخلاف'
     : isStudyDirty ? 'أساس المفاضلة أو مبرر الترسية'
@@ -250,7 +253,7 @@ export function App() {
     if (started) handleGo({ label: 'فتح العرض الموزون', target: 'bids', bidderId });
   };
   const { handleApplyExtractedItems, referenceRows } = createImportHandlers(ctx);
-  const { handleUpdateBidderName, handleAddNewBidder, handleDeleteBidder, handleUpdateBidderStatus,
+  const { handleUpdateBidderName, handleAddNewBidder, handleAddExcludedBeforeAnalysis, handleDeleteBidder, handleUpdateBidderStatus,
     handleSaveSettings, handleRenameProject, handleSaveBidValidity, handleResetAllBidders, selectBidder } = createBidderHandlers(ctx, { closeSettings: () => setIsSettingsOpen(false) });
   const { handleSaveRecommendationEdit } = createRecommendationHandlers(ctx);
   const { handleSaveExclusionReasons } = createExclusionHandlers(currentProject, ctx.saveProject);
@@ -361,6 +364,9 @@ export function App() {
           onAdd={handleAddNewBidder}
           onEditValidity={setValidityBidderId}
           onEditInitiatives={setInitiativesBidderId}
+          onAddExcluded={(name) => { const id = handleAddExcludedBeforeAnalysis(name); if (id) setExclusionBidderId(id); }}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onGapDirtyChange={setIsGapNameDirty}
         />
 
         {/* Dynamic KPI Cards */}

@@ -8,6 +8,7 @@ import {
 import { assessBalance, correctedBalanceRows } from './weightedOffer';
 import { isCommitteeCorrected } from './bidderAuditEngine';
 import { preferenceReference } from './contractTypes';
+import { isThirdOrLaterAnnouncement, receivedBidsCountOf } from './tenderDetails';
 
 export interface GuidanceItem { key: LegalKey; ruling: string }
 
@@ -31,6 +32,10 @@ export function stageGuidance(project: TenderProject, tab: string): GuidanceItem
       add('ann4_5_b5', 'إذا رفض مقدم العطاء التصحيح الحسابي يُستبعد عطاؤه وتُصادر تأميناته الأولية');
     }
     if (rows.some(i => i.unpriced)) add('art10_1_t', 'الفقرة التي لم يُدوَّن سعر إزاءها تُعدّ كلفتها مشمولة بالمبلغ الإجمالي للعطاء');
+    // عطاء واحد مستلم في الإعلان الأول: حكم المادة (20)/ثانياً، إرشاد فقط (التوصية المطبوعة للعطاء الواحد لا تتغيّر)
+    if (project.announcementNo === 1 && receivedBidsCountOf(project) === 1) {
+      add('art20_2', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا تسلّمت عطاءً واحداً في الإعلان أو الدعوة الأولى');
+    }
     if (withAmounts.length >= 2) add('ann4_5_b6', 'يُحدَّد تسلسل مقدمي العطاءات بعد إجراء التصحيح والتدقيق الحسابي لجميع العطاءات');
   } else if (tab === 'study' && !hasNoEstimate(project)) {
     const rec = buildRecommendation(project);
@@ -50,12 +55,15 @@ export function stageGuidance(project: TenderProject, tab: string): GuidanceItem
     if (close) add(pref, prefRuling + (equal ? '، وعند التساوي لأصغر فئة نقدية يجوز استكمال المبادرات إن لم تُقدَّم ابتداءً وتصبح جزءاً من العطاء' : ''));
     if (equal) add('art15_4a', 'يجوز الإرساء على أكثر من متقدم إذا تساوت الأسعار والشروط ونصّت على ذلك شروط المناقصة');
     if (rec.chosenNotLowest) add('art10_1_h', 'جهة التعاقد غير ملزمة بقبول أوطأ العطاءات');
+    // الإعلان الثالث فما بعد: لا إحالة بعده في السنة التقويمية تعني الإلغاء وإعادة الإعلان في السنة اللاحقة (ضوابط (2) ثالثاً/7)
+    const finalAnnouncementRuling = 'إذا لم يُتوصَّل إلى الإحالة بعد الإعلان للمرة الثالثة والأخيرة في السنة التقويمية تُلغى المناقصة وتُعاد أثمانها للمناقصين ويُعلن عنها مجدداً في السنة التقويمية اللاحقة بإعلان جديد يأخذ تسلسلات جديدة';
     if (rec.kind === 'referral') {
       add('art13_3b', 'للجنة التحليل التوصية بالتفاوض لتخفيض الأسعار إلى الحدود المسموحة للكلفة التخمينية دون المساس بنطاق العمل المعلن، إذا كان أقل العطاءات المطابقة للمواصفات يزيد على الحدود المقبولة');
     } else if (rec.kind === 'retender') {
       if (rec.retenderReason === 'lowest-below') add('art20_4', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كان مبلغ العطاء المستجيب أقل من الكلفة التخمينية بنسبة (20%) أو أكثر');
       else add('art20_3', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا كانت جميع العطاءات المستلمة لا تتطابق مع شروط ومعايير المناقصة');
     }
+    if ((rec.kind === 'retender' || rec.kind === 'referral') && isThirdOrLaterAnnouncement(project)) add('ann2_3_7', finalAnnouncementRuling);
   }
   const keys = uniqueLegalKeys(out.map(i => i.key));
   return keys.map(k => out.find(i => i.key === k)!);
