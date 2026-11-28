@@ -9,6 +9,7 @@ import { assessBalance, correctedBalanceRows } from './weightedOffer';
 import { isCommitteeCorrected } from './bidderAuditEngine';
 import { preferenceReference } from './contractTypes';
 import { isThirdOrLaterAnnouncement, receivedBidsCountOf } from './tenderDetails';
+import { isPlaceholderBidder } from './placeholderBidder';
 
 export interface GuidanceItem { key: LegalKey; ruling: string }
 
@@ -33,7 +34,11 @@ export function stageGuidance(project: TenderProject, tab: string): GuidanceItem
     }
     if (rows.some(i => i.unpriced)) add('art10_1_t', 'الفقرة التي لم يُدوَّن سعر إزاءها تُعدّ كلفتها مشمولة بالمبلغ الإجمالي للعطاء');
     // عطاء واحد مستلم في الإعلان الأول: حكم المادة (20)/ثانياً، إرشاد فقط (التوصية المطبوعة للعطاء الواحد لا تتغيّر)
-    if (project.announcementNo === 1 && receivedBidsCountOf(project) === 1) {
+    // العطاء الواحد يُعدّ بالمستلَم لا بالمحلَّل (أسامة 2026-11-28): عطاء مؤهل واحد بجانب عطاءات استُبعدت لنقص في التأهيل
+    // ليس «عطاءً واحداً»، فيُعدّ المسجَّلون كلهم (المستبعدون قبل التحليل منهم) إن زادوا على العدد المكتوب
+    const received = receivedBidsCountOf(project);
+    const offers = received === undefined ? undefined : Math.max(received, project.bidders.filter(b => !isPlaceholderBidder(project, b)).length);
+    if (project.announcementNo === 1 && offers === 1) {
       add('art20_2', 'لجهة التعاقد إعادة الإعلان أو الدعوة إذا تسلّمت عطاءً واحداً في الإعلان أو الدعوة الأولى');
     }
     if (withAmounts.length >= 2) add('ann4_5_b6', 'يُحدَّد تسلسل مقدمي العطاءات بعد إجراء التصحيح والتدقيق الحسابي لجميع العطاءات');

@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import type { TenderProject } from '../types/tender';
 import { bidCountGap } from '../utils/bidCountGap';
-import { bidsCountAccusative } from '../utils/arabicCount';
+import { bidsCountGenitive } from '../utils/arabicCount';
 
 interface BidCountGapCardProps {
   project: TenderProject;
@@ -51,7 +51,7 @@ export const BidCountGapCard: React.FC<BidCountGapCardProps> = ({ project, onAdd
       {gap.kind === 'missing' ? (
         <>
           <p className="text-sm font-black">
-            في معلومات المناقصة ({gap.received}) عطاءات مستلمة، والمسجَّل ({gap.registered}). ما سبب نقص {bidsCountAccusative(gap.diff)}؟
+            عدد العطاءات المستلمة في معلومات المناقصة ({gap.received})، والمسجَّل ({gap.registered}). ما سبب نقص {bidsCountGenitive(gap.diff)}؟
           </p>
           {naming ? (
             <div className="mt-2 flex flex-wrap items-start gap-2">

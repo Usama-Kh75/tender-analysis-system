@@ -59,6 +59,10 @@ test('art20_2: عطاء واحد مستلم في الإعلان الأول فق�
   assert.ok(!keys(withBidders([a], { announcementNo: 2, receivedBidsCount: 1 })).includes('art20_2'));
   assert.ok(!keys(withBidders([a], { announcementNo: 1, receivedBidsCount: 2 })).includes('art20_2'));
   assert.ok(!keys(withBidders([a], { announcementNo: 1 })).includes('art20_2'));
+  // عطاء مؤهل واحد وعطاءان استُبعدا لنقص في التأهيل: ليس عطاءً واحداً (أسامة 2026-11-28)
+  assert.ok(!keys(withBidders([a, empty('C', 'disqualified'), empty('D', 'disqualified')], { announcementNo: 1, receivedBidsCount: 3 })).includes('art20_2'));
+  // والعدد المكتوب (1) أقل من المسجَّلين المستبعدين: يُعدّ المسجَّلون
+  assert.ok(!keys(withBidders([a, empty('C', 'disqualified')], { announcementNo: 1, receivedBidsCount: 1 })).includes('art20_2'));
 });
 
 test('إعادة الإعلان في الإعلان الثالث: إلغاء وإعادة في السنة اللاحقة ومعها ann2_3_7', () => {

@@ -11,5 +11,5 @@ export const unpricedCountText = (n: number): string => count(n, 'فقرة وا�
 export const itemsWithErrorsText = (n: number): string => `${itemsCountText(n)} فيها أخطاء`;
 /** «عطاء واحد / عطاءان / N عطاءات / N عطاءً» (عدد العطاءات في فرق المستلمة والمسجَّلة) */
 export const bidsCountText = (n: number): string => count(n, 'عطاء واحد', 'عطاءان', 'عطاءات', 'عطاءً');
-/** المنصوب (للنقص): «عطاءً واحداً / عطاءين / N عطاءات / N عطاءً» */
-export const bidsCountAccusative = (n: number): string => count(n, 'عطاءً واحداً', 'عطاءين', 'عطاءات', 'عطاءً');
+/** المجرور بعد مضاف (نقص …): «عطاء واحد / عطاءين / N عطاءات / N عطاءً» */
+export const bidsCountGenitive = (n: number): string => count(n, 'عطاء واحد', 'عطاءين', 'عطاءات', 'عطاءً');
