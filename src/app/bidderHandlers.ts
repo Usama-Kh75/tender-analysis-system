@@ -12,6 +12,7 @@ import { announcementLabel, invitationTypeInfo, receivedBidsCountOf } from '../u
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
 import { withoutBidderPrices } from './itemFields';
+import { addOrReplacePlaceholder } from '../utils/placeholderBidder';
 
 /** جزء سجل التدقيق لحقل اختياري تغيّرت قيمته؛ فارغ إن لم تتغيّر. */
 function detailChange(label: string, before: string | undefined, after: string | undefined, paren = false): string {
@@ -68,9 +69,12 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       status: 'pending'
     };
 
+    // أول مجهز يحلّ محل الحامل «شركة جديدة» إن لم يُمسّ، فلا يبقى مجهز فارغ يُعدّ عطاءً
+    const placed = addOrReplacePlaceholder(currentProject, currentProject.bidders, newBidder);
+
     let updatedProj: TenderProject = {
       ...currentProject,
-      bidders: [...currentProject.bidders, newBidder],
+      bidders: placed.bidders,
       activeBidderId: newBidder.id,
       updatedAt: new Date().toISOString()
     };
@@ -79,6 +83,7 @@ export function createBidderHandlers(ctx: EditContext, { closeSettings }: { clos
       updatedProj,
       'إضافة مجهز جديد',
       `تمت إضافة المجهز (${targetName}) بنجاح إلى المناقصة`
+        + (placed.replaced ? ` في موضع المجهز الفارغ (${placed.replaced}) الذي وضعه النظام عند الإنشاء` : '')
     );
 
     saveProject(updatedProj);

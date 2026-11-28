@@ -6,6 +6,7 @@ import { localDate } from '../utils/localDate';
 import { Bidder, BOQItem, TenderProject } from '../types/tender';
 import { EditContext } from './editContext';
 import { syncSharedFieldsToAllBidders } from './itemFields';
+import { addOrReplacePlaceholder } from '../utils/placeholderBidder';
 
 export function createImportHandlers(ctx: EditContext) {
   const { currentProject, activeBidder, saveProject, blockedByOffer } = ctx;
@@ -116,19 +117,23 @@ export function createImportHandlers(ctx: EditContext) {
       // توحيد هوية الفقرات والكلفة التخمينية مع بقية المجهزين الحاليين إن جلب الاستيراد صفوفاً أو قيماً تخمينية جديدة
       const syncedExistingBidders = syncSharedFieldsToAllBidders(currentProject.bidders, mergedItems, currentProject.deviationThreshold);
 
+      // أول مجهز يحلّ محل الحامل «شركة جديدة» إن لم يُمسّ، فلا يبقى مجهز فارغ يُعدّ عطاءً
+      const placed = addOrReplacePlaceholder(currentProject, syncedExistingBidders, newBidder);
+      const placedNote = placed.replaced ? ` في موضع المجهز الفارغ (${placed.replaced}) الذي وضعه النظام عند الإنشاء` : '';
+
       let updatedProj: TenderProject = {
         ...currentProject,
-        bidders: [...syncedExistingBidders, newBidder],
+        bidders: placed.bidders,
         activeBidderId: newBidder.id,
         updatedAt: new Date().toISOString()
       };
 
       updatedProj = manual
-        ? addAuditLog(updatedProj, 'إدخال يدوي', `إدخال يدوي من الورقة لمجهز جديد (${newBidder.name}): (${count}) فقرة`)
+        ? addAuditLog(updatedProj, 'إدخال يدوي', `إدخال يدوي من الورقة لمجهز جديد (${newBidder.name}): (${count}) فقرة${placedNote}`)
         : addAuditLog(
           updatedProj,
           'استيراد عطاء شركة جديدة',
-          `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة${statedNote}`
+          `تم إنشاء المجهز (${newBidder.name}) واستيراد (${extracted.length}) فقرة${statedNote}${placedNote}`
         );
 
       saveProject(updatedProj);
