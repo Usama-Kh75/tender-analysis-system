@@ -101,7 +101,7 @@ export const ExclusionReasonsModal: React.FC<ExclusionReasonsModalProps> = ({ pr
           </p>
 
           {bondExempt && (
-            <div className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-xl p-3 leading-relaxed">
+            <div id="bond-exempt-note" className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-xl p-3 leading-relaxed">
               {BID_BOND_EXEMPT_NOTE}
               <details className="mt-1 font-normal">
                 <summary className="cursor-pointer font-bold underline">النص الرسمي</summary>
@@ -124,6 +124,7 @@ export const ExclusionReasonsModal: React.FC<ExclusionReasonsModalProps> = ({ pr
                         id={`ground-${i}`}
                         value={r.ground}
                         onChange={e => update(i, { ground: e.target.value })}
+                        aria-describedby={bondExempt ? 'bond-exempt-note' : undefined}
                         className={fieldClass}
                       >
                         {!info && <option value={r.ground}>سبب غير محدد</option>}
